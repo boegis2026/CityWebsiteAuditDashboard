@@ -1,7 +1,5 @@
 # CityWebsiteAuditDashboard
 
-# City Website Audit Dashboard
-
 A prototype ASP.NET Core MVC application for auditing websites by collecting HTTP information and storing scan results in a SQL Server database.
 
 This project was created as a personal learning project inspired by my internship with the City of Los Angeles Bureau of Engineering GIS Division. During the internship I performed manual website audits by collecting website information and recording it in spreadsheets. I wanted to explore how much of that workflow could be automated while learning ASP.NET Core MVC, Entity Framework Core, and SQL Server.
