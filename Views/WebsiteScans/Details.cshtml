@@ -1,0 +1,147 @@
+@model CityWebsiteAuditDashboard.Models.WebsiteScan
+
+@{
+    ViewData["Title"] = "Scan Details";
+
+    bool isSuccessful =
+        Model.HttpStatusCode >= 200 &&
+        Model.HttpStatusCode < 400;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1>Scan Details</h1>
+        <p class="text-muted mb-0">
+            Full results for this website audit.
+        </p>
+    </div>
+
+    <a asp-action="Index"
+       class="btn btn-outline-secondary">
+        Back to Dashboard
+    </a>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>@Model.Url</strong>
+
+        @if (isSuccessful)
+        {
+            <span class="badge bg-success">
+                HTTP @Model.HttpStatusCode
+            </span>
+        }
+        else if (Model.HttpStatusCode.HasValue)
+        {
+            <span class="badge bg-danger">
+                HTTP @Model.HttpStatusCode
+            </span>
+        }
+        else
+        {
+            <span class="badge bg-secondary">
+                Failed
+            </span>
+        }
+    </div>
+
+    <div class="card-body">
+        <div class="row g-4">
+            <div class="col-md-6">
+                <h6 class="text-muted">Website URL</h6>
+                <p>
+                    <a href="@Model.Url"
+                       target="_blank"
+                       rel="noopener noreferrer">
+                        @Model.Url
+                    </a>
+                </p>
+            </div>
+
+            <div class="col-md-6">
+                <h6 class="text-muted">Date Scanned</h6>
+                <p>
+                    @Model.DateScanned
+                    .ToLocalTime()
+                    .ToString("MMMM d, yyyy h:mm:ss tt")
+                </p>
+            </div>
+
+            <div class="col-md-6">
+                <h6 class="text-muted">HTTP Status</h6>
+                <p>
+                    @(Model.HttpStatusCode?.ToString() ?? "Unavailable")
+                </p>
+            </div>
+
+            <div class="col-md-6">
+                <h6 class="text-muted">Response Time</h6>
+                <p>
+                    @(Model.ResponseTimeMilliseconds?.ToString() ?? "Unavailable") ms
+                </p>
+            </div>
+
+            <div class="col-md-6">
+                <h6 class="text-muted">Server Header</h6>
+                <p>
+                    @(Model.ServerHeader ?? "Not provided")
+                </p>
+            </div>
+
+            <div class="col-md-6">
+                <h6 class="text-muted">X-Powered-By</h6>
+                <p>
+                    @(Model.XPoweredByHeader ?? "Not provided")
+                </p>
+            </div>
+
+            <div class="col-md-6">
+                <h6 class="text-muted">IPv4 Address</h6>
+                <p>
+                    @(Model.IPv4Address ?? "Unavailable")
+                </p>
+            </div>
+
+            <div class="col-md-6">
+                <h6 class="text-muted">Notes</h6>
+                <p>
+                    @(Model.Notes ?? "No notes")
+                </p>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(Model.ScanError))
+        {
+            <div class="alert alert-danger mt-3">
+                <strong>Scan Error:</strong>
+                @Model.ScanError
+            </div>
+        }
+    </div>
+
+    <div class="card-footer d-flex gap-2">
+        <form asp-action="ScanAgain"
+              asp-route-id="@Model.Id"
+              method="post">
+            @Html.AntiForgeryToken()
+
+            <button type="submit"
+                    class="btn btn-success">
+                Scan Again
+            </button>
+        </form>
+
+        <a asp-action="Edit"
+           asp-route-id="@Model.Id"
+           class="btn btn-outline-primary">
+            Edit Notes
+        </a>
+
+        <a asp-action="Delete"
+           asp-route-id="@Model.Id"
+           class="btn btn-outline-danger">
+            Delete
+        </a>
+    </div>
+</div>

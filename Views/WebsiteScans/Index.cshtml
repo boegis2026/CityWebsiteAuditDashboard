@@ -1,0 +1,411 @@
+@model CityWebsiteAuditDashboard.ViewModels.WebsiteDashboardViewModel
+
+@{
+    ViewData["Title"] = "Website Audit Dashboard";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1>Website Audit Dashboard</h1>
+        <p class="text-muted mb-0">
+            View and manage previous website scans.
+        </p>
+    </div>
+
+    <a asp-action="Create" class="btn btn-primary">
+        Scan New Website
+    </a>
+</div>
+
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger">
+        @TempData["ErrorMessage"]
+    </div>
+}
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card shadow-sm dashboard-stat-card h-100">
+            <div class="card-body">
+                <h2 class="dashboard-card-heading">Total Scans</h2>
+                <p class="dashboard-card-value">@Model.TotalScans</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card shadow-sm dashboard-stat-card h-100">
+            <div class="card-body">
+                <h2 class="dashboard-card-heading">Successful</h2>
+                <p class="dashboard-card-value text-success">
+                    @Model.SuccessfulScans
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card shadow-sm dashboard-stat-card h-100">
+            <div class="card-body">
+                <h2 class="dashboard-card-heading">Failed</h2>
+                <p class="dashboard-card-value text-danger">
+                    @Model.FailedScans
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card shadow-sm dashboard-stat-card h-100">
+            <div class="card-body">
+                <h2 class="dashboard-card-heading">Average Response</h2>
+                <p class="dashboard-card-value">
+                    @Model.AverageResponseTime ms
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<form method="get" class="card card-body shadow-sm mb-4">
+    <div class="row g-3">
+        <div class="col-lg-3 col-md-6">
+            <label for="searchString" class="form-label">
+                Search
+            </label>
+
+            <input type="text"
+                   id="searchString"
+                   name="searchString"
+                   value="@Model.SearchString"
+                   class="form-control"
+                   placeholder="Search by URL or notes" />
+        </div>
+
+        <div class="col-lg-2 col-md-6">
+            <label for="serverFilter" class="form-label">
+                Server
+            </label>
+
+            <select id="serverFilter"
+                    name="serverFilter"
+                    class="form-select"
+                    asp-items="Model.ServerOptions">
+                <option value="">All servers</option>
+            </select>
+        </div>
+
+        <div class="col-lg-2 col-md-4">
+            <label for="sortBy" class="form-label">
+                Sort By
+            </label>
+
+            <select id="sortBy"
+                    name="sortBy"
+                    class="form-select">
+
+                @if (Model.SortBy == "date")
+                {
+                    <option value="date" selected>Date Scanned</option>
+                }
+                else
+                {
+                    <option value="date">Date Scanned</option>
+                }
+
+                @if (Model.SortBy == "url")
+                {
+                    <option value="url" selected>Website URL</option>
+                }
+                else
+                {
+                    <option value="url">Website URL</option>
+                }
+
+                @if (Model.SortBy == "status")
+                {
+                    <option value="status" selected>HTTP Status</option>
+                }
+                else
+                {
+                    <option value="status">HTTP Status</option>
+                }
+
+                @if (Model.SortBy == "response")
+                {
+                    <option value="response" selected>Response Time</option>
+                }
+                else
+                {
+                    <option value="response">Response Time</option>
+                }
+            </select>
+        </div>
+
+        <div class="col-lg-2 col-md-4">
+            <label for="sortDescending" class="form-label">
+                Direction
+            </label>
+
+            <select id="sortDescending"
+                    name="sortDescending"
+                    class="form-select">
+
+                @if (Model.SortDescending)
+                {
+                    <option value="true" selected>Descending</option>
+                    <option value="false">Ascending</option>
+                }
+                else
+                {
+                    <option value="true">Descending</option>
+                    <option value="false" selected>Ascending</option>
+                }
+            </select>
+        </div>
+
+        <div class="col-lg-2 col-md-4">
+            <label for="pageSize" class="form-label">
+                Rows
+            </label>
+
+            <select id="pageSize"
+                    name="pageSize"
+                    class="form-select">
+
+                @if (Model.PageSize == 10)
+                {
+                    <option value="10" selected>10</option>
+                }
+                else
+                {
+                    <option value="10">10</option>
+                }
+
+                @if (Model.PageSize == 25)
+                {
+                    <option value="25" selected>25</option>
+                }
+                else
+                {
+                    <option value="25">25</option>
+                }
+
+                @if (Model.PageSize == 50)
+                {
+                    <option value="50" selected>50</option>
+                }
+                else
+                {
+                    <option value="50">50</option>
+                }
+            </select>
+        </div>
+
+        <div class="col-lg-2 col-md-4">
+            <label for="customPageSize" class="form-label">
+                Custom Rows
+            </label>
+
+            <input type="number"
+                   id="customPageSize"
+                   name="customPageSize"
+                   class="form-control"
+                   min="1"
+                   max="500"
+                   placeholder="Example: 15" />
+        </div>
+
+        <div class="col-lg-2 col-md-4 d-flex align-items-end">
+            <button type="submit"
+                    class="btn btn-dark w-100">
+                Apply
+            </button>
+        </div>
+    </div>
+
+    <div class="mt-3">
+        <a asp-action="Index"
+           class="btn btn-outline-secondary">
+            Clear Filters
+        </a>
+    </div>
+</form>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th>Website</th>
+                        <th>Status</th>
+                        <th>Response</th>
+                        <th>Server</th>
+                        <th>IPv4</th>
+                        <th>Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @foreach (WebsiteScan scan in Model.Scans)
+                    {
+                        <tr>
+                            <td class="website-url">
+                                <strong>@scan.Url</strong>
+
+                                @if (!string.IsNullOrWhiteSpace(scan.Notes))
+                                {
+                                    <div class="small text-muted">
+                                        @scan.Notes
+                                    </div>
+                                }
+                            </td>
+
+                            <td>
+                                @if (scan.HttpStatusCode >= 200 &&
+                                     scan.HttpStatusCode < 400)
+                                {
+                                    <span class="badge bg-success">
+                                        @scan.HttpStatusCode
+                                    </span>
+                                }
+                                else if (scan.HttpStatusCode.HasValue)
+                                {
+                                    <span class="badge bg-danger">
+                                        @scan.HttpStatusCode
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">
+                                        Failed
+                                    </span>
+                                }
+                            </td>
+
+                            <td>
+                                @if (scan.ResponseTimeMilliseconds.HasValue)
+                                {
+                                    <span>
+                                        @scan.ResponseTimeMilliseconds ms
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">
+                                        Unavailable
+                                    </span>
+                                }
+                            </td>
+
+                            <td>
+                                @(scan.ServerHeader ?? "Not provided")
+                            </td>
+
+                            <td>
+                                @(scan.IPv4Address ?? "Unavailable")
+                            </td>
+
+                            <td>
+                                @(scan.DateScanned
+                                    .ToLocalTime()
+                                    .ToString("MMM d, yyyy h:mm tt"))
+                            </td>
+
+                            <td class="action-buttons">
+                                <div class="d-flex flex-wrap gap-1">
+                                    <a asp-action="Details"
+                                       asp-route-id="@scan.Id"
+                                       class="btn btn-sm btn-outline-primary">
+                                        Details
+                                    </a>
+
+                                    <form asp-action="ScanAgain"
+                                          asp-route-id="@scan.Id"
+                                          method="post">
+                                        @Html.AntiForgeryToken()
+
+                                        <button type="submit"
+                                                class="btn btn-sm btn-outline-success">
+                                            Scan Again
+                                        </button>
+                                    </form>
+
+                                    <a asp-action="Delete"
+                                       asp-route-id="@scan.Id"
+                                       class="btn btn-sm btn-outline-danger">
+                                        Delete
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+
+                    @if (!Model.Scans.Any())
+                    {
+                        <tr>
+                            <td colspan="7"
+                                class="text-center text-muted py-4">
+                                No website scans found.
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@if (Model.TotalPages > 1)
+{
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            <li class="page-item @(Model.CurrentPage == 1 ? "disabled" : "")">
+                <a class="page-link"
+                   asp-action="Index"
+                   asp-route-page="@(Model.CurrentPage - 1)"
+                   asp-route-pageSize="@Model.PageSize"
+                   asp-route-searchString="@Model.SearchString"
+                   asp-route-serverFilter="@Model.ServerFilter"
+                   asp-route-sortBy="@Model.SortBy"
+                   asp-route-sortDescending="@Model.SortDescending">
+                    Previous
+                </a>
+            </li>
+
+            @for (int pageNumber = 1;
+                  pageNumber <= Model.TotalPages;
+                  pageNumber++)
+            {
+                <li class="page-item @(pageNumber == Model.CurrentPage ? "active" : "")">
+                    <a class="page-link"
+                       asp-action="Index"
+                       asp-route-page="@pageNumber"
+                       asp-route-pageSize="@Model.PageSize"
+                       asp-route-searchString="@Model.SearchString"
+                       asp-route-serverFilter="@Model.ServerFilter"
+                       asp-route-sortBy="@Model.SortBy"
+                       asp-route-sortDescending="@Model.SortDescending">
+                        @pageNumber
+                    </a>
+                </li>
+            }
+
+            <li class="page-item @(Model.CurrentPage == Model.TotalPages ? "disabled" : "")">
+                <a class="page-link"
+                   asp-action="Index"
+                   asp-route-page="@(Model.CurrentPage + 1)"
+                   asp-route-pageSize="@Model.PageSize"
+                   asp-route-searchString="@Model.SearchString"
+                   asp-route-serverFilter="@Model.ServerFilter"
+                   asp-route-sortBy="@Model.SortBy"
+                   asp-route-sortDescending="@Model.SortDescending">
+                    Next
+                </a>
+            </li>
+        </ul>
+    </nav>
+}
