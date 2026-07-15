@@ -33,5 +33,21 @@ namespace CityWebsiteAuditDashboard.Models
 
         [Display(Name = "Scan Error")]
         public string? ScanError { get; set; }
+
+        public int? WaveErrors { get; set; }
+
+        public int? WaveContrastErrors { get; set; }
+
+        public int? WaveAlerts { get; set; }
+
+        public int? WaveFeatures { get; set; }
+
+        public int? WaveAria { get; set; }
+
+        public bool? WaveScanSucceeded { get; set; }
+
+        public string? WaveErrorMessage { get; set; }
+
+        public DateTime? WaveScannedAt { get; set; }
     }
 }

@@ -10,13 +10,16 @@ public class WebsiteScansController : Controller
 {
     private readonly ApplicationDbContext _context;
     private readonly IWebsiteScannerService _scannerService;
+    private readonly IWaveAccessibilityService _waveAccessibilityService;
 
     public WebsiteScansController(
         ApplicationDbContext context,
-        IWebsiteScannerService scannerService)
+        IWebsiteScannerService scannerService,
+        IWaveAccessibilityService waveAccessibilityService)
     {
         _context = context;
         _scannerService = scannerService;
+        _waveAccessibilityService = waveAccessibilityService;
     }
 
     // GET: WEBSITESCANS
@@ -171,7 +174,9 @@ public class WebsiteScansController : Controller
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(
-    [Bind("Url,Notes")] WebsiteScan websiteScan)
+    [Bind("Url,Notes")] WebsiteScan websiteScan,
+    bool includeWaveScan)
+
     {
         if (!ModelState.IsValid)
         {
@@ -179,6 +184,37 @@ public class WebsiteScansController : Controller
         }
 
         await _scannerService.ScanAsync(websiteScan);
+
+        if (includeWaveScan)
+        {
+            WaveAccessibilityResult waveResult =
+                await _waveAccessibilityService.ScanAsync(websiteScan.Url);
+
+            websiteScan.WaveScanSucceeded = waveResult.Succeeded;
+            websiteScan.WaveScannedAt = DateTime.Now;
+
+            if (waveResult.Succeeded)
+            {
+                websiteScan.WaveErrors = waveResult.Errors;
+                websiteScan.WaveContrastErrors = waveResult.ContrastErrors;
+                websiteScan.WaveAlerts = waveResult.Alerts;
+                websiteScan.WaveFeatures = waveResult.Features;
+                websiteScan.WaveAria = waveResult.Aria;
+                websiteScan.WaveErrorMessage = null;
+            }
+            else
+            {
+                websiteScan.WaveErrors = null;
+                websiteScan.WaveContrastErrors = null;
+                websiteScan.WaveAlerts = null;
+                websiteScan.WaveFeatures = null;
+                websiteScan.WaveAria = null;
+                websiteScan.WaveErrorMessage = waveResult.ErrorMessage;
+
+                TempData["WaveWarning"] =
+                    "The website scan completed, but the accessibility scan could not be completed.";
+            }
+        }
 
         _context.Add(websiteScan);
         await _context.SaveChangesAsync();
