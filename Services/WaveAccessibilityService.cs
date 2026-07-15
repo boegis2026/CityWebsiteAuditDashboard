@@ -1,6 +1,7 @@
 ﻿using System.Net;
 using System.Net.Http.Json;
 using CityWebsiteAuditDashboard.Dtos;
+using System.Text.Json;
 
 namespace CityWebsiteAuditDashboard.Services
 {
@@ -52,7 +53,8 @@ namespace CityWebsiteAuditDashboard.Services
                     $"https://wave.webaim.org/api/request" +
                     $"?key={Uri.EscapeDataString(apiKey)}" +
                     $"&url={Uri.EscapeDataString(websiteUrl)}" +
-                    $"&reporttype=2";
+                    $"&reporttype=2" +
+                    $"&evaldelay=3000";
 
                 using HttpResponseMessage response =
                     await _httpClient.GetAsync(requestUrl, cancellationToken);
@@ -69,40 +71,87 @@ namespace CityWebsiteAuditDashboard.Services
 
                 if (!response.IsSuccessStatusCode)
                 {
+                    string responseBody =
+                        await response.Content.ReadAsStringAsync(cancellationToken);
+
                     _logger.LogWarning(
-                        "WAVE returned HTTP status code {StatusCode}.",
-                        response.StatusCode);
+                        "WAVE returned HTTP {StatusCode} for {WebsiteUrl}. Response: {ResponseBody}",
+                        (int)response.StatusCode,
+                        websiteUrl,
+                        responseBody);
 
                     return new WaveAccessibilityResult
                     {
                         Succeeded = false,
-                        ErrorMessage = "The WAVE accessibility service could not complete the scan."
+                        ErrorMessage =
+                            $"WAVE returned HTTP status {(int)response.StatusCode}."
                     };
                 }
 
-                WaveApiResponse? waveResponse =
-                    await response.Content.ReadFromJsonAsync<WaveApiResponse>(
-                        cancellationToken: cancellationToken);
+                string responseJson =
+                    await response.Content.ReadAsStringAsync(cancellationToken);
 
-                if (waveResponse?.Status == null)
+                WaveApiResponse? waveResponse;
+
+                try
                 {
+                    waveResponse = JsonSerializer.Deserialize<WaveApiResponse>(
+                        responseJson,
+                        new JsonSerializerOptions
+                        {
+                            PropertyNameCaseInsensitive = true
+                        });
+                }
+                catch (JsonException exception)
+                {
+                    _logger.LogError(
+                        exception,
+                        "WAVE JSON could not be parsed for {WebsiteUrl}. " +
+                        "JSON path: {JsonPath}. Line: {LineNumber}. Byte: {BytePosition}. " +
+                        "Response: {ResponseJson}",
+                        websiteUrl,
+                        exception.Path,
+                        exception.LineNumber,
+                        exception.BytePositionInLine,
+                        responseJson);
+
                     return new WaveAccessibilityResult
                     {
                         Succeeded = false,
-                        ErrorMessage = "WAVE returned an unexpected response."
+                        ErrorMessage =
+                            $"WAVE returned an unexpected value at {exception.Path ?? "an unknown JSON property"}."
+                    };
+                }
+
+                if (waveResponse?.Status == null)
+                {
+                    _logger.LogWarning(
+                        "WAVE returned a response without a status object for {WebsiteUrl}.",
+                        websiteUrl);
+
+                    return new WaveAccessibilityResult
+                    {
+                        Succeeded = false,
+                        ErrorMessage = "WAVE returned a response without scan status information."
                     };
                 }
 
                 if (!waveResponse.Status.Success)
                 {
+                    string rawWaveError = string.IsNullOrWhiteSpace(waveResponse.Status.Error)
+                        ? "WAVE returned no failure explanation."
+                        : waveResponse.Status.Error;
+
                     _logger.LogWarning(
-                        "WAVE scan failed. Message: {WaveError}",
-                        waveResponse.Status.Error);
+                        "WAVE scan failed for {WebsiteUrl}. HTTP status: {HttpStatusCode}. WAVE message: {WaveError}",
+                        websiteUrl,
+                        waveResponse.Status.HttpStatusCode,
+                        rawWaveError);
 
                     return new WaveAccessibilityResult
                     {
                         Succeeded = false,
-                        ErrorMessage = GetFriendlyWaveError(waveResponse.Status.Error)
+                        ErrorMessage = GetFriendlyWaveError(rawWaveError)
                     };
                 }
 
@@ -147,6 +196,21 @@ namespace CityWebsiteAuditDashboard.Services
                     ErrorMessage = "The WAVE accessibility service could not be reached."
                 };
             }
+            catch (JsonException exception)
+            {
+                _logger.LogError(
+                    exception,
+                    "WAVE JSON could not be parsed for {WebsiteUrl}.",
+                    websiteUrl);
+
+                return new WaveAccessibilityResult
+                {
+                    Succeeded = false,
+                    ErrorMessage =
+                        $"JSON parsing failed at: {exception.Path ?? "unknown property"}. " +
+                        $"Reason: {exception.Message}"
+                };
+            }
             catch (Exception exception)
             {
                 _logger.LogError(
@@ -186,59 +250,80 @@ namespace CityWebsiteAuditDashboard.Services
             string category,
             WaveCategoryCount? categoryResult)
         {
-            if (categoryResult?.Items == null)
+            if (categoryResult == null ||
+                categoryResult.Items.ValueKind != JsonValueKind.Object)
             {
                 return;
             }
 
-            foreach (KeyValuePair<string, WaveApiItem> entry
-                in categoryResult.Items)
+            foreach (JsonProperty entry
+                in categoryResult.Items.EnumerateObject())
             {
-                WaveApiItem item = entry.Value;
+                if (entry.Value.ValueKind != JsonValueKind.Object)
+                {
+                    continue;
+                }
+
+                WaveApiItem? item;
+
+                try
+                {
+                    item = entry.Value.Deserialize<WaveApiItem>();
+                }
+                catch (JsonException)
+                {
+                    continue;
+                }
+
+                if (item == null)
+                {
+                    continue;
+                }
 
                 issues.Add(new WaveAccessibilityIssueResult
                 {
                     Category = category,
 
                     IssueCode = string.IsNullOrWhiteSpace(item.Id)
-                        ? entry.Key
+                        ? entry.Name
                         : item.Id,
 
                     Description = string.IsNullOrWhiteSpace(item.Description)
-                        ? entry.Key.Replace("_", " ")
+                        ? entry.Name.Replace("_", " ")
                         : item.Description,
 
                     Count = item.Count
                 });
             }
         }
-        private static string GetFriendlyWaveError(string? waveError)
+
+        private static string GetFriendlyWaveError(string rawWaveError)
         {
-            if (string.IsNullOrWhiteSpace(waveError))
+            if (string.IsNullOrWhiteSpace(rawWaveError))
             {
-                return "The WAVE accessibility scan could not be completed.";
+                return "WAVE returned an unspecified error.";
             }
 
-            string lowerError = waveError.ToLowerInvariant();
+            // map a few common WAVE messages to friendlier text
+            string lower = rawWaveError.Trim().ToLowerInvariant();
 
-            if (lowerError.Contains("credit"))
+            if (lower.Contains("invalid api key") || lower.Contains("invalid key"))
             {
-                return "The WAVE account does not have enough API credits.";
+                return "The WAVE API key is invalid or has been revoked.";
             }
 
-            if (lowerError.Contains("key") ||
-                lowerError.Contains("authentication") ||
-                lowerError.Contains("authorized"))
+            if (lower.Contains("quota") || lower.Contains("credits"))
             {
-                return "The WAVE API key was rejected.";
+                return "The WAVE API usage limit has been reached.";
             }
 
-            if (lowerError.Contains("url"))
+            if (lower.Contains("timeout"))
             {
-                return "WAVE could not scan the supplied website URL.";
+                return "The WAVE service timed out while processing the request.";
             }
 
-            return "The WAVE accessibility scan could not be completed.";
+            // default: return the original message
+            return rawWaveError;
         }
     }
 }

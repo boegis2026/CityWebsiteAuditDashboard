@@ -1,4 +1,6 @@
-﻿using System.Text.Json.Serialization;
+﻿using CityWebsiteAuditDashboard.Dtos;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace CityWebsiteAuditDashboard.Dtos
 {
@@ -56,7 +58,7 @@ namespace CityWebsiteAuditDashboard.Dtos
         public int Count { get; set; }
 
         [JsonPropertyName("items")]
-        public Dictionary<string, WaveApiItem>? Items { get; set; }
+        public JsonElement Items { get; set; }
     }
 
     public class WaveApiItem
