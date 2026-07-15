@@ -80,6 +80,78 @@
             </div>
         </div>
     </div>
+    <div class="row g-3 mb-4">
+        <div class="col-md-6 col-xl-3">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <div class="text-muted small">
+                        Total WAVE Errors
+                    </div>
+
+                    <div class="fs-3 fw-semibold">
+                        @Model.TotalWaveErrors
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 col-xl-3">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <div class="text-muted small">
+                        Total Contrast Errors
+                    </div>
+
+                    <div class="fs-3 fw-semibold">
+                        @Model.TotalWaveContrastErrors
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 col-xl-3">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <div class="text-muted small">
+                        Websites With Errors
+                    </div>
+
+                    <div class="fs-3 fw-semibold">
+                        @Model.WebsitesWithWaveErrors
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 col-xl-3">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <div class="text-muted small">
+                        Highest Error Count
+                    </div>
+
+                    <div class="fs-3 fw-semibold">
+                        @Model.HighestWaveErrorCount
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(
+                        Model.WebsiteWithHighestWaveErrors))
+                    {
+                        <div class="small text-muted text-truncate"
+                             title="@Model.WebsiteWithHighestWaveErrors">
+                            @Model.WebsiteWithHighestWaveErrors
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="small text-muted">
+                            No successful WAVE scans
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <form method="get" class="card card-body shadow-sm mb-4">
@@ -327,6 +399,45 @@
                                 @(scan.DateScanned
                                     .ToLocalTime()
                                     .ToString("MMM d, yyyy h:mm tt"))
+                            </td>
+
+                            <th>Accessibility</th>
+                            <td>
+                                @if (scan.WaveScanSucceeded == true)
+                                {
+                                    int totalErrors =
+                                        (scan.WaveErrors ?? 0) +
+                                        (scan.WaveContrastErrors ?? 0);
+
+                                    if (totalErrors == 0)
+                                    {
+                                        <span class="badge bg-success">
+                                            No errors
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger">
+                                            @totalErrors error@(totalErrors == 1 ? "" : "s")
+                                        </span>
+                                    }
+
+                                    <div class="small text-muted mt-1">
+                                        Alerts: @(scan.WaveAlerts ?? 0)
+                                    </div>
+                                }
+                                else if (scan.WaveScanSucceeded == false)
+                                {
+                                    <span class="badge bg-warning text-dark">
+                                        Scan failed
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">
+                                        Not scanned
+                                    </span>
+                                }
                             </td>
 
                             <td class="action-buttons">

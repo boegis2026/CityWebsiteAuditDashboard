@@ -12,5 +12,7 @@ namespace CityWebsiteAuditDashboard.Data
         }
 
         public DbSet<WebsiteScan> WebsiteScans { get; set; }
+
+        public DbSet<WaveAccessibilityIssue> WaveAccessibilityIssues { get; set; }
     }
 }

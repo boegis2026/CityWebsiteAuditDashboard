@@ -104,6 +104,32 @@ public class WebsiteScansController : Controller
             .OrderBy(server => server)
             .ToListAsync();
 
+        var successfulWaveScans = await _context.WebsiteScans
+            .Where(scan => scan.WaveScanSucceeded == true)
+            .Select(scan => new
+            {
+                scan.Url,
+                WaveErrors = scan.WaveErrors ?? 0,
+                WaveContrastErrors = scan.WaveContrastErrors ?? 0
+            })
+            .ToListAsync();
+
+        int totalWaveErrors = successfulWaveScans
+            .Sum(scan => scan.WaveErrors);
+
+        int totalWaveContrastErrors = successfulWaveScans
+            .Sum(scan => scan.WaveContrastErrors);
+
+        int websitesWithWaveErrors = successfulWaveScans
+            .Count(scan =>
+                scan.WaveErrors > 0 ||
+                scan.WaveContrastErrors > 0);
+
+        var highestWaveErrorWebsite = successfulWaveScans
+            .OrderByDescending(scan =>
+                scan.WaveErrors + scan.WaveContrastErrors)
+            .FirstOrDefault();
+
         WebsiteDashboardViewModel viewModel =
             new WebsiteDashboardViewModel
             {
@@ -138,7 +164,17 @@ public class WebsiteScansController : Controller
                     await _context.WebsiteScans
                         .AverageAsync(scan =>
                             (double?)scan.ResponseTimeMilliseconds)
-                    ?? 0)
+                    ?? 0),
+
+                TotalWaveErrors = totalWaveErrors,
+                TotalWaveContrastErrors = totalWaveContrastErrors,
+                WebsitesWithWaveErrors = websitesWithWaveErrors,
+                WebsiteWithHighestWaveErrors = highestWaveErrorWebsite?.Url,
+
+                HighestWaveErrorCount = highestWaveErrorWebsite == null
+                    ? 0
+                    : highestWaveErrorWebsite.WaveErrors +
+                    highestWaveErrorWebsite.WaveContrastErrors
             };
 
         return View(viewModel);
@@ -153,7 +189,9 @@ public class WebsiteScansController : Controller
         }
 
         var websitescan = await _context.WebsiteScans
-            .FirstOrDefaultAsync(m => m.Id == id);
+            .Include(scan => scan.WaveAccessibilityIssues)
+            .FirstOrDefaultAsync(scan => scan.Id == id);
+
         if (websitescan == null)
         {
             return NotFound();
@@ -201,6 +239,18 @@ public class WebsiteScansController : Controller
                 websiteScan.WaveFeatures = waveResult.Features;
                 websiteScan.WaveAria = waveResult.Aria;
                 websiteScan.WaveErrorMessage = null;
+
+            foreach (WaveAccessibilityIssueResult issue in waveResult.Issues)
+{
+    websiteScan.WaveAccessibilityIssues.Add(
+        new WaveAccessibilityIssue
+        {
+            Category = issue.Category,
+            IssueCode = issue.IssueCode,
+            Description = issue.Description,
+            Count = issue.Count
+        });
+}
             }
             else
             {
@@ -300,7 +350,7 @@ public class WebsiteScansController : Controller
         return _context.WebsiteScans.Any(e => e.Id == id);
     }
 
-    // POST: WEBSITESCANS/ScanAgain/5
+    // POST: WebsiteScans/ScanAgain/5
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ScanAgain(int id)
@@ -316,7 +366,16 @@ public class WebsiteScansController : Controller
         WebsiteScan newScan = new WebsiteScan
         {
             Url = originalScan.Url,
-            Notes = originalScan.Notes
+            Notes = originalScan.Notes,
+
+            WaveErrors = originalScan.WaveErrors,
+            WaveContrastErrors = originalScan.WaveContrastErrors,
+            WaveAlerts = originalScan.WaveAlerts,
+            WaveFeatures = originalScan.WaveFeatures,
+            WaveAria = originalScan.WaveAria,
+            WaveScanSucceeded = originalScan.WaveScanSucceeded,
+            WaveErrorMessage = originalScan.WaveErrorMessage,
+            WaveScannedAt = originalScan.WaveScannedAt
         };
 
         await _scannerService.ScanAsync(newScan);

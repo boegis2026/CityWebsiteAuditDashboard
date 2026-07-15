@@ -49,5 +49,8 @@ namespace CityWebsiteAuditDashboard.Models
         public string? WaveErrorMessage { get; set; }
 
         public DateTime? WaveScannedAt { get; set; }
+
+        public ICollection<WaveAccessibilityIssue> WaveAccessibilityIssues { get; set; }
+            = new List<WaveAccessibilityIssue>();
     }
 }

@@ -17,5 +17,19 @@
         public int? CreditsRemaining { get; set; }
 
         public string? ErrorMessage { get; set; }
+
+        public List<WaveAccessibilityIssueResult> Issues { get; set; }
+            = new List<WaveAccessibilityIssueResult>();
+    }
+
+    public class WaveAccessibilityIssueResult
+    {
+        public string Category { get; set; } = string.Empty;
+
+        public string IssueCode { get; set; } = string.Empty;
+
+        public string Description { get; set; } = string.Empty;
+
+        public int Count { get; set; }
     }
 }

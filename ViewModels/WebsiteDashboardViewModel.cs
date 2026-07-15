@@ -29,6 +29,16 @@ namespace CityWebsiteAuditDashboard.ViewModels
 
         public int PageSize { get; set; }
 
+        public int TotalWaveErrors { get; set; }
+
+        public int TotalWaveContrastErrors { get; set; }
+
+        public int WebsitesWithWaveErrors { get; set; }
+
+        public string? WebsiteWithHighestWaveErrors { get; set; }
+
+        public int HighestWaveErrorCount { get; set; }
+
         public long AverageResponseTime { get; set; }
     }
 }

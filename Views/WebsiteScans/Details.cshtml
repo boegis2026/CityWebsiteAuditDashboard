@@ -208,6 +208,100 @@
         </div>
     </div>
 
+    @if (Model.WaveAccessibilityIssues.Any())
+    {
+        <hr class="my-4" />
+
+        <h3 class="h6 mb-3">
+            Accessibility Issue Breakdown
+        </h3>
+
+        <div class="table-responsive">
+            <table class="table table-sm table-striped align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th scope="col">Category</th>
+                        <th scope="col">Issue</th>
+                        <th scope="col" class="text-end">Count</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @foreach (var issue in Model.WaveAccessibilityIssues
+                        .OrderBy(issue => issue.Category == "Error" ? 1
+                            : issue.Category == "Contrast" ? 2
+                            : issue.Category == "Alert" ? 3
+                            : issue.Category == "Feature" ? 4
+                            : issue.Category == "ARIA" ? 5
+                            : issue.Category == "Structure" ? 6
+                            : 7)
+                        .ThenByDescending(issue => issue.Count)
+                        .ThenBy(issue => issue.Description))
+                    {
+                        <tr>
+                            <td>
+                                @if (issue.Category == "Error")
+                                {
+                                    <span class="badge bg-danger">Error</span>
+                                }
+                                else if (issue.Category == "Contrast")
+                                {
+                                    <span class="badge bg-danger">
+                                        Contrast
+                                    </span>
+                                }
+                                else if (issue.Category == "Alert")
+                                {
+                                    <span class="badge bg-warning text-dark">
+                                        Alert
+                                    </span>
+                                }
+                                else if (issue.Category == "Feature")
+                                {
+                                    <span class="badge bg-success">
+                                        Feature
+                                    </span>
+                                }
+                                else if (issue.Category == "ARIA")
+                                {
+                                    <span class="badge bg-info text-dark">
+                                        ARIA
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">
+                                        @issue.Category
+                                    </span>
+                                }
+                            </td>
+
+                            <td>
+                                <div class="fw-semibold">
+                                    @issue.Description
+                                </div>
+
+                                <div class="small text-muted">
+                                    @issue.IssueCode
+                                </div>
+                            </td>
+
+                            <td class="text-end fw-semibold">
+                                @issue.Count
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-light border mt-4 mb-0">
+            WAVE completed successfully, but no detailed issue types were returned.
+        </div>
+    }
+
     <div class="card-footer d-flex gap-2">
         <form asp-action="ScanAgain"
               asp-route-id="@Model.Id"

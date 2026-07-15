@@ -49,6 +49,24 @@ namespace CityWebsiteAuditDashboard.Dtos
 
     public class WaveCategoryCount
     {
+        [JsonPropertyName("description")]
+        public string? Description { get; set; }
+
+        [JsonPropertyName("count")]
+        public int Count { get; set; }
+
+        [JsonPropertyName("items")]
+        public Dictionary<string, WaveApiItem>? Items { get; set; }
+    }
+
+    public class WaveApiItem
+    {
+        [JsonPropertyName("id")]
+        public string? Id { get; set; }
+
+        [JsonPropertyName("description")]
+        public string? Description { get; set; }
+
         [JsonPropertyName("count")]
         public int Count { get; set; }
     }

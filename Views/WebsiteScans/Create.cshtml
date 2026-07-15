@@ -14,7 +14,7 @@
 
 <div class="row">
     <div class="col-md-6">
-        <form asp-action="Create">
+        <form asp-action="Create" id="scanForm">
             <div asp-validation-summary="ModelOnly"
                  class="text-danger"></div>
 
@@ -55,9 +55,17 @@
             </div>
 
             <button type="submit"
+                    id="scanButton"
                     class="btn btn-primary">
                 Scan Website
             </button>
+
+            <div id="scanStatus"
+                 class="alert alert-info mt-3 d-none"
+                 role="status"
+                 aria-live="polite">
+                Scanning the website. This may take a moment.
+            </div>
 
             <a asp-action="Index"
                class="btn btn-secondary">
@@ -71,4 +79,24 @@
     @{
         await Html.RenderPartialAsync("_ValidationScriptsPartial");
     }
+
+    <script>
+        document.getElementById("scanForm")
+            ?.addEventListener("submit", function () {
+                const form = this;
+                const button = document.getElementById("scanButton");
+                const status = document.getElementById("scanStatus");
+
+                if (!form.checkValidity()) {
+                    return;
+                }
+
+                if (button) {
+                    button.disabled = true;
+                    button.textContent = "Scanning...";
+                }
+
+                status?.classList.remove("d-none");
+            });
+    </script>
 }

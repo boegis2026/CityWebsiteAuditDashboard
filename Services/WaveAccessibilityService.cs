@@ -52,7 +52,7 @@ namespace CityWebsiteAuditDashboard.Services
                     $"https://wave.webaim.org/api/request" +
                     $"?key={Uri.EscapeDataString(apiKey)}" +
                     $"&url={Uri.EscapeDataString(websiteUrl)}" +
-                    $"&reporttype=1";
+                    $"&reporttype=2";
 
                 using HttpResponseMessage response =
                     await _httpClient.GetAsync(requestUrl, cancellationToken);
@@ -123,7 +123,8 @@ namespace CityWebsiteAuditDashboard.Services
                     Alerts = waveResponse.Categories.Alert?.Count ?? 0,
                     Features = waveResponse.Categories.Feature?.Count ?? 0,
                     Aria = waveResponse.Categories.Aria?.Count ?? 0,
-                    CreditsRemaining = waveResponse.Statistics?.CreditsRemaining
+                    CreditsRemaining = waveResponse.Statistics?.CreditsRemaining,
+                    Issues = BuildIssueList(waveResponse.Categories)
                 };
             }
             catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -160,6 +161,57 @@ namespace CityWebsiteAuditDashboard.Services
             }
         }
 
+        private static List<WaveAccessibilityIssueResult> BuildIssueList(
+    WaveCategories categories)
+        {
+            List<WaveAccessibilityIssueResult> issues = new();
+
+            AddCategoryIssues(issues, "Error", categories.Error);
+            AddCategoryIssues(issues, "Contrast", categories.Contrast);
+            AddCategoryIssues(issues, "Alert", categories.Alert);
+            AddCategoryIssues(issues, "Feature", categories.Feature);
+            AddCategoryIssues(issues, "Structure", categories.Structure);
+            AddCategoryIssues(issues, "ARIA", categories.Aria);
+
+            return issues
+                .Where(issue => issue.Count > 0)
+                .OrderBy(issue => issue.Category)
+                .ThenByDescending(issue => issue.Count)
+                .ThenBy(issue => issue.Description)
+                .ToList();
+        }
+
+        private static void AddCategoryIssues(
+            List<WaveAccessibilityIssueResult> issues,
+            string category,
+            WaveCategoryCount? categoryResult)
+        {
+            if (categoryResult?.Items == null)
+            {
+                return;
+            }
+
+            foreach (KeyValuePair<string, WaveApiItem> entry
+                in categoryResult.Items)
+            {
+                WaveApiItem item = entry.Value;
+
+                issues.Add(new WaveAccessibilityIssueResult
+                {
+                    Category = category,
+
+                    IssueCode = string.IsNullOrWhiteSpace(item.Id)
+                        ? entry.Key
+                        : item.Id,
+
+                    Description = string.IsNullOrWhiteSpace(item.Description)
+                        ? entry.Key.Replace("_", " ")
+                        : item.Description,
+
+                    Count = item.Count
+                });
+            }
+        }
         private static string GetFriendlyWaveError(string? waveError)
         {
             if (string.IsNullOrWhiteSpace(waveError))
