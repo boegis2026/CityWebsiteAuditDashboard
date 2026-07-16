@@ -1,0 +1,316 @@
+﻿@model CityWebsiteAuditDashboard.ViewModels.BatchScanViewModel
+
+@{
+    ViewData["Title"] = "Batch Analysis";
+}
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="mb-1">Batch Analysis</h1>
+            <p class="text-muted mb-0">
+                Scan up to 25 public website URLs, one at a time.
+            </p>
+        </div>
+
+        <a asp-action="Index" class="btn btn-secondary">
+            Back to Dashboard
+        </a>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">
+            <h2 class="h5 mb-0">Batch Scan Setup</h2>
+        </div>
+
+        <div class="card-body">
+            <form asp-action="Batch"
+                  method="post"
+                  id="batchScanForm">
+
+                <div asp-validation-summary="ModelOnly"
+                     class="alert alert-danger"
+                     role="alert">
+                </div>
+
+                @if (ViewData["BatchValidationSuccess"] is string validationSuccess)
+                {
+                    <div class="alert alert-success" role="status">
+                        @validationSuccess
+                    </div>
+                }
+
+                <div class="mb-3">
+                    <label asp-for="NumberOfUrls"
+                           class="form-label">
+                    </label>
+
+                    <input asp-for="NumberOfUrls"
+                           class="form-control"
+                           type="number"
+                           min="1"
+                           max="25"
+                           id="numberOfUrls" />
+
+                    <span asp-validation-for="NumberOfUrls"
+                          class="text-danger">
+                    </span>
+
+                    <div class="form-text">
+                        Enter a number from 1 through 25.
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="UrlsText"
+                           class="form-label">
+                    </label>
+
+                    <textarea asp-for="UrlsText"
+                              class="form-control"
+                              rows="12"
+                              placeholder="https://example.com&#10;https://engineering.lacity.gov/&#10;https://www.lacity.gov/">
+                    </textarea>
+
+                    <span asp-validation-for="UrlsText"
+                          class="text-danger">
+                    </span>
+
+                    <div class="form-text">
+                        Enter one complete HTTP or HTTPS URL per line.
+                        Blank lines will be ignored.
+                    </div>
+                </div>
+
+                <div class="form-check mb-3">
+                    <input asp-for="IncludeWaveScan"
+                           class="form-check-input"
+                           id="includeWaveScan" />
+
+                    <label asp-for="IncludeWaveScan"
+                           class="form-check-label">
+                    </label>
+                </div>
+
+                <div id="waveCreditMessage"
+                     class="alert alert-info"
+                     role="status"
+                     aria-live="polite">
+                    WAVE is not selected. No WAVE API credits will be used.
+                </div>
+
+                <button type="submit"
+                        class="btn btn-primary"
+                        id="batchScanButton">
+                    Run Batch Scan
+                </button>
+                <div id="batchScanStatus"
+                     class="alert alert-info mt-3 d-none"
+                     role="status"
+                     aria-live="polite">
+                    Processing the batch one URL at a time. Please do not close or refresh this page.
+                </div>
+            </form>
+        </div>
+    </div>
+
+    @if (Model.BatchCompleted)
+    {
+        <div class="card shadow-sm mb-4">
+            <div class="card-header">
+                <h2 class="h5 mb-0">Batch Summary</h2>
+            </div>
+
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6 col-xl">
+                        <div class="border rounded p-3 h-100">
+                            <div class="text-muted small">Total Submitted</div>
+                            <div class="fs-4 fw-semibold">
+                                @Model.TotalSubmitted
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6 col-xl">
+                        <div class="border rounded p-3 h-100">
+                            <div class="text-muted small">Successful Scans</div>
+                            <div class="fs-4 fw-semibold">
+                                @Model.SuccessfulScans
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6 col-xl">
+                        <div class="border rounded p-3 h-100">
+                            <div class="text-muted small">Failed Scans</div>
+                            <div class="fs-4 fw-semibold">
+                                @Model.FailedScans
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6 col-xl">
+                        <div class="border rounded p-3 h-100">
+                            <div class="text-muted small">WAVE Completed</div>
+                            <div class="fs-4 fw-semibold">
+                                @Model.WaveScansCompleted
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6 col-xl">
+                        <div class="border rounded p-3 h-100">
+                            <div class="text-muted small">WAVE Failed</div>
+                            <div class="fs-4 fw-semibold">
+                                @Model.WaveScansFailed
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h2 class="h5 mb-0">Individual Results</h2>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-striped align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th scope="col">URL</th>
+                            <th scope="col">Website Scan</th>
+                            <th scope="col">WAVE</th>
+                            <th scope="col">Message</th>
+                            <th scope="col">Details</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var result in Model.Results)
+                        {
+                            <tr>
+                                <td class="text-break">
+                                    @result.Url
+                                </td>
+
+                                <td>
+                                    @if (result.ScanSucceeded)
+                                    {
+                                        <span class="badge bg-success">
+                                            Completed
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger">
+                                            Failed
+                                        </span>
+                                    }
+                                </td>
+
+                                <td>
+                                    @if (!result.WaveRequested)
+                                    {
+                                        <span class="badge bg-secondary">
+                                            Not requested
+                                        </span>
+                                    }
+                                    else if (result.WaveSucceeded == true)
+                                    {
+                                        <span class="badge bg-success">
+                                            Completed
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning text-dark">
+                                            Failed
+                                        </span>
+                                    }
+                                </td>
+
+                                <td>
+                                    @result.Message
+                                </td>
+
+                                <td>
+                                    @if (result.WebsiteScanId.HasValue)
+                                    {
+                                        <a asp-action="Details"
+                                           asp-route-id="@result.WebsiteScanId"
+                                           class="btn btn-sm btn-outline-primary">
+                                            View
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">—</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+
+    <script>
+        const numberInput = document.getElementById("numberOfUrls");
+        const waveCheckbox = document.getElementById("includeWaveScan");
+        const creditMessage = document.getElementById("waveCreditMessage");
+
+        function updateWaveCreditMessage() {
+            const numberOfUrls = Number.parseInt(numberInput?.value) || 0;
+
+            if (!waveCheckbox?.checked) {
+                creditMessage.textContent =
+                    "WAVE is not selected. No WAVE API credits will be used.";
+                return;
+            }
+
+            const creditsPerUrl = 2;
+            const estimatedCredits = numberOfUrls * creditsPerUrl;
+
+            creditMessage.textContent =
+                `WAVE report type 2 uses ${creditsPerUrl} credits per URL. ` +
+                `This batch is estimated to use ${estimatedCredits} credits.`;
+        }
+
+        numberInput?.addEventListener(
+            "input",
+            updateWaveCreditMessage);
+
+        waveCheckbox?.addEventListener(
+            "change",
+            updateWaveCreditMessage);
+
+        updateWaveCreditMessage();
+
+        const batchForm = document.getElementById("batchScanForm");
+        const batchButton = document.getElementById("batchScanButton");
+        const batchStatus = document.getElementById("batchScanStatus");
+
+        batchForm?.addEventListener("submit", function () {
+            if (!batchForm.checkValidity()) {
+                return;
+            }
+
+            if (batchButton) {
+                batchButton.disabled = true;
+                batchButton.textContent = "Processing Batch...";
+            }
+
+            batchStatus?.classList.remove("d-none");
+        });
+    </script>
+}

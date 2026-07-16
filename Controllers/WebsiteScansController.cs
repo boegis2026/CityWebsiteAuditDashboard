@@ -180,6 +180,283 @@ public class WebsiteScansController : Controller
         return View(viewModel);
     }
 
+    // GET: WebsiteScans/Batch
+    [HttpGet]
+    public IActionResult Batch()
+    {
+        return View(new BatchScanViewModel());
+    }
+
+    // POST: WebsiteScans/Batch
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Batch(BatchScanViewModel model)
+    {
+        if (!ModelState.IsValid)
+        {
+            return View(model);
+        }
+
+        List<string> urls = model.UrlsText
+            .Split(
+                new[] { "\r\n", "\n", "\r" },
+                StringSplitOptions.None)
+            .Select(url => url.Trim())
+            .Where(url => !string.IsNullOrWhiteSpace(url))
+            .ToList();
+
+        if (urls.Count == 0)
+        {
+            ModelState.AddModelError(
+                nameof(model.UrlsText),
+                "Paste at least one website URL.");
+
+            return View(model);
+        }
+
+        if (urls.Count > 25)
+        {
+            ModelState.AddModelError(
+                nameof(model.UrlsText),
+                "A batch cannot contain more than 25 URLs.");
+
+            return View(model);
+        }
+
+        if (model.NumberOfUrls != urls.Count)
+        {
+            ModelState.AddModelError(
+                nameof(model.NumberOfUrls),
+                $"You entered {model.NumberOfUrls}, but {urls.Count} non-empty URL(s) were pasted.");
+
+            return View(model);
+        }
+
+        List<string> invalidUrls = new();
+
+        foreach (string url in urls)
+        {
+            bool isValid =
+                Uri.TryCreate(url, UriKind.Absolute, out Uri? parsedUri) &&
+                !string.IsNullOrWhiteSpace(parsedUri.Host) &&
+                (parsedUri.Scheme == Uri.UriSchemeHttp ||
+                 parsedUri.Scheme == Uri.UriSchemeHttps);
+
+            if (!isValid)
+            {
+                invalidUrls.Add(url);
+            }
+        }
+
+        if (invalidUrls.Count > 0)
+        {
+            ModelState.AddModelError(
+                nameof(model.UrlsText),
+                "These URLs are invalid: " +
+                string.Join(", ", invalidUrls));
+
+            return View(model);
+        }
+
+        model.UrlsText = string.Join(
+            Environment.NewLine,
+            urls);
+
+        model.Results.Clear();
+        model.TotalSubmitted = urls.Count;
+        model.SuccessfulScans = 0;
+        model.FailedScans = 0;
+        model.WaveScansCompleted = 0;
+        model.WaveScansFailed = 0;
+
+        foreach (string url in urls)
+        {
+            BatchScanResultViewModel result =
+                new BatchScanResultViewModel
+                {
+                    Url = url,
+                    WaveRequested = model.IncludeWaveScan
+                };
+
+            WebsiteScan? websiteScan = null;
+
+            bool normalScanSucceeded = false;
+            bool recordSaved = false;
+            bool? waveSucceeded = null;
+
+            try
+            {
+                websiteScan = new WebsiteScan
+                {
+                    Url = url
+                };
+
+                // Reuse the existing normal website scanner.
+                await _scannerService.ScanAsync(websiteScan);
+
+                normalScanSucceeded =
+                    string.IsNullOrWhiteSpace(websiteScan.ScanError);
+
+                if (normalScanSucceeded)
+                {
+                    result.Message = "Website scan completed.";
+                }
+                else
+                {
+                    result.Message =
+                        string.IsNullOrWhiteSpace(websiteScan.ScanError)
+                            ? "The website scan could not be completed."
+                            : websiteScan.ScanError;
+                }
+
+                // Run WAVE only when deliberately selected.
+                if (model.IncludeWaveScan)
+                {
+                    WaveAccessibilityResult waveResult =
+                        await _waveAccessibilityService.ScanAsync(url);
+
+                    waveSucceeded = waveResult.Succeeded;
+                    result.WaveSucceeded = waveResult.Succeeded;
+
+                    websiteScan.WaveScanSucceeded =
+                        waveResult.Succeeded;
+
+                    websiteScan.WaveScannedAt =
+                        DateTime.Now;
+
+                    if (waveResult.Succeeded)
+                    {
+                        websiteScan.WaveErrors =
+                            waveResult.Errors;
+
+                        websiteScan.WaveContrastErrors =
+                            waveResult.ContrastErrors;
+
+                        websiteScan.WaveAlerts =
+                            waveResult.Alerts;
+
+                        websiteScan.WaveFeatures =
+                            waveResult.Features;
+
+                        websiteScan.WaveAria =
+                            waveResult.Aria;
+
+                        websiteScan.WaveErrorMessage = null;
+
+                        foreach (WaveAccessibilityIssueResult issue
+                            in waveResult.Issues)
+                        {
+                            websiteScan.WaveAccessibilityIssues.Add(
+                                new WaveAccessibilityIssue
+                                {
+                                    Category = issue.Category,
+                                    IssueCode = issue.IssueCode,
+                                    Description = issue.Description,
+                                    Count = issue.Count
+                                });
+                        }
+
+                        result.Message +=
+                            " WAVE accessibility scan completed.";
+                    }
+                    else
+                    {
+                        websiteScan.WaveErrors = null;
+                        websiteScan.WaveContrastErrors = null;
+                        websiteScan.WaveAlerts = null;
+                        websiteScan.WaveFeatures = null;
+                        websiteScan.WaveAria = null;
+
+                        websiteScan.WaveErrorMessage =
+                            waveResult.ErrorMessage;
+
+                        result.Message +=
+                            " WAVE accessibility scan failed.";
+
+                        if (!string.IsNullOrWhiteSpace(
+                            waveResult.ErrorMessage))
+                        {
+                            result.Message +=
+                                $" {waveResult.ErrorMessage}";
+                        }
+                    }
+                }
+
+                // Save this URL independently from every other URL.
+                _context.WebsiteScans.Add(websiteScan);
+                await _context.SaveChangesAsync();
+
+                recordSaved = true;
+
+                // EF Core fills this after the INSERT succeeds.
+                result.WebsiteScanId = websiteScan.Id;
+            }
+            catch (Exception)
+            {
+                /*
+                 * If an INSERT fails, remove any unsaved Added entities
+                 * from EF Core's tracker. Otherwise, EF may try to save
+                 * them again during the next URL.
+                 */
+                foreach (var entry in _context.ChangeTracker
+                    .Entries()
+                    .Where(entry =>
+                        entry.State ==
+                        Microsoft.EntityFrameworkCore.EntityState.Added)
+                    .ToList())
+                {
+                    entry.State =
+                        Microsoft.EntityFrameworkCore.EntityState.Detached;
+                }
+
+                result.Message =
+                    "This URL could not be fully processed or saved. " +
+                    "The remaining URLs were still processed.";
+
+                if (model.IncludeWaveScan &&
+                    waveSucceeded == null)
+                {
+                    waveSucceeded = false;
+                    result.WaveSucceeded = false;
+                }
+            }
+
+            /*
+             * A batch item counts as successful only when the normal
+             * scan succeeded and its database record was saved.
+             */
+            result.ScanSucceeded =
+                normalScanSucceeded && recordSaved;
+
+            if (result.ScanSucceeded)
+            {
+                model.SuccessfulScans++;
+            }
+            else
+            {
+                model.FailedScans++;
+            }
+
+            if (model.IncludeWaveScan)
+            {
+                if (waveSucceeded == true)
+                {
+                    model.WaveScansCompleted++;
+                }
+                else
+                {
+                    model.WaveScansFailed++;
+                }
+            }
+
+            model.Results.Add(result);
+        }
+
+        model.BatchCompleted = true;
+
+        return View(model);
+    }
+
     // GET: WEBSITESCANS/Details/5
     public async Task<IActionResult> Details(int? id)
     {
