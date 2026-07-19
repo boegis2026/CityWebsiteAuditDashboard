@@ -1,0 +1,257 @@
+﻿@model CityWebsiteAuditDashboard.ViewModels.AuthenticatedAuditHistoryViewModel
+
+@{
+    ViewData["Title"] = "Authenticated Audit History";
+
+    int completedCount =
+        Model.Runs.Count(run => run.Status == "Completed");
+
+    int runningCount =
+        Model.Runs.Count(run => run.Status == "Running");
+
+    int unsuccessfulCount =
+    Model.Runs.Count(run =>
+        run.Status == "Failed" ||
+        run.Status == "Cancelled" ||
+        run.Status == "Interrupted");
+}
+
+<div class="container py-4">
+    <div class="d-flex flex-wrap
+        justify-content-between
+        align-items-start
+        gap-3
+        mb-4">
+        <div>
+            <h1 class="h2 mb-1">Authenticated Audit History</h1>
+
+            <p class="text-muted mb-0">
+                Review authenticated Playwright audit sessions saved in
+                SQL Server.
+            </p>
+        </div>
+
+        <a asp-controller="AuthenticatedAudits"
+           asp-action="Index"
+           class="btn btn-primary">
+            Start Authenticated Audit
+        </a>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-xl-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">
+                        Total runs
+                    </div>
+
+                    <div class="fs-3 fw-semibold">
+                        @Model.Runs.Count
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">
+                        Completed
+                    </div>
+
+                    <div class="fs-3 fw-semibold">
+                        @completedCount
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">
+                        Running
+                    </div>
+
+                    <div class="fs-3 fw-semibold">
+                        @runningCount
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">
+                        Unsuccessful or interrupted
+                    </div>
+
+                    <div class="fs-3 fw-semibold">
+                        @unsuccessfulCount
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (Model.Runs.Count == 0)
+    {
+        <div class="alert alert-info">
+            No authenticated audit runs have been saved yet.
+        </div>
+    }
+    else
+    {
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h2 class="h5 mb-0">Saved audit runs</h2>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-striped
+                    table-hover
+                    align-middle
+                    mb-0">
+                    <thead>
+                        <tr>
+                            <th scope="col">Run</th>
+                            <th scope="col">Application</th>
+                            <th scope="col">Started</th>
+                            <th scope="col">Completed</th>
+                            <th scope="col">Status</th>
+                            <th scope="col">Steps</th>
+                            <th scope="col">Successful</th>
+                            <th scope="col">Failed</th>
+                            <th scope="col">Final step</th>
+                            <th scope="col">Engine</th>
+                            <th scope="col">
+                                <span class="visually-hidden">Actions</span>
+                            </th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var run in Model.Runs)
+                        {
+                            string statusBadgeClass =
+                            run.Status switch
+                                {
+                                "Completed" => "bg-success",
+                                "Running" => "bg-primary",
+                                "Failed" => "bg-danger",
+                                "Cancelled" => "bg-warning text-dark",
+                                "Interrupted" => "bg-warning text-dark",
+                                _ => "bg-secondary"
+                                };
+
+                            <tr>
+                                <td>
+                                    #@run.Id
+                                </td>
+
+                                <td>
+                                    <div class="fw-semibold">
+                                        @run.ApplicationName
+                                    </div>
+
+                                    <div class="small text-muted text-break"
+                                         style="max-width: 300px;">
+                                        @run.StartingUrl
+                                    </div>
+
+                                    @if (!string.IsNullOrWhiteSpace(
+                                        run.ErrorMessage))
+                                    {
+                                        <details class="mt-2">
+                                            <summary class="small text-danger">
+                                                View run error
+                                            </summary>
+
+                                            <div class="small text-danger
+                                                text-break
+                                                mt-1">
+                                                @run.ErrorMessage
+                                            </div>
+                                        </details>
+                                    }
+                                </td>
+
+                                <td>
+                                    @run.StartedAt.ToString(
+                                        "yyyy-MM-dd HH:mm:ss")
+                                    <div class="small text-muted">UTC</div>
+                                </td>
+
+                                <td>
+                                    @if (run.CompletedAt.HasValue)
+                                    {
+                                        @run.CompletedAt.Value.ToString(
+                                            "yyyy-MM-dd HH:mm:ss")
+
+                                        <div class="small text-muted">
+                                            UTC
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">
+                                            Not completed
+                                        </span>
+                                    }
+                                </td>
+
+                                <td>
+                                    <span class="badge @statusBadgeClass">
+                                        @run.Status
+                                    </span>
+                                </td>
+
+                                <td>
+                                    @run.StepCount
+                                </td>
+
+                                <td>
+                                    @run.SuccessfulStepCount
+                                </td>
+
+                                <td>
+                                    @run.FailedStepCount
+                                </td>
+
+                                <td>
+                                    @if (run.FinalStepNumber.HasValue)
+                                    {
+                                        <span>
+                                            Step @run.FinalStepNumber
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">
+                                            None
+                                        </span>
+                                    }
+                                </td>
+
+                                <td>
+                                    @run.AccessibilityEngine
+                                </td>
+
+                                <td class="text-end">
+                                    <a asp-controller="AuthenticatedAudits"
+                                       asp-action="Details"
+                                       asp-route-id="@run.Id"
+                                       class="btn btn-sm btn-outline-primary">
+                                        View Details
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>

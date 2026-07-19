@@ -1,0 +1,446 @@
+﻿@model CityWebsiteAuditDashboard.ViewModels.AuthenticatedAuditDashboardViewModel
+@using CityWebsiteAuditDashboard.Services.AuthenticatedAuditing
+
+@{
+    ViewData["Title"] = "Authenticated Audit";
+}
+
+<div class="container py-4">
+    <div class="d-flex flex-wrap
+        justify-content-between
+        align-items-start
+        gap-3
+        mb-4">
+        <div>
+            <h1 class="h2">Authenticated Accessibility Audit</h1>
+
+            <p class="text-muted mb-0">
+                Open a visible Playwright browser, log in manually, and scan each
+                rendered application state without automatically advancing or
+                submitting the protected workflow.
+            </p>
+        </div>
+
+        <a asp-controller="AuthenticatedAudits"
+           asp-action="History"
+           class="btn btn-outline-secondary">
+            View Audit History
+        </a>
+    </div>
+
+    @*
+        Validation errors can include invalid start information, a missing
+        in memory browser session, or a Playwright/database failure.
+    *@
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <div asp-validation-summary="ModelOnly"
+             class="alert alert-danger"
+             role="alert">
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+    {
+        <div class="alert alert-info" role="status">
+            @Model.StatusMessage
+        </div>
+    }
+
+    @if (!Model.SessionIsActive)
+    {
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h2 class="h5 mb-0">Start authenticated audit</h2>
+            </div>
+
+            <div class="card-body">
+                <form asp-controller="AuthenticatedAudits"
+                      asp-action="Start"
+                      method="post">
+
+                    <div class="mb-3">
+                        <label asp-for="StartInput.ApplicationName"
+                               class="form-label">
+                        </label>
+
+                        <input asp-for="StartInput.ApplicationName"
+                               class="form-control"
+                               placeholder="Example: Class A Permits" />
+
+                        <span asp-validation-for="StartInput.ApplicationName"
+                              class="text-danger">
+                        </span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="StartInput.StartingUrl"
+                               class="form-label">
+                        </label>
+
+                        <input asp-for="StartInput.StartingUrl"
+                               class="form-control"
+                               placeholder="https://example.gov/login" />
+
+                        <span asp-validation-for="StartInput.StartingUrl"
+                              class="text-danger">
+                        </span>
+
+                        <div class="form-text">
+                            Enter the page where the manual authentication
+                            process should begin.
+                        </div>
+                    </div>
+
+                    <div class="alert alert-warning">
+                        <strong>Important:</strong>
+                        The browser opens on the computer running this dashboard.
+                        Complete the login manually and do not enter credentials
+                        into the dashboard itself.
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        Start Browser Session
+                    </button>
+                </form>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row g-4">
+            <div class="col-lg-7">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header">
+                        <h2 class="h5 mb-0">Active browser session</h2>
+                    </div>
+
+                    <div class="card-body">
+                        <dl class="row mb-4">
+                            <dt class="col-sm-4">Application</dt>
+                            <dd class="col-sm-8">
+                                @Model.ApplicationName
+                            </dd>
+
+                            <dt class="col-sm-4">Starting URL</dt>
+                            <dd class="col-sm-8 text-break">
+                                @Model.StartingUrl
+                            </dd>
+
+                            <dt class="col-sm-4">Accessibility engine</dt>
+                            <dd class="col-sm-8">
+                                @Model.AccessibilityEngine
+                            </dd>
+
+                            <dt class="col-sm-4">Started</dt>
+                            <dd class="col-sm-8">
+                                @if (Model.StartedAt.HasValue)
+                                {
+                                    @Model.StartedAt.Value.ToString(
+                                        "yyyy-MM-dd HH:mm:ss 'UTC'")
+                                }
+                                else
+                                {
+                                    <span>Unknown</span>
+                                }
+                            </dd>
+                        </dl>
+
+                        <div class="alert alert-secondary">
+                            <ol class="mb-0">
+                                <li>
+                                    Use the Playwright browser to log in.
+                                </li>
+                                <li>
+                                    Navigate manually to the state you want to audit.
+                                </li>
+                                <li>
+                                    Return here and select
+                                    <strong>Scan Current Step</strong>.
+                                </li>
+                                <li>
+                                    Repeat for each additional rendered state.
+                                </li>
+                                <li>
+                                    Use
+                                    <strong>Complete and Close Browser</strong>
+                                    when finished.
+                                </li>
+                            </ol>
+                        </div>
+
+                        @*
+                            These hidden fields preserve the information needed
+                            to redisplay the session after the Scan POST request.
+
+                            The live Playwright browser objects remain only in
+                            AuthenticatedAuditService.
+                        *@
+                        <form asp-controller="AuthenticatedAudits"
+                              asp-action="Scan"
+                              method="post"
+                              class="d-inline">
+
+                            <input type="hidden"
+                                   name="SessionId"
+                                   value="@Model.SessionId" />
+
+                            <input type="hidden"
+                                   name="ApplicationName"
+                                   value="@Model.ApplicationName" />
+
+                            <input type="hidden"
+                                   name="StartingUrl"
+                                   value="@Model.StartingUrl" />
+
+                            <input type="hidden"
+                                   name="AccessibilityEngine"
+                                   value="@Model.AccessibilityEngine" />
+
+                            <input type="hidden"
+                                   name="StartedAt"
+                                   value="@Model.StartedAt?.ToString("O")" />
+
+                            <button type="submit"
+                                    class="btn btn-success">
+                                Scan Current Step
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-5">
+                <div class="card border-danger shadow-sm h-100">
+                    <div class="card-header">
+                        <h2 class="h5 mb-0">Complete session</h2>
+                    </div>
+
+                    <div class="card-body">
+                        <p>
+                            Completing the session closes the Playwright browser
+                            and marks the audit run as completed in SQL Server.
+                        </p>
+
+                        <p class="text-muted">
+                            It does not click Submit, Pay, Certify, Finish,
+                            Finalize, or any other application control.
+                        </p>
+
+                        <form asp-controller="AuthenticatedAudits"
+                              asp-action="Stop"
+                              method="post">
+
+                            <input type="hidden"
+                                   name="SessionId"
+                                   value="@Model.SessionId" />
+
+                            <input type="hidden"
+                                   name="ApplicationName"
+                                   value="@Model.ApplicationName" />
+
+                            <input type="hidden"
+                                   name="StartingUrl"
+                                   value="@Model.StartingUrl" />
+
+                            <input type="hidden"
+                                   name="AccessibilityEngine"
+                                   value="@Model.AccessibilityEngine" />
+
+                            <input type="hidden"
+                                   name="StartedAt"
+                                   value="@Model.StartedAt?.ToString("O")" />
+
+                            <div class="form-check mb-3">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       name="MarkLastStepAsFinal"
+                                       value="true"
+                                       checked
+                                       id="markLastStepAsFinal" />
+
+                                @*
+                                    An unchecked checkbox sends no value.
+
+                                    This hidden input ensures false is posted
+                                    when the user clears the checkbox.
+                                *@
+                                <input type="hidden"
+                                       name="MarkLastStepAsFinal"
+                                       value="false" />
+
+                                <label class="form-check-label"
+                                       for="markLastStepAsFinal">
+                                    Mark the last scanned state as final
+                                </label>
+                            </div>
+
+                            <button type="submit"
+                                    class="btn btn-outline-danger">
+                                Complete and Close Browser
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (Model.LastStepResult is not null)
+        {
+            AuthenticatedAuditStepResult step = Model.LastStepResult;
+
+            <div class="card shadow-sm mt-4">
+                <div class="card-header d-flex
+                            justify-content-between
+                            align-items-center">
+
+                    <h2 class="h5 mb-0">
+                        Last scanned state: Step @step.StepNumber
+                    </h2>
+
+                    @if (step.ScanSucceeded)
+                    {
+                        <span class="badge bg-success">
+                            Scan succeeded
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-danger">
+                            Scan failed
+                        </span>
+                    }
+                </div>
+
+                <div class="card-body">
+                    <dl class="row">
+                        <dt class="col-md-3">Step name</dt>
+                        <dd class="col-md-9">
+                            @step.StepName
+                        </dd>
+
+                        <dt class="col-md-3">Page title</dt>
+                        <dd class="col-md-9">
+                            @(step.PageTitle ?? "Not detected")
+                        </dd>
+
+                        <dt class="col-md-3">Main heading</dt>
+                        <dd class="col-md-9">
+                            @(step.Heading ?? "Not detected")
+                        </dd>
+
+                        <dt class="col-md-3">Current URL</dt>
+                        <dd class="col-md-9 text-break">
+                            @step.Url
+                        </dd>
+
+                        <dt class="col-md-3">DOM fingerprint</dt>
+                        <dd class="col-md-9">
+                            <code class="text-break">
+                                @(step.DomFingerprint ?? "Not generated")
+                            </code>
+                        </dd>
+                    </dl>
+
+                    <div class="row g-3 mt-1">
+                        <div class="col-6 col-md-4 col-xl-2">
+                            <div class="border rounded p-3 text-center h-100">
+                                <div class="fs-4 fw-semibold">
+                                    @step.VisibleFormCount
+                                </div>
+
+                                <div class="small text-muted">
+                                    Visible forms
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-6 col-md-4 col-xl-2">
+                            <div class="border rounded p-3 text-center h-100">
+                                <div class="fs-4 fw-semibold">
+                                    @step.VisibleFieldCount
+                                </div>
+
+                                <div class="small text-muted">
+                                    Visible fields
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-6 col-md-4 col-xl-2">
+                            <div class="border rounded p-3 text-center h-100">
+                                <div class="fs-4 fw-semibold">
+                                    @step.VisibleButtonCount
+                                </div>
+
+                                <div class="small text-muted">
+                                    Visible buttons
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-6 col-md-4 col-xl-2">
+                            <div class="border rounded p-3 text-center h-100">
+                                <div class="fs-4 fw-semibold">
+                                    @step.ViolationRuleCount
+                                </div>
+
+                                <div class="small text-muted">
+                                    Violation rules
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-6 col-md-4 col-xl-2">
+                            <div class="border rounded p-3 text-center h-100">
+                                <div class="fs-4 fw-semibold">
+                                    @step.AffectedElementCount
+                                </div>
+
+                                <div class="small text-muted">
+                                    Affected elements
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-6 col-md-4 col-xl-2">
+                            <div class="border rounded p-3 text-center h-100">
+                                <div class="fs-4 fw-semibold">
+                                    @step.NeedsReviewRuleCount
+                                </div>
+
+                                <div class="small text-muted">
+                                    Needs review
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-6 col-md-4 col-xl-2">
+                            <div class="border rounded p-3 text-center h-100">
+                                <div class="fs-4 fw-semibold">
+                                    @step.PassedRuleCount
+                                </div>
+
+                                <div class="small text-muted">
+                                    Passed rules
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(step.ErrorMessage))
+                    {
+                        <div class="alert alert-danger mt-4 mb-0">
+                            <strong>Scan error:</strong>
+                            @step.ErrorMessage
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

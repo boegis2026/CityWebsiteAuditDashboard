@@ -4,6 +4,7 @@ using CityWebsiteAuditDashboard.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CityWebsiteAuditDashboard.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260717234644_AddAuthenticatedAuditTables")]
+    partial class AddAuthenticatedAuditTables
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -21,54 +24,6 @@ namespace CityWebsiteAuditDashboard.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
-
-            modelBuilder.Entity("CityWebsiteAuditDashboard.Models.AuthenticatedAuditFinding", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("AffectedElementCount")
-                        .HasColumnType("int");
-
-                    b.Property<int>("AuthenticatedAuditStepId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(2000)
-                        .HasColumnType("nvarchar(2000)");
-
-                    b.Property<string>("FindingType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("Help")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("HelpUrl")
-                        .HasMaxLength(2048)
-                        .HasColumnType("nvarchar(2048)");
-
-                    b.Property<string>("Impact")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("RuleId")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AuthenticatedAuditStepId", "FindingType", "RuleId")
-                        .IsUnique();
-
-                    b.ToTable("AuthenticatedAuditFindings");
-                });
 
             modelBuilder.Entity("CityWebsiteAuditDashboard.Models.AuthenticatedAuditRun", b =>
                 {
@@ -298,17 +253,6 @@ namespace CityWebsiteAuditDashboard.Migrations
                     b.ToTable("WebsiteScans");
                 });
 
-            modelBuilder.Entity("CityWebsiteAuditDashboard.Models.AuthenticatedAuditFinding", b =>
-                {
-                    b.HasOne("CityWebsiteAuditDashboard.Models.AuthenticatedAuditStep", "AuthenticatedAuditStep")
-                        .WithMany("Findings")
-                        .HasForeignKey("AuthenticatedAuditStepId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("AuthenticatedAuditStep");
-                });
-
             modelBuilder.Entity("CityWebsiteAuditDashboard.Models.AuthenticatedAuditStep", b =>
                 {
                     b.HasOne("CityWebsiteAuditDashboard.Models.AuthenticatedAuditRun", "AuthenticatedAuditRun")
@@ -334,11 +278,6 @@ namespace CityWebsiteAuditDashboard.Migrations
             modelBuilder.Entity("CityWebsiteAuditDashboard.Models.AuthenticatedAuditRun", b =>
                 {
                     b.Navigation("Steps");
-                });
-
-            modelBuilder.Entity("CityWebsiteAuditDashboard.Models.AuthenticatedAuditStep", b =>
-                {
-                    b.Navigation("Findings");
                 });
 
             modelBuilder.Entity("CityWebsiteAuditDashboard.Models.WebsiteScan", b =>

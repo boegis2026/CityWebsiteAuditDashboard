@@ -1,6 +1,7 @@
 using CityWebsiteAuditDashboard.Services;
 using CityWebsiteAuditDashboard.Data;
 using Microsoft.EntityFrameworkCore;
+using CityWebsiteAuditDashboard.Services.AuthenticatedAuditing;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,6 +24,28 @@ builder.Services.AddHttpClient<IWebsiteScannerService, WebsiteScannerService>(cl
     client.DefaultRequestHeaders.UserAgent.ParseAdd(
         "CityWebsiteAuditDashboard/1.0");
 });
+
+// A singleton is required because the same authenticated Playwright browser
+// must remain alive across separate Start, Scan, and Stop HTTP requests.
+builder.Services.AddSingleton<
+    IAuthenticatedAuditService,
+    AuthenticatedAuditService>();
+
+/*
+ * A Playwright browser session cannot survive an application restart.
+ * This startup service marks any leftover Running database records as
+ * Interrupted so the history page does not show sessions that no longer exist.
+ */
+builder.Services.AddHostedService<
+    AuthenticatedAuditStartupRecoveryService>();
+
+/*
+ * Gracefully closes active Playwright browsers when the dashboard stops.
+ * Startup recovery remains responsible for sessions lost during crashes or
+ * forced process termination.
+ */
+builder.Services.AddHostedService<
+    AuthenticatedAuditShutdownService>();
 
 var app = builder.Build();
 
