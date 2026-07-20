@@ -38,15 +38,18 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
     public AuthenticatedAuditSessionResult? GetActiveSession()
     {
         /*
-         * The proof-of-concept dashboard supports one manually controlled
-         * authenticated browser session at a time.
+         * Closing the visible Edge window may close all of its pages while the
+         * underlying Playwright browser process remains connected.
          *
-         * Ordering by StartedAt also gives predictable behavior if an older
-         * version of the application happened to create more than one session.
+         * A usable session therefore requires both a connected browser and at
+         * least one open HTTP or HTTPS page.
          */
         AuthenticatedAuditBrowserSession? session =
             _sessions.Values
-                .Where(session => !session.IsStopping)
+                .Where(session =>
+                    !session.IsStopping &&
+                    session.Browser.IsConnected &&
+                    session.BrowserContext.Pages.Any(IsAuditablePage))
                 .OrderByDescending(session => session.StartedAt)
                 .FirstOrDefault();
 
@@ -55,13 +58,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             return null;
         }
 
-        /*
-         * Return only safe session metadata. Playwright browser, context, and page
-         * objects remain private inside this service.
-         */
         return new AuthenticatedAuditSessionResult
         {
             SessionId = session.SessionId,
+            AuditRunId = session.AuditRunId,
             ApplicationName = session.ApplicationName,
             StartingUrl = session.StartingUrl,
             AccessibilityEngine = session.AccessibilityEngine,
@@ -161,6 +161,45 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     "The authenticated browser session could not be registered.");
             }
 
+            /*
+            * The initial page existed before the BrowserContext.Page event handler was
+            * registered, so attach its close handler directly.
+            */
+            RegisterPageCloseTracking(sessionId, startingPage);
+
+            /*
+             * The protected application may open in another tab after login. Register the
+             * same close tracking for every additional page created in this context.
+             */
+            browserContext.Page += (_, newPage) =>
+            {
+                RegisterPageCloseTracking(sessionId, newPage);
+            };
+
+            /*
+            * Detect when the user manually closes Edge or when the browser crashes.
+            *
+            * StopSessionAsync removes the session before intentionally closing the
+            * browser, so this handler only owns unexpected browser disconnections.
+            */
+            browser.Disconnected += (_, _) =>
+            {
+                /*
+                 * Event handlers cannot be awaited by Playwright. The helper catches and
+                 * logs its own exceptions so failures are not silently lost.
+                 */
+                _ = HandleUnexpectedBrowserDisconnectAsync(sessionId);
+            };
+
+            /*
+             * Cover the small possibility that Edge disconnected between registration
+             * and attaching the event handler.
+             */
+            if (!browser.IsConnected)
+            {
+                _ = HandleUnexpectedBrowserDisconnectAsync(sessionId);
+            }
+
             // Ownership of these objects now belongs to the in-memory session.
             // Clearing the local references prevents the catch block from
             // closing a successfully registered browser.
@@ -176,6 +215,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             return new AuthenticatedAuditSessionResult
             {
                 SessionId = sessionId,
+                AuditRunId = auditRunId,
                 ApplicationName = applicationName,
                 StartingUrl = startingUrl,
                 AccessibilityEngine = "axe-core",
@@ -215,6 +255,20 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         {
             throw new KeyNotFoundException(
                 "The authenticated audit session was not found or is no longer running.");
+        }
+
+        if (!session.Browser.IsConnected)
+        {
+            throw new KeyNotFoundException(
+                "The Playwright controlled Edge browser has been closed. " +
+                "The authenticated audit session is no longer available.");
+        }
+
+        if (!session.BrowserContext.Pages.Any(IsAuditablePage))
+        {
+            throw new KeyNotFoundException(
+                "All Playwright-controlled Edge pages have been closed. " +
+                "The authenticated audit session is no longer available.");
         }
 
         // Only one scan or stop operation may use this browser session at a time.
@@ -1082,6 +1136,157 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         auditRun.ErrorMessage = null;
 
         await dbContext.SaveChangesAsync(CancellationToken.None);
+    }
+
+    private async Task HandleUnexpectedBrowserDisconnectAsync(
+    Guid sessionId)
+    {
+        if (!_sessions.TryGetValue(
+                sessionId,
+                out AuthenticatedAuditBrowserSession? session))
+        {
+            /*
+             * The normal Stop operation removes the session before closing Edge.
+             * In that case, the Disconnected event requires no additional work.
+             */
+            return;
+        }
+
+        bool lockTaken = false;
+        bool ownsCleanup = false;
+
+        try
+        {
+            /*
+             * If a scan was already running when Edge closed, wait for that
+             * operation to finish handling its browser exception and database save.
+             */
+            await session.OperationLock.WaitAsync(CancellationToken.None);
+            lockTaken = true;
+
+            if (session.IsStopping)
+            {
+                return;
+            }
+
+            bool removed =
+                _sessions.TryRemove(
+                    sessionId,
+                    out AuthenticatedAuditBrowserSession? removedSession);
+
+            if (!removed ||
+                !ReferenceEquals(removedSession, session))
+            {
+                return;
+            }
+
+            session.IsStopping = true;
+            ownsCleanup = true;
+
+            await MarkRunAsInterruptedAsync(
+                session.AuditRunId,
+                "The Playwright-controlled Edge browser was closed or " +
+                "disconnected before this authenticated audit session was " +
+                "completed.");
+
+            _logger.LogWarning(
+                "Authenticated audit session {SessionId} for run {AuditRunId} " +
+                "was interrupted because its browser disconnected.",
+                sessionId,
+                session.AuditRunId);
+        }
+        catch (Exception exception)
+        {
+            /*
+             * Browser disconnection handlers run outside a normal controller
+             * request, so all exceptions must be caught and logged here.
+             */
+            _logger.LogError(
+                exception,
+                "Could not clean up disconnected authenticated audit session " +
+                "{SessionId}.",
+                sessionId);
+        }
+        finally
+        {
+            if (lockTaken)
+            {
+                session.OperationLock.Release();
+            }
+
+            if (ownsCleanup)
+            {
+                try
+                {
+                    /*
+                     * Edge is already disconnected, but this still releases the
+                     * remaining Playwright context and managed resources.
+                     */
+                    await session.DisposeAsync();
+                }
+                catch (Exception exception)
+                {
+                    _logger.LogError(
+                        exception,
+                        "Could not completely release disconnected Playwright " +
+                        "session {SessionId}.",
+                        sessionId);
+                }
+            }
+        }
+    }
+
+    private void RegisterPageCloseTracking(
+    Guid sessionId,
+    IPage page)
+    {
+        /*
+         * Page.Close is raised when the associated tab or browser window closes.
+         * The event itself cannot be awaited, so cleanup runs through a protected
+         * asynchronous helper.
+         */
+        page.Close += (_, _) =>
+        {
+            _ = HandlePossibleLastPageClosedAsync(sessionId);
+        };
+    }
+
+    private async Task HandlePossibleLastPageClosedAsync(
+        Guid sessionId)
+    {
+        /*
+         * Give Playwright a brief moment to finish updating BrowserContext.Pages.
+         * This also avoids interrupting the session during a transition where one
+         * page closes immediately before another protected tab opens.
+         */
+        await Task.Delay(250);
+
+        if (!_sessions.TryGetValue(
+                sessionId,
+                out AuthenticatedAuditBrowserSession? session))
+        {
+            return;
+        }
+
+        if (session.IsStopping)
+        {
+            return;
+        }
+
+        bool hasOpenAuditablePage =
+            session.BrowserContext.Pages.Any(IsAuditablePage);
+
+        if (hasOpenAuditablePage)
+        {
+            // Another login or protected application tab is still available.
+            return;
+        }
+
+        /*
+         * No usable Edge pages remain. Reuse the existing interruption cleanup,
+         * which removes the session, updates SQL Server, and releases Playwright.
+         */
+        await HandleUnexpectedBrowserDisconnectAsync(sessionId);
     }
 
     private async Task MarkRunAsInterruptedAsync(

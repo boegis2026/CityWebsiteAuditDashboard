@@ -19,6 +19,12 @@ public sealed class AuthenticatedAuditSessionResult
     // the Playwright browser or page objects to controllers.
     public Guid SessionId { get; init; }
 
+    /// <summary>
+    /// Database identifier for the audit run associated with this live browser.
+    /// This allows the dashboard GET page to reload the most recently saved step.
+    /// </summary>
+    public int AuditRunId { get; init; }
+
     public string ApplicationName { get; init; } = string.Empty;
 
     public string StartingUrl { get; init; } = string.Empty;

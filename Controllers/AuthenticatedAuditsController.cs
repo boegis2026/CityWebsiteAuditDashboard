@@ -34,25 +34,66 @@ public sealed class AuthenticatedAuditsController : Controller
     }
 
     [HttpGet]
-    public IActionResult Index()
+    public async Task<IActionResult> Index(
+    CancellationToken cancellationToken)
     {
+        string? statusMessage =
+            TempData["AuthenticatedAuditStatus"] as string;
+
         AuthenticatedAuditSessionResult? activeSession =
             _authenticatedAuditService.GetActiveSession();
 
         if (activeSession is null)
         {
-            return View(new AuthenticatedAuditDashboardViewModel());
+            return View(
+                new AuthenticatedAuditDashboardViewModel
+                {
+                    StatusMessage = statusMessage
+                });
         }
 
         /*
-         * Restore the visible session controls after a refresh or after the user
-         * visits another dashboard page. The live browser remained in the
-         * singleton service throughout that navigation.
+         * POST actions redirect back to this GET action. Reload the most recently
+         * saved step from SQL Server so refreshing the browser never repeats a
+         * Start or Scan form submission.
          */
-        return View(
+        AuthenticatedAuditStepResult? latestStep =
+            await _dbContext.AuthenticatedAuditSteps
+                .AsNoTracking()
+                .Where(step =>
+                    step.AuthenticatedAuditRunId ==
+                    activeSession.AuditRunId)
+                .OrderByDescending(step => step.StepNumber)
+                .Select(step => new AuthenticatedAuditStepResult
+                {
+                    StepNumber = step.StepNumber,
+                    StepName = step.StepName,
+                    Url = step.Url,
+                    PageTitle = step.PageTitle,
+                    Heading = step.Heading,
+                    DomFingerprint = step.DomFingerprint,
+                    ScannedAt = step.ScannedAt,
+                    VisibleFormCount = step.VisibleFormCount,
+                    VisibleFieldCount = step.VisibleFieldCount,
+                    VisibleButtonCount = step.VisibleButtonCount,
+                    ViolationRuleCount = step.ViolationRuleCount,
+                    AffectedElementCount = step.AffectedElementCount,
+                    NeedsReviewRuleCount = step.NeedsReviewRuleCount,
+                    PassedRuleCount = step.PassedRuleCount,
+                    ScanSucceeded = step.ScanSucceeded,
+                    ErrorMessage = step.ErrorMessage
+                })
+                .FirstOrDefaultAsync(cancellationToken);
+
+        AuthenticatedAuditDashboardViewModel model =
             CreateActiveSessionViewModel(
                 activeSession,
-                "The existing authenticated browser session is still active."));
+                statusMessage ??
+                "The existing authenticated browser session is still active.");
+
+        model.LastStepResult = latestStep;
+
+        return View(model);
     }
 
     [HttpGet]
@@ -227,19 +268,15 @@ public sealed class AuthenticatedAuditsController : Controller
                     },
                     cancellationToken);
 
-            return View(
-                "Index",
-                new AuthenticatedAuditDashboardViewModel
-                {
-                    SessionId = result.SessionId,
-                    ApplicationName = result.ApplicationName,
-                    StartingUrl = result.StartingUrl,
-                    AccessibilityEngine = result.AccessibilityEngine,
-                    StartedAt = result.StartedAt,
-                    StatusMessage =
-                        "The browser is open. Log in manually, navigate to " +
-                        "the first protected state, and then select Scan Current Step."
-                });
+            /*
+            * Redirect after a successful POST so refreshing the dashboard does not
+            * submit Start again and launch another Edge window.
+            */
+            TempData["AuthenticatedAuditStatus"] =
+                "The browser is open. Log in manually, navigate to the first " +
+                "protected state, and then select Scan Current Step.";
+
+            return RedirectToAction(nameof(Index));
         }
         catch (OperationCanceledException)
             when (cancellationToken.IsCancellationRequested)
@@ -328,14 +365,17 @@ public sealed class AuthenticatedAuditsController : Controller
                     input.SessionId,
                     cancellationToken);
 
-            model.LastStepResult = stepResult;
+            /*
+            * The Index GET action reloads the latest saved step from SQL Server.
+            * Redirecting prevents a browser refresh from scanning the same state twice.
+            */
+            TempData["AuthenticatedAuditStatus"] =
+                stepResult.ScanSucceeded
+                    ? $"Step {stepResult.StepNumber} was scanned and saved."
+                    : $"Step {stepResult.StepNumber} was saved, but its " +
+                      "accessibility scan did not complete.";
 
-            model.StatusMessage = stepResult.ScanSucceeded
-                ? $"Step {stepResult.StepNumber} was scanned and saved."
-                : $"Step {stepResult.StepNumber} was saved, but its " +
-                  "accessibility scan did not complete.";
-
-            return View("Index", model);
+            return RedirectToAction(nameof(Index));
         }
         catch (OperationCanceledException)
             when (cancellationToken.IsCancellationRequested)
@@ -415,16 +455,13 @@ public sealed class AuthenticatedAuditsController : Controller
                 cancellationToken);
 
             /*
-             * Clearing SessionId causes the page to return to its inactive
-             * state. The completed run and its steps remain in SQL Server.
-             */
-            model.SessionId = null;
-            model.LastStepResult = null;
-            model.StatusMessage =
+            * Redirecting prevents refresh from attempting to stop the same session again.
+            */
+            TempData["AuthenticatedAuditStatus"] =
                 "The authenticated audit session was completed and " +
                 "the Playwright browser was closed.";
 
-            return View("Index", model);
+            return RedirectToAction(nameof(Index));
         }
         catch (OperationCanceledException)
             when (cancellationToken.IsCancellationRequested)
