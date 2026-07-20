@@ -48,10 +48,6 @@ body {
     background-color: white;
 }
 
-.dashboard-stat-card {
-    border-left: 4px solid #0d6efd;
-}
-
     .dashboard-stat-card h2 {
         margin-bottom: 0;
         font-weight: 700;

@@ -87,7 +87,7 @@ try
     Console.WriteLine(
         SanitizeUrlForDisplay(formPage.Url));
 
-    const int maximumSteps = 5;
+    const int maximumSteps = 25;
 
     var completedSteps =
         new List<AuthenticatedStepScanResult>();
