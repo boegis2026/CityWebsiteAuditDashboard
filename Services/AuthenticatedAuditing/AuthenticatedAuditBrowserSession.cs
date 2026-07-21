@@ -69,36 +69,61 @@ internal sealed class AuthenticatedAuditBrowserSession : IAsyncDisposable
     /// </summary>
     public SemaphoreSlim OperationLock { get; } = new(1, 1);
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        // Attempt each cleanup operation independently. If one Playwright
-        // object is already closed, the remaining resources should still
-        // receive their cleanup calls.
-        try
+        /*
+         * Default cleanup path for situations where the browser has not
+         * already been closed through StopSessionAsync.
+         */
+        return DisposeAsync(closeBrowser: true);
+    }
+
+    public async ValueTask DisposeAsync(bool closeBrowser)
+    {
+        if (closeBrowser)
         {
-            await BrowserContext.CloseAsync();
-        }
-        catch (PlaywrightException)
-        {
-            // The context may already have been closed by the browser or user.
+            try
+            {
+                if (Browser is not null &&
+                    Browser.IsConnected)
+                {
+                    await Browser.CloseAsync();
+                }
+            }
+            catch (PlaywrightException)
+            {
+                // The browser may already be closed or disconnected.
+            }
+            finally
+            {
+                Playwright?.Dispose();
+                OperationLock.Dispose();
+            }
+
+            return;
         }
 
-        try
-        {
-            await Browser.CloseAsync();
-        }
-        catch (PlaywrightException)
-        {
-            // The browser may already have been manually closed.
-        }
+        /*
+         * StopSessionAsync already closed the browser through CDP.
+         *
+         * Playwright.Dispose takes approximately 30 seconds on this
+         * workstation, so complete that driver cleanup in the background
+         * instead of blocking the dashboard request.
+         */
+        IPlaywright? playwrightToDispose = Playwright;
 
-        Playwright.Dispose();
-     /*
-    * OperationLock is intentionally not disposed here.
-    *
-    * Another request may have obtained the session immediately before it was
-    * removed from the session dictionary and may still be waiting on this lock.
-    * That request will acquire the lock, see IsStopping, and exit safely.
-    */
+        OperationLock.Dispose();
+
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                playwrightToDispose?.Dispose();
+            }
+            catch
+            {
+                // Background cleanup must not affect the completed audit run.
+            }
+        });
     }
 }

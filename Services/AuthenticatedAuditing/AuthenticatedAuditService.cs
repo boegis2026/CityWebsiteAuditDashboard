@@ -7,6 +7,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Deque.AxeCore.Commons;
 using Deque.AxeCore.Playwright;
+using System.Diagnostics;
 
 namespace CityWebsiteAuditDashboard.Services.AuthenticatedAuditing;
 
@@ -451,6 +452,8 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
     {
         ArgumentNullException.ThrowIfNull(urls);
 
+        Stopwatch batchStopwatch = Stopwatch.StartNew();
+
         /*
          * Ignore blank entries and trim surrounding spaces before validation.
          * Duplicate URLs are kept because the same URL may represent different
@@ -497,6 +500,9 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            Stopwatch itemStopwatch = Stopwatch.StartNew();
+            string? finalUrl = null;
+
             try
             {
                 /*
@@ -504,10 +510,11 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                  * single-step scanner. This keeps all accessibility collection,
                  * database persistence, and fingerprint logic in one place.
                  */
-                await NavigateAuthenticatedSessionAsync(
-                    sessionId,
-                    url,
-                    cancellationToken);
+                finalUrl =
+                    await NavigateAuthenticatedSessionAsync(
+                        sessionId,
+                        url,
+                        cancellationToken);
 
                 AuthenticatedAuditStepResult stepResult =
                     await ScanCurrentStepAsync(
@@ -518,6 +525,9 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     new AuthenticatedAuditBatchItemResult
                     {
                         Url = url,
+                        FinalUrl = finalUrl,
+                        WasRedirected =
+                            UrlChangedAfterNavigation(url, finalUrl),
                         StepNumber = stepResult.StepNumber,
                         StepName = stepResult.StepName,
                         Succeeded = stepResult.ScanSucceeded,
@@ -527,6 +537,8 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             stepResult.NeedsReviewRuleCount,
                         AffectedElementCount =
                             stepResult.AffectedElementCount,
+                        DurationMilliseconds =
+                            itemStopwatch.ElapsedMilliseconds,
                         ErrorMessage = stepResult.ErrorMessage
                     });
             }
@@ -553,12 +565,15 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     {
                         Url = url,
                         Succeeded = false,
+                        DurationMilliseconds =
+                            itemStopwatch.ElapsedMilliseconds,
                         ErrorMessage =
                             LimitLength(exception.Message, 2000)
                     });
             }
         }
 
+        batchStopwatch.Stop();
         return new AuthenticatedAuditBatchResult
         {
             RequestedCount = normalizedUrls.Length,
@@ -566,6 +581,8 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 itemResults.Count(item => item.Succeeded),
             FailedCount =
                 itemResults.Count(item => !item.Succeeded),
+            DurationMilliseconds =
+                batchStopwatch.ElapsedMilliseconds,
             Items = itemResults
         };
     }
@@ -575,6 +592,8 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
     bool markLastStepAsFinal,
     CancellationToken cancellationToken = default)
     {
+        Stopwatch totalTimer = Stopwatch.StartNew();
+
         if (!_sessions.TryGetValue(
                 sessionId,
                 out AuthenticatedAuditBrowserSession? session))
@@ -583,11 +602,15 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 "The authenticated audit session was not found or is no longer running.");
         }
 
-        /*
-         * Wait for any current scan to finish. If the request is cancelled before
-         * obtaining the lock, the live session remains available and is not lost.
-         */
+        Stopwatch lockTimer = Stopwatch.StartNew();
+
         await session.OperationLock.WaitAsync(cancellationToken);
+
+        lockTimer.Stop();
+
+        _logger.LogInformation(
+            "Close browser timing: operation lock took {ElapsedMilliseconds} ms.",
+            lockTimer.ElapsedMilliseconds);
 
         bool ownsShutdown = false;
 
@@ -600,8 +623,8 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             }
 
             /*
-             * Remove the session before closing the browser. New dashboard
-             * requests will no longer be able to locate or use this session.
+             * Remove the session so no new scans can use it while shutdown
+             * is taking place.
              */
             if (!_sessions.TryRemove(sessionId, out _))
             {
@@ -613,18 +636,112 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             ownsShutdown = true;
 
             /*
-             * Do not use the web request's cancellation token for this database
-             * update. Once shutdown begins, the final audit status should still be
-             * saved even if the browser request is interrupted.
+             * Save the completed status before disconnecting Playwright.
+             * This prevents the audit history from remaining marked as Running.
              */
-            await CompleteAuditRunAsync(
-                session.AuditRunId,
-                session.LastSavedStepId,
-                markLastStepAsFinal);
+            try
+            {
+                Stopwatch databaseTimer = Stopwatch.StartNew();
+
+                await CompleteAuditRunAsync(
+                    session.AuditRunId,
+                    session.LastSavedStepId,
+                    markLastStepAsFinal);
+
+                databaseTimer.Stop();
+
+                _logger.LogInformation(
+                    "Close browser timing: CompleteAuditRunAsync took " +
+                    "{ElapsedMilliseconds} ms.",
+                    databaseTimer.ElapsedMilliseconds);
+            }
+            finally
+            {
+                /*
+                 * Always attempt to close the browser, even if the database
+                 * update encounters a problem.
+                 */
+                Stopwatch browserShutdownTimer = Stopwatch.StartNew();
+
+                try
+                {
+                    if (session.Browser is not null)
+                    {
+                        /*
+                         * Close all open contexts and their pages first.
+                         */
+                        IBrowserContext[] openContexts =
+                            session.Browser.Contexts.ToArray();
+
+                        foreach (IBrowserContext context in openContexts)
+                        {
+                            try
+                            {
+                                await context.CloseAsync();
+                            }
+                            catch (PlaywrightException)
+                            {
+                                // The context may already be closed.
+                            }
+                            catch (ObjectDisposedException)
+                            {
+                                // The context connection may already be disposed.
+                            }
+                        }
+
+                        /*
+                         * Browser.CloseAsync takes approximately 30 seconds on
+                         * this workstation. Use Chromium's CDP Browser.close
+                         * command for immediate shutdown instead.
+                         */
+                        if (session.Browser.IsConnected)
+                        {
+                            try
+                            {
+                                ICDPSession cdpSession =
+                                    await session.Browser
+                                        .NewBrowserCDPSessionAsync();
+
+                                await cdpSession.SendAsync("Browser.close");
+                            }
+                            catch (PlaywrightException)
+                            {
+                                /*
+                                 * Browser.close disconnects Playwright, which can
+                                 * throw even when the browser closed successfully.
+                                 */
+                            }
+                            catch (ObjectDisposedException)
+                            {
+                                // The browser connection already closed.
+                            }
+                        }
+                    }
+                }
+                catch (Exception exception)
+                {
+                    /*
+                     * Browser cleanup must not replace or prevent the database
+                     * completion result.
+                     */
+                    _logger.LogWarning(
+                        exception,
+                        "The authenticated browser closed with a shutdown warning.");
+                }
+                finally
+                {
+                    browserShutdownTimer.Stop();
+
+                    _logger.LogInformation(
+                        "Close browser timing: browser shutdown took " +
+                        "{ElapsedMilliseconds} ms.",
+                        browserShutdownTimer.ElapsedMilliseconds);
+                }
+            }
 
             _logger.LogInformation(
-                "Stopped authenticated audit session {SessionId} for run {AuditRunId}. " +
-                "Last step marked final: {MarkLastStepAsFinal}.",
+                "Stopped authenticated audit session {SessionId} for run " +
+                "{AuditRunId}. Last step marked final: {MarkLastStepAsFinal}.",
                 sessionId,
                 session.AuditRunId,
                 markLastStepAsFinal);
@@ -635,12 +752,44 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
 
             if (ownsShutdown)
             {
-                // Closing Playwright does not submit, pay, certify, or finalize
-                // anything in the protected application.
-                await session.DisposeAsync();
+                Stopwatch disposeTimer = Stopwatch.StartNew();
+
+                try
+                {
+                    /*
+                    * The browser was already closed through CDP above.
+                    * Dispose only the remaining Playwright and lock resources.
+                    */
+                    await session.DisposeAsync(closeBrowser: false);
+                }
+                catch (PlaywrightException exception)
+                {
+                    _logger.LogWarning(
+                        exception,
+                        "Playwright was already disconnected during session disposal.");
+                }
+                catch (ObjectDisposedException)
+                {
+                    // The Playwright resources were already disposed.
+                }
+
+                disposeTimer.Stop();
+
+                _logger.LogInformation(
+                    "Close browser timing: DisposeAsync took " +
+                    "{ElapsedMilliseconds} ms.",
+                    disposeTimer.ElapsedMilliseconds);
             }
+
+            totalTimer.Stop();
+
+            _logger.LogInformation(
+                "Close browser timing: total shutdown took " +
+                "{ElapsedMilliseconds} ms.",
+                totalTimer.ElapsedMilliseconds);
         }
     }
+
 
     public async Task InterruptAllSessionsAsync(
     CancellationToken cancellationToken = default)
@@ -1225,7 +1374,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         return auditStep.Id;
     }
 
-    private async Task NavigateAuthenticatedSessionAsync(
+    private async Task<string> NavigateAuthenticatedSessionAsync(
     Guid sessionId,
     string url,
     CancellationToken cancellationToken)
@@ -1310,6 +1459,12 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     "load state before the timeout. The scan will still proceed.",
                     url);
             }
+            /*
+            * Playwright updates Page.Url after server-side redirects and client-side
+            * navigation. Returning it lets the batch report unexpected destinations,
+            * including possible sign-in redirects.
+            */
+            return page.Url;
         }
         finally
         {
@@ -1680,6 +1835,51 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         }
 
         return value[..maximumLength];
+    }
+
+    /// <summary>
+    /// Compares the requested and final navigation destinations while ignoring
+    /// query strings and fragments, which protected applications commonly change.
+    /// </summary>
+    private static bool UrlChangedAfterNavigation(
+        string requestedUrl,
+        string finalUrl)
+    {
+        if (!Uri.TryCreate(
+                requestedUrl,
+                UriKind.Absolute,
+                out Uri? requestedUri) ||
+            !Uri.TryCreate(
+                finalUrl,
+                UriKind.Absolute,
+                out Uri? finalUri))
+        {
+            return !string.Equals(
+                requestedUrl.Trim(),
+                finalUrl.Trim(),
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        string requestedPath =
+            requestedUri.AbsolutePath.TrimEnd('/');
+
+        string finalPath =
+            finalUri.AbsolutePath.TrimEnd('/');
+
+        return
+            !string.Equals(
+                requestedUri.Scheme,
+                finalUri.Scheme,
+                StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(
+                requestedUri.Host,
+                finalUri.Host,
+                StringComparison.OrdinalIgnoreCase) ||
+            requestedUri.Port != finalUri.Port ||
+            !string.Equals(
+                requestedPath,
+                finalPath,
+                StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

@@ -614,6 +614,62 @@ public sealed class AuthenticatedAuditsController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    public IActionResult LoadAttentionUrls(string[] urls)
+    {
+        AuthenticatedAuditSessionResult? activeSession =
+            _authenticatedAuditService.GetActiveSession();
+
+        if (activeSession is null)
+        {
+            TempData["AuthenticatedAuditStatus"] =
+                "The authenticated browser session is no longer available. " +
+                "Start a new session and sign in again.";
+
+            return RedirectToAction(nameof(Index));
+        }
+
+        /*
+         * Remove blank values and trim spaces before placing the URLs back into
+         * the authenticated batch form.
+         */
+        string[] normalizedUrls =
+            (urls ?? Array.Empty<string>())
+                .Where(url => !string.IsNullOrWhiteSpace(url))
+                .Select(url => url.Trim())
+                .Take(25)
+                .ToArray();
+
+        if (normalizedUrls.Length == 0)
+        {
+            AuthenticatedAuditDashboardViewModel emptyModel =
+                CreateActiveSessionViewModel(
+                    activeSession,
+                    "There are no failed or redirected URLs to load.");
+
+            return View("Index", emptyModel);
+        }
+
+        AuthenticatedAuditDashboardViewModel model =
+            CreateActiveSessionViewModel(
+                activeSession,
+                $"{normalizedUrls.Length} attention URL(s) were loaded " +
+                "into the authenticated batch form.");
+
+        model.BatchInput =
+            new AuthenticatedAuditBatchInputModel
+            {
+                SessionId = activeSession.SessionId,
+                NumberOfUrls = normalizedUrls.Length,
+                Urls = string.Join(
+                    Environment.NewLine,
+                    normalizedUrls)
+            };
+
+        return View("Index", model);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> Stop(
         AuthenticatedAuditSessionInputModel input,
         CancellationToken cancellationToken)

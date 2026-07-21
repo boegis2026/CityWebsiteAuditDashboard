@@ -168,7 +168,9 @@
 
                                 <form asp-action="ScanBatch"
                                       method="post"
-                                      id="authenticatedBatchForm">
+                                      id="authenticatedBatchForm"
+                                      data-starting-url="@Model.StartingUrl">
+
                                     @Html.AntiForgeryToken()
 
                                     <input asp-for="BatchInput.SessionId"
@@ -186,6 +188,7 @@
                                             </label>
 
                                             <input asp-for="BatchInput.NumberOfUrls"
+                                                   id="authenticatedBatchExpectedCount"
                                                    class="form-control"
                                                    type="number"
                                                    min="1"
@@ -205,11 +208,25 @@
                                             <textarea asp-for="BatchInput.Urls"
                                                       class="form-control"
                                                       rows="7"
+                                                      id="authenticatedBatchUrls"
                                                       placeholder="https://protected-app.example/page-1&#10;https://protected-app.example/page-2"></textarea>
 
                                             <span asp-validation-for="BatchInput.Urls"
                                                   class="text-danger">
                                             </span>
+
+                                            <div id="authenticatedBatchUrlStatus"
+                                                 class="alert alert-secondary py-2 mt-2 mb-0"
+                                                 role="status"
+                                                 aria-live="polite">
+                                                No protected URLs detected yet.
+                                            </div>
+
+                                            <div id="authenticatedBatchDomainWarning"
+                                                 class="alert alert-warning py-2 mt-2 mb-0 d-none"
+                                                 role="status"
+                                                 aria-live="polite">
+                                            </div>
 
                                             <div class="form-text">
                                                 Enter one complete HTTP or HTTPS URL per line. Blank
@@ -251,6 +268,50 @@
 
                         @if (Model.LastBatchResult is not null)
                         {
+                            int totalViolationRules =
+                                Model.LastBatchResult.Items.Sum(
+                                    item => item.ViolationRuleCount);
+
+                            int totalNeedsReviewRules =
+                                Model.LastBatchResult.Items.Sum(
+                                    item => item.NeedsReviewRuleCount);
+
+                            int totalAffectedElements =
+                                Model.LastBatchResult.Items.Sum(
+                                    item => item.AffectedElementCount);
+
+                            int redirectedPageCount =
+                                Model.LastBatchResult.Items.Count(
+                                    item => item.WasRedirected);
+
+                            var attentionItems =
+                                Model.LastBatchResult.Items
+                                    .Where(item =>
+                                        !item.Succeeded ||
+                                        item.WasRedirected)
+                                    .ToList();
+
+                            string attentionUrls =
+                                string.Join(
+                                    Environment.NewLine,
+                                    attentionItems.Select(item => item.Url));
+
+                            long averageDurationMilliseconds =
+                                Model.LastBatchResult.Items.Count > 0
+                                    ? (long)Model.LastBatchResult.Items.Average(
+                                        item => item.DurationMilliseconds)
+                                    : 0;
+
+                            TimeSpan averagePageDuration =
+                                TimeSpan.FromMilliseconds(
+                                    averageDurationMilliseconds);
+
+                            TimeSpan totalBatchDuration =
+                                TimeSpan.FromMilliseconds(
+                                    Model.LastBatchResult.DurationMilliseconds);
+
+                            <div class="card shadow-sm mb-4">
+
                             <div class="card shadow-sm mb-4">
                                 <div class="card-header bg-white">
                                     <div class="d-flex flex-wrap justify-content-between
@@ -263,6 +324,11 @@
                                             <span class="badge bg-primary">
                                                 Requested:
                                                 @Model.LastBatchResult.RequestedCount
+                                            </span>
+
+                                            <span class="badge bg-secondary">
+                                                Total Time:
+                                                @totalBatchDuration.ToString(@"m\:ss")
                                             </span>
 
                                             <span class="badge bg-success">
@@ -281,13 +347,109 @@
                                     </div>
                                 </div>
 
+                                <form asp-controller="AuthenticatedAudits"
+                                      asp-action="LoadAttentionUrls"
+                                      method="post"
+                                      class="d-inline">
+
+                                    @Html.AntiForgeryToken()
+
+                                    @foreach (var attentionItem in attentionItems)
+                                    {
+                                        <input type="hidden"
+                                               name="urls"
+                                               value="@attentionItem.Url" />
+                                    }
+
+                                    <button 
+                                        type="submit"
+                                        class="btn btn-sm btn-outline-warning">
+                                        Load Attention URLs
+
+                                        <span class="badge bg-warning text-dark ms-1">
+                                            @attentionItems.Count
+                                        </span>
+                                    </button>
+                                </form>
+
+                                @if (attentionItems.Count > 0)
+                                {
+                                    <button 
+                                        type="button"
+                                        class="btn btn-sm btn-outline-secondary"
+                                        id="authenticatedBatchAttentionFilterButton">
+                                        Show Attention Only
+                                    </button>
+
+                                }
+
+                                @if (redirectedPageCount > 0)
+                                {
+                                    <div class="alert alert-warning rounded-0 mb-0">
+                                        <strong>Navigation review required.</strong>
+
+                                        @redirectedPageCount
+                                        requested URL(s) ended on a different page.
+
+                                        Review the final URLs below. A redirect may be expected, but it can
+                                        also indicate that the authenticated session expired or that the
+                                        application returned to a sign-in page.
+                                    </div>
+                                }
+
+                                <div class="card-body border-bottom">
+                                    <div class="row g-3 text-center">
+                                        <div class="col-6 col-lg-3">
+                                            <div class="fw-semibold fs-4">
+                                                @totalViolationRules
+                                            </div>
+
+                                            <div class="small text-muted">
+                                                Violation Rules
+                                            </div>
+                                        </div>
+
+                                        <div class="col-6 col-lg-3">
+                                            <div class="fw-semibold fs-4">
+                                                @totalNeedsReviewRules
+                                            </div>
+
+                                            <div class="small text-muted">
+                                                Needs Review
+                                            </div>
+                                        </div>
+
+                                        <div class="col-6 col-lg-3">
+                                            <div class="fw-semibold fs-4">
+                                                @totalAffectedElements
+                                            </div>
+
+                                            <div class="small text-muted">
+                                                Affected Elements
+                                            </div>
+                                        </div>
+
+                                        <div class="col-6 col-lg-3">
+                                            <div class="fw-semibold fs-4">
+                                                @averagePageDuration.ToString(@"m\:ss\.fff")
+                                            </div>
+
+                                            <div class="small text-muted">
+                                                Average Page Time
+                                            </div>
+                            </div>
+                        </div>
+                    </div>
+
                                 <div class="card-body p-0">
                                     <div class="table-responsive">
                                         <table class="table table-hover align-middle mb-0">
                                             <thead class="table-light">
                                                 <tr>
                                                     <th scope="col">URL</th>
+                                                    <th scope="col">Navigation</th>
                                                     <th scope="col">Result</th>
+                                                    <th scope="col">Scan Time</th>
                                                     <th scope="col">Step</th>
                                                     <th scope="col">Violations</th>
                                                     <th scope="col">Needs Review</th>
@@ -295,12 +457,15 @@
                                                 </tr>
                                             </thead>
 
-                                            <tbody>
+                                            <tbody id="authenticatedBatchResultsBody">
                                                 @foreach (
                                                     AuthenticatedAuditBatchItemResult item
                                                     in Model.LastBatchResult.Items)
                                                 {
-                                                    <tr>
+                                                    <tr data-attention="@(
+                                                        (!item.Succeeded || item.WasRedirected)
+                                                            .ToString()
+                                                            .ToLowerInvariant())">
                                                         <td class="text-break">
                                                             <a href="@item.Url"
                                                                target="_blank"
@@ -324,12 +489,29 @@
                                                                     Saved
                                                                 </span>
                                                             }
+                                                            @if (redirectedPageCount > 0)
+                                                            {
+                                                                <span class="badge bg-warning text-dark">
+                                                                    Redirected:
+                                                                    @redirectedPageCount
+                                                                </span>
+                                                             }
                                                             else
                                                             {
                                                                 <span class="badge bg-danger">
                                                                     Failed
                                                                 </span>
                                                             }
+                                                        </td>
+
+                                                        <td>
+                                                            @{
+                                                                TimeSpan itemDuration =
+                                                                    TimeSpan.FromMilliseconds(
+                                                                        item.DurationMilliseconds);
+                                                            }
+
+                                                            @itemDuration.ToString(@"m\:ss\.fff")
                                                         </td>
 
                                                         <td>
@@ -350,6 +532,33 @@
                                                             else
                                                             {
                                                                 <span class="text-muted">—</span>
+                                                            }
+                                                        </td>
+
+                                                        <td>
+                                                            @if (item.WasRedirected)
+                                                            {
+                                                                <span class="badge bg-warning text-dark">
+                                                                    Redirected
+                                                                </span>
+
+                                                                @if (!string.IsNullOrWhiteSpace(item.FinalUrl))
+                                                                {
+                                                                    <div class="small text-muted text-break mt-1">
+                                                                        Final URL:
+                                                                        <a href="@item.FinalUrl"
+                                                                           target="_blank"
+                                                                           rel="noopener noreferrer">
+                                                                           @item.FinalUrl
+                                                                        </a>
+                                                                    </div>
+                                                                }
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="badge bg-success">
+                                                                    Requested Page
+                                                                </span>
                                                             }
                                                         </td>
 
@@ -375,6 +584,8 @@
                                     Full rule-level findings are available in Authenticated Audit
                                     History after the session is completed.
                                 </div>
+                            </div>
+                        }
                             </div>
                         }
 
@@ -724,6 +935,19 @@
                 document.getElementById(
                     "authenticatedBatchProgress");
 
+            const urlsTextarea =
+                document.getElementById(
+                    "authenticatedBatchUrls");
+
+            const expectedCountInput =
+                document.getElementById(
+                    "authenticatedBatchExpectedCount");
+
+            if (
+                urlsTextarea !== null &&
+                expectedCountInput !== null
+            ) {
+            
             if (form === null || button === null) {
                 return;
             }
@@ -755,6 +979,277 @@
                     button.disabled = true;
                 }, 0);
             });
+
+        const expectedCountInput =
+            document.getElementById(
+                "authenticatedBatchExpectedCount");
+
+        const urlsTextarea =
+            document.getElementById(
+                "authenticatedBatchUrls");
+
+        const urlStatus =
+            document.getElementById(
+                "authenticatedBatchUrlStatus");
+
+        const batchForm =
+            document.getElementById(
+                "authenticatedBatchForm");
+
+        const domainWarning =
+            document.getElementById(
+                "authenticatedBatchDomainWarning");
+
+        function updateAuthenticatedBatchDomainWarning(urls) {
+            if (
+                batchForm === null ||
+                domainWarning === null
+            ) {
+                return;
+            }
+
+            domainWarning.classList.add("d-none");
+            domainWarning.textContent = "";
+
+            const startingUrlValue =
+                batchForm.dataset.startingUrl;
+
+            if (
+                !startingUrlValue ||
+                urls.length === 0
+            ) {
+                return;
+            }
+
+            let startingHost;
+
+            try {
+                startingHost =
+                    new URL(startingUrlValue).hostname.toLowerCase();
+            } catch {
+                return;
+            }
+
+            const differentHosts = new Set();
+
+            urls.forEach(function (url) {
+                try {
+                    const parsedUrl = new URL(url);
+                    const currentHost =
+                        parsedUrl.hostname.toLowerCase();
+
+                    if (currentHost !== startingHost) {
+                        differentHosts.add(currentHost);
+                    }
+                } catch {
+                    /*
+                     * Invalid URLs are already reported by the primary
+                     * live-validation message.
+                     */
+                }
+            });
+
+            if (differentHosts.size === 0) {
+                return;
+            }
+
+            domainWarning.textContent =
+                "Authentication warning: the batch contains URL(s) from a " +
+                "different domain than the starting application: " +
+                Array.from(differentHosts).join(", ") +
+                ". Those pages may require a separate login session.";
+
+            domainWarning.classList.remove("d-none");
+        }
+
+        function updateAuthenticatedBatchStatus() {
+            if (
+                expectedCountInput === null ||
+                urlsTextarea === null ||
+                urlStatus === null
+            ) {
+                return;
+            }
+
+            const urls = urlsTextarea.value
+                .split(/\r?\n/)
+                .map(function (url) {
+                    return url.trim();
+                })
+                .filter(function (url) {
+                    return url.length > 0;
+                });
+
+            updateAuthenticatedBatchDomainWarning(urls);
+
+            const expectedCount =
+                Number.parseInt(expectedCountInput.value, 10);
+
+            const invalidLineNumbers = [];
+            const duplicateLineNumbers = [];
+            const previouslySeenUrls = new Set();
+
+            urls.forEach(function (url, index) {
+                let validUrl = false;
+
+                try {
+                    const parsedUrl = new URL(url);
+
+                    validUrl =
+                        parsedUrl.protocol === "http:" ||
+                        parsedUrl.protocol === "https:";
+                } catch {
+                    validUrl = false;
+                }
+
+                if (!validUrl) {
+                    invalidLineNumbers.push(index + 1);
+                }
+
+                const duplicateKey = url.toLowerCase();
+
+                if (previouslySeenUrls.has(duplicateKey)) {
+                    duplicateLineNumbers.push(index + 1);
+                } else {
+                    previouslySeenUrls.add(duplicateKey);
+                }
+
+                const attentionFilterButton =
+                    document.getElementById(
+                        "authenticatedBatchAttentionFilterButton");
+
+                const batchResultRows =
+                    document.querySelectorAll(
+                        "#authenticatedBatchResultsBody tr[data-attention]");
+
+                if (
+                    attentionFilterButton !== null &&
+                    batchResultRows.length > 0
+                ) {
+                    let showingAttentionOnly = false;
+
+                    attentionFilterButton.addEventListener(
+                        "click",
+                        function () {
+                            showingAttentionOnly =
+                                !showingAttentionOnly;
+
+                            batchResultRows.forEach(function (row) {
+                                const requiresAttention =
+                                    row.dataset.attention === "true";
+
+                                row.classList.toggle(
+                                    "d-none",
+                                    showingAttentionOnly &&
+                                    !requiresAttention);
+                            });
+
+                            if (showingAttentionOnly) {
+                                attentionFilterButton.textContent =
+                                    "Show All Results";
+
+                                attentionFilterButton.classList.remove(
+                                    "btn-outline-secondary");
+
+                                attentionFilterButton.classList.add(
+                                    "btn-secondary");
+                            } else {
+                                attentionFilterButton.textContent =
+                                    "Show Attention Only";
+
+                                attentionFilterButton.classList.remove(
+                                    "btn-secondary");
+
+                                attentionFilterButton.classList.add(
+                                    "btn-outline-secondary");
+                            }
+                        });
+                }
+
+            });
+
+            urlStatus.classList.remove(
+                "alert-secondary",
+                "alert-info",
+                "alert-success",
+                "alert-warning",
+                "alert-danger"
+            );
+
+            if (urls.length === 0) {
+                urlStatus.classList.add("alert-secondary");
+                urlStatus.textContent =
+                    "No protected URLs detected yet.";
+
+                return;
+            }
+
+            if (invalidLineNumbers.length > 0) {
+                urlStatus.classList.add("alert-danger");
+                urlStatus.textContent =
+                    urls.length +
+                    " non-empty URL(s) detected. Invalid URL line(s): " +
+                    invalidLineNumbers.join(", ") +
+                    ".";
+
+                return;
+            }
+
+            if (
+                Number.isInteger(expectedCount) &&
+                expectedCount !== urls.length
+            ) {
+                urlStatus.classList.add("alert-warning");
+                urlStatus.textContent =
+                    urls.length +
+                    " non-empty URL(s) detected, but Number of URLs is " +
+                    expectedCount +
+                    ".";
+
+                return;
+            }
+
+            if (duplicateLineNumbers.length > 0) {
+                urlStatus.classList.add("alert-warning");
+                urlStatus.textContent =
+                    urls.length +
+                    " valid URL(s) detected. Duplicate URL line(s): " +
+                    duplicateLineNumbers.join(", ") +
+                    ".";
+
+                return;
+            }
+
+            if (!Number.isInteger(expectedCount)) {
+                urlStatus.classList.add("alert-info");
+                urlStatus.textContent =
+                    urls.length +
+                    " valid URL(s) detected. Enter the same number above.";
+
+                return;
+            }
+
+            urlStatus.classList.add("alert-success");
+            urlStatus.textContent =
+                urls.length +
+                " valid URL(s) detected. The batch is ready to run.";
+        }
+
+        if (
+            expectedCountInput !== null &&
+            urlsTextarea !== null
+        ) {
+            expectedCountInput.addEventListener(
+                "input",
+                updateAuthenticatedBatchStatus);
+
+            urlsTextarea.addEventListener(
+                "input",
+                updateAuthenticatedBatchStatus);
+
+            updateAuthenticatedBatchStatus();
+        }
+
         });
     </script>
 }

@@ -123,6 +123,11 @@ public sealed class AuthenticatedAuditBatchResult
 
     public IReadOnlyList<AuthenticatedAuditBatchItemResult> Items { get; init; }
         = Array.Empty<AuthenticatedAuditBatchItemResult>();
+
+    /// <summary>
+    /// Total time spent navigating and analyzing all URLs in the batch.
+    /// </summary>
+    public long DurationMilliseconds { get; init; }
 }
 
 /// <summary>
@@ -137,6 +142,17 @@ public sealed class AuthenticatedAuditBatchItemResult
 
     public string? StepName { get; init; }
 
+    /// <summary>
+    /// The final URL displayed by the browser after navigation and redirects.
+    /// </summary>
+    public string FinalUrl { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Indicates that navigation ended on a different page than the URL
+    /// originally requested. Query strings and fragments are ignored.
+    /// </summary>
+    public bool WasRedirected { get; init; }
+
     public bool Succeeded { get; init; }
 
     public int ViolationRuleCount { get; init; }
@@ -146,4 +162,9 @@ public sealed class AuthenticatedAuditBatchItemResult
     public int AffectedElementCount { get; init; }
 
     public string? ErrorMessage { get; init; }
+
+    /// <summary>
+    /// Time spent navigating to and analyzing this individual URL.
+    /// </summary>
+    public long DurationMilliseconds { get; init; }
 }

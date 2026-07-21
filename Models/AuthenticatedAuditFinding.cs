@@ -43,6 +43,10 @@ public sealed class AuthenticatedAuditFinding
     [StringLength(2048)]
     public string? HelpUrl { get; set; }
 
+    public string WcagTags { get; set; } = string.Empty;
+
+    public string? WcagLevel { get; set; }
+
     /// <summary>
     /// Number of page elements reported under this rule.
     ///
