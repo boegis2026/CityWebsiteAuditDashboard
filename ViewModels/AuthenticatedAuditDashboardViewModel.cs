@@ -1,7 +1,36 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using CityWebsiteAuditDashboard.Services.AuthenticatedAuditing;
+using System.ComponentModel.DataAnnotations;
 
 namespace CityWebsiteAuditDashboard.ViewModels;
+
+/// <summary>
+/// Collects the URLs for one authenticated batch.
+///
+/// Blank lines are ignored, surrounding spaces are removed, and the entered
+/// count must match the number of non-empty URLs.
+/// </summary>
+public sealed class AuthenticatedAuditBatchInputModel
+{
+    /*
+    * A session ID does not exist until the Playwright browser session starts.
+    * The ScanBatch controller action verifies that this ID matches the currently
+    * active authenticated session before performing any navigation.
+    */
+    public Guid SessionId { get; set; }
+
+    [Required(ErrorMessage = "Enter the number of URLs.")]
+    [Range(
+        1,
+        25,
+        ErrorMessage = "Authenticated batches are limited to 25 URLs.")]
+    [Display(Name = "Number of URLs")]
+    public int? NumberOfUrls { get; set; }
+
+    [Required(ErrorMessage = "Paste at least one protected URL.")]
+    [Display(Name = "Protected URLs")]
+    public string Urls { get; set; } = string.Empty;
+}
 
 /// <summary>
 /// Information displayed on the authenticated-audit dashboard page.
@@ -23,7 +52,21 @@ public sealed class AuthenticatedAuditDashboardViewModel
 
     public AuthenticatedAuditStepResult? LastStepResult { get; set; }
 
+    /// <summary>
+    /// Input used to automatically scan multiple protected URLs through the
+    /// currently authenticated Playwright browser session.
+    /// </summary>
+    public AuthenticatedAuditBatchInputModel BatchInput { get; set; }
+        = new();
+
+
     public string? StatusMessage { get; set; }
+
+    /// <summary>
+    /// Displays the most recently completed authenticated batch after the
+    /// Post/Redirect/Get workflow returns to the dashboard.
+    /// </summary>
+    public AuthenticatedAuditBatchResult? LastBatchResult { get; set; }
 
     /*
      * This property controls what the dashboard displays. The live browser

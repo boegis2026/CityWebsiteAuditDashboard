@@ -105,3 +105,45 @@ public sealed class AuthenticatedAuditFindingResult
 
     public int AffectedElementCount { get; init; }
 }
+
+/// <summary>
+/// Summarizes one authenticated batch scan performed inside an existing
+/// Playwright browser session.
+///
+/// Every URL uses the same BrowserContext so the user's authentication cookies
+/// and session state remain available throughout the batch.
+/// </summary>
+public sealed class AuthenticatedAuditBatchResult
+{
+    public int RequestedCount { get; init; }
+
+    public int SucceededCount { get; init; }
+
+    public int FailedCount { get; init; }
+
+    public IReadOnlyList<AuthenticatedAuditBatchItemResult> Items { get; init; }
+        = Array.Empty<AuthenticatedAuditBatchItemResult>();
+}
+
+/// <summary>
+/// Represents the outcome of scanning one URL in an authenticated batch.
+/// Successful pages are also persisted as AuthenticatedAuditStep records.
+/// </summary>
+public sealed class AuthenticatedAuditBatchItemResult
+{
+    public string Url { get; init; } = string.Empty;
+
+    public int? StepNumber { get; init; }
+
+    public string? StepName { get; init; }
+
+    public bool Succeeded { get; init; }
+
+    public int ViolationRuleCount { get; init; }
+
+    public int NeedsReviewRuleCount { get; init; }
+
+    public int AffectedElementCount { get; init; }
+
+    public string? ErrorMessage { get; init; }
+}

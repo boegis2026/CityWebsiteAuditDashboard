@@ -36,6 +36,18 @@ public interface IAuthenticatedAuditService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Automatically visits and scans a list of protected URLs using the same
+    /// authenticated Playwright browser context.
+    ///
+    /// The user signs in once before starting the batch. Authentication cookies
+    /// and session storage remain available for every URL in the batch.
+    /// </summary>
+    Task<AuthenticatedAuditBatchResult> ScanBatchAsync(
+        Guid sessionId,
+        IReadOnlyList<string> urls,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Safely closes the browser and ends the audit session.
     /// </summary>
     Task StopSessionAsync(

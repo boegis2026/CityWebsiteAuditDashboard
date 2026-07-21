@@ -27,6 +27,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
     private readonly ConcurrentDictionary<Guid, AuthenticatedAuditBrowserSession>
         _sessions = new();
 
+    /*
+    * Keep the proof-of-concept batch small enough to avoid accidentally
+    * overwhelming a protected application or creating an excessively long
+    * browser session.
+    */
+    private const int MaximumAuthenticatedBatchSize = 25;
+
     public AuthenticatedAuditService(
         IServiceScopeFactory scopeFactory,
         ILogger<AuthenticatedAuditService> logger)
@@ -435,6 +442,132 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         {
             session.OperationLock.Release();
         }
+    }
+
+    public async Task<AuthenticatedAuditBatchResult> ScanBatchAsync(
+    Guid sessionId,
+    IReadOnlyList<string> urls,
+    CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(urls);
+
+        /*
+         * Ignore blank entries and trim surrounding spaces before validation.
+         * Duplicate URLs are kept because the same URL may represent different
+         * application states in some protected workflows.
+         */
+        string[] normalizedUrls =
+            urls
+                .Where(url => !string.IsNullOrWhiteSpace(url))
+                .Select(url => url.Trim())
+                .ToArray();
+
+        if (normalizedUrls.Length == 0)
+        {
+            throw new ArgumentException(
+                "Enter at least one authenticated URL.",
+                nameof(urls));
+        }
+
+        if (normalizedUrls.Length > MaximumAuthenticatedBatchSize)
+        {
+            throw new ArgumentException(
+                $"Authenticated batches are limited to " +
+                $"{MaximumAuthenticatedBatchSize} URLs.",
+                nameof(urls));
+        }
+
+        foreach (string url in normalizedUrls)
+        {
+            if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? parsedUri) ||
+                (parsedUri.Scheme != Uri.UriSchemeHttp &&
+                 parsedUri.Scheme != Uri.UriSchemeHttps))
+            {
+                throw new ArgumentException(
+                    $"The URL '{url}' is not a valid HTTP or HTTPS URL.",
+                    nameof(urls));
+            }
+        }
+
+        var itemResults =
+            new List<AuthenticatedAuditBatchItemResult>(
+                normalizedUrls.Length);
+
+        foreach (string url in normalizedUrls)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            try
+            {
+                /*
+                 * Navigate the Playwright page first, then reuse the normal
+                 * single-step scanner. This keeps all accessibility collection,
+                 * database persistence, and fingerprint logic in one place.
+                 */
+                await NavigateAuthenticatedSessionAsync(
+                    sessionId,
+                    url,
+                    cancellationToken);
+
+                AuthenticatedAuditStepResult stepResult =
+                    await ScanCurrentStepAsync(
+                        sessionId,
+                        cancellationToken);
+
+                itemResults.Add(
+                    new AuthenticatedAuditBatchItemResult
+                    {
+                        Url = url,
+                        StepNumber = stepResult.StepNumber,
+                        StepName = stepResult.StepName,
+                        Succeeded = stepResult.ScanSucceeded,
+                        ViolationRuleCount =
+                            stepResult.ViolationRuleCount,
+                        NeedsReviewRuleCount =
+                            stepResult.NeedsReviewRuleCount,
+                        AffectedElementCount =
+                            stepResult.AffectedElementCount,
+                        ErrorMessage = stepResult.ErrorMessage
+                    });
+            }
+            catch (OperationCanceledException)
+                when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                /*
+                 * One inaccessible or broken URL should not prevent the remaining
+                 * protected pages from being scanned.
+                 */
+                _logger.LogWarning(
+                    exception,
+                    "Authenticated batch URL {Url} could not be scanned in " +
+                    "session {SessionId}.",
+                    url,
+                    sessionId);
+
+                itemResults.Add(
+                    new AuthenticatedAuditBatchItemResult
+                    {
+                        Url = url,
+                        Succeeded = false,
+                        ErrorMessage =
+                            LimitLength(exception.Message, 2000)
+                    });
+            }
+        }
+
+        return new AuthenticatedAuditBatchResult
+        {
+            RequestedCount = normalizedUrls.Length,
+            SucceededCount =
+                itemResults.Count(item => item.Succeeded),
+            FailedCount =
+                itemResults.Count(item => !item.Succeeded),
+            Items = itemResults
+        };
     }
 
     public async Task StopSessionAsync(
@@ -875,6 +1008,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 "The rendered page information could not be captured.");
     }
 
+
     private static string GetStepName(
         RenderedPageSnapshot? snapshot,
         int stepNumber)
@@ -1089,6 +1223,101 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         await dbContext.SaveChangesAsync(cancellationToken);
 
         return auditStep.Id;
+    }
+
+    private async Task NavigateAuthenticatedSessionAsync(
+    Guid sessionId,
+    string url,
+    CancellationToken cancellationToken)
+    {
+        if (!_sessions.TryGetValue(
+                sessionId,
+                out AuthenticatedAuditBrowserSession? session))
+        {
+            throw new KeyNotFoundException(
+                "The authenticated audit session is no longer running.");
+        }
+
+        bool lockTaken = false;
+
+        try
+        {
+            /*
+             * Prevent navigation from occurring while another request is scanning
+             * or stopping the same browser session.
+             */
+            await session.OperationLock.WaitAsync(cancellationToken);
+            lockTaken = true;
+
+            if (session.IsStopping ||
+                !_sessions.ContainsKey(sessionId))
+            {
+                throw new KeyNotFoundException(
+                    "The authenticated audit session is no longer running.");
+            }
+
+            if (!session.Browser.IsConnected)
+            {
+                throw new KeyNotFoundException(
+                    "The Playwright-controlled Edge browser has been closed.");
+            }
+
+            /*
+             * Reuse the active page whenever possible. Every page created from the
+             * same BrowserContext shares the user's authenticated cookies and
+             * browser storage.
+             */
+            IPage? page = session.ActivePage;
+
+            if (page is null || page.IsClosed)
+            {
+                page =
+                    session.BrowserContext.Pages
+                        .LastOrDefault(openPage => !openPage.IsClosed);
+
+                page ??=
+                    await session.BrowserContext.NewPageAsync();
+            }
+
+            await page.GotoAsync(
+                url,
+                new PageGotoOptions
+                {
+                    WaitUntil = WaitUntilState.DOMContentLoaded,
+                    Timeout = 30000
+                });
+
+            session.ActivePage = page;
+
+            /*
+             * Some protected applications continue rendering after navigation.
+             * This is best-effort because long-running application requests may
+             * prevent a traditional network-idle state.
+             */
+            try
+            {
+                await page.WaitForLoadStateAsync(
+                    LoadState.DOMContentLoaded,
+                    new PageWaitForLoadStateOptions
+                    {
+                        Timeout = 10000
+                    });
+            }
+            catch (System.TimeoutException)
+            {
+                _logger.LogDebug(
+                    "Authenticated batch URL {Url} did not reach the requested " +
+                    "load state before the timeout. The scan will still proceed.",
+                    url);
+            }
+        }
+        finally
+        {
+            if (lockTaken)
+            {
+                session.OperationLock.Release();
+            }
+        }
     }
 
     private async Task CompleteAuditRunAsync(

@@ -4,6 +4,7 @@ using CityWebsiteAuditDashboard.Services.AuthenticatedAuditing;
 using CityWebsiteAuditDashboard.ViewModels;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace CityWebsiteAuditDashboard.Controllers;
 
@@ -39,6 +40,31 @@ public sealed class AuthenticatedAuditsController : Controller
     {
         string? statusMessage =
             TempData["AuthenticatedAuditStatus"] as string;
+
+        AuthenticatedAuditBatchResult? lastBatchResult = null;
+
+        string? batchResultJson =
+            TempData["AuthenticatedAuditBatchResult"] as string;
+
+        if (!string.IsNullOrWhiteSpace(batchResultJson))
+        {
+            try
+            {
+                lastBatchResult =
+                    JsonSerializer.Deserialize<AuthenticatedAuditBatchResult>(
+                        batchResultJson);
+            }
+            catch (JsonException exception)
+            {
+                /*
+                 * A display-only TempData problem should not prevent the main
+                 * authenticated session from being restored.
+                 */
+                _logger.LogWarning(
+                    exception,
+                    "The latest authenticated batch summary could not be restored.");
+            }
+        }
 
         AuthenticatedAuditSessionResult? activeSession =
             _authenticatedAuditService.GetActiveSession();
@@ -90,6 +116,8 @@ public sealed class AuthenticatedAuditsController : Controller
                 activeSession,
                 statusMessage ??
                 "The existing authenticated browser session is still active.");
+
+        model.LastBatchResult = lastBatchResult;
 
         model.LastStepResult = latestStep;
 
@@ -431,6 +459,161 @@ public sealed class AuthenticatedAuditsController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ScanBatch(
+    [Bind(Prefix = "BatchInput")]
+    AuthenticatedAuditBatchInputModel input,
+    CancellationToken cancellationToken)
+    {
+        /*
+         * Ignore blank lines and remove spaces around each pasted URL.
+         */
+        string[] urls =
+            (input.Urls ?? string.Empty)
+                .Split(
+                    new[] { "\r\n", "\n", "\r" },
+                    StringSplitOptions.RemoveEmptyEntries |
+                    StringSplitOptions.TrimEntries);
+
+        if (input.NumberOfUrls.HasValue &&
+            input.NumberOfUrls.Value != urls.Length)
+        {
+            ModelState.AddModelError(
+                "BatchInput.NumberOfUrls",
+                $"You entered {input.NumberOfUrls.Value}, but pasted " +
+                $"{urls.Length} non-empty URL(s).");
+        }
+
+        for (int index = 0; index < urls.Length; index++)
+        {
+            string url = urls[index];
+
+            bool validUrl =
+                Uri.TryCreate(
+                    url,
+                    UriKind.Absolute,
+                    out Uri? parsedUri) &&
+                (parsedUri.Scheme == Uri.UriSchemeHttp ||
+                 parsedUri.Scheme == Uri.UriSchemeHttps);
+
+            if (!validUrl)
+            {
+                ModelState.AddModelError(
+                    "BatchInput.Urls",
+                    $"Line {index + 1} is not a valid HTTP or HTTPS URL: {url}");
+            }
+        }
+
+        AuthenticatedAuditSessionResult? activeSession =
+            _authenticatedAuditService.GetActiveSession();
+
+        if (activeSession is null ||
+            activeSession.SessionId != input.SessionId)
+        {
+            TempData["AuthenticatedAuditStatus"] =
+                "The authenticated browser session is no longer available. " +
+                "Start a new session and sign in again.";
+
+            return RedirectToAction(nameof(Index));
+        }
+
+        if (!ModelState.IsValid)
+        {
+            /*
+             * Validation failures return the form directly because no browser
+             * navigation or accessibility scan has occurred yet.
+             */
+            AuthenticatedAuditDashboardViewModel invalidModel =
+                CreateActiveSessionViewModel(activeSession);
+
+            invalidModel.BatchInput = input;
+
+            return View("Index", invalidModel);
+        }
+
+        try
+        {
+            AuthenticatedAuditBatchResult result =
+                await _authenticatedAuditService.ScanBatchAsync(
+                    input.SessionId,
+                    urls,
+                    cancellationToken);
+
+            /*
+             * Redirect after the successful POST so refreshing the dashboard does
+             * not run the same authenticated batch a second time.
+             */
+            TempData["AuthenticatedAuditStatus"] =
+                $"Authenticated batch completed: " +
+                $"{result.SucceededCount} succeeded and " +
+                $"{result.FailedCount} failed out of " +
+                $"{result.RequestedCount} URL(s).";
+
+            /*
+             * Store the small result summary for one redirect so the dashboard can show
+             * what happened for each URL without rerunning the batch after a refresh.
+             *
+             * The full audit steps and accessibility findings are already permanently
+             * stored in SQL Server.
+             */
+            TempData["AuthenticatedAuditBatchResult"] =
+                JsonSerializer.Serialize(result);
+
+            return RedirectToAction(nameof(Index));
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            TempData["AuthenticatedAuditStatus"] =
+                "The authenticated batch was cancelled before it completed.";
+
+            return RedirectToAction(nameof(Index));
+        }
+        catch (KeyNotFoundException exception)
+        {
+            TempData["AuthenticatedAuditStatus"] =
+                exception.Message;
+
+            return RedirectToAction(nameof(Index));
+        }
+        catch (ArgumentException exception)
+        {
+            ModelState.AddModelError(
+                string.Empty,
+                exception.Message);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(
+                exception,
+                "Authenticated batch scanning failed for session {SessionId}.",
+                input.SessionId);
+
+            ModelState.AddModelError(
+                string.Empty,
+                "The authenticated batch could not be completed. " +
+                "Review the application logs for more information.");
+        }
+
+        AuthenticatedAuditSessionResult? remainingSession =
+            _authenticatedAuditService.GetActiveSession();
+
+        if (remainingSession is null)
+        {
+            return View(
+                "Index",
+                new AuthenticatedAuditDashboardViewModel());
+        }
+
+        AuthenticatedAuditDashboardViewModel errorModel =
+            CreateActiveSessionViewModel(remainingSession);
+
+        errorModel.BatchInput = input;
+
+        return View("Index", errorModel);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> Stop(
         AuthenticatedAuditSessionInputModel input,
         CancellationToken cancellationToken)
@@ -495,8 +678,8 @@ public sealed class AuthenticatedAuditsController : Controller
     }
 
     private static AuthenticatedAuditDashboardViewModel
-        CreateActiveSessionViewModel(
-            AuthenticatedAuditSessionInputModel input)
+    CreateActiveSessionViewModel(
+        AuthenticatedAuditSessionInputModel input)
     {
         return new AuthenticatedAuditDashboardViewModel
         {
@@ -507,7 +690,16 @@ public sealed class AuthenticatedAuditsController : Controller
                 input.AccessibilityEngine)
                     ? "axe-core"
                     : input.AccessibilityEngine,
-            StartedAt = input.StartedAt
+            StartedAt = input.StartedAt,
+
+            /*
+             * Keep the authenticated batch connected to the same live
+             * Playwright browser session.
+             */
+            BatchInput = new AuthenticatedAuditBatchInputModel
+            {
+                SessionId = input.SessionId
+            }
         };
     }
 }

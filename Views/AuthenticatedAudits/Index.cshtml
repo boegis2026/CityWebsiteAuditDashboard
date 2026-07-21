@@ -102,6 +102,14 @@
                     <button type="submit" class="btn btn-primary">
                         Start Browser Session
                     </button>
+
+                    <div id="authenticatedAuditStartProgress"
+                         class="alert alert-primary mt-3 mb-0 d-none"
+                         role="status"
+                         aria-live="polite">
+                        <strong>Starting authenticated browser session.</strong>
+                        Please wait while the Playwright-controlled Edge window opens.
+                    </div>
                 </form>
             </div>
         </div>
@@ -146,25 +154,250 @@
                             </dd>
                         </dl>
 
+                        <div class="card shadow-sm mb-4">
+                            <div class="card-body">
+                                <h2 class="h5 mb-2">
+                                    Authenticated Batch Analysis
+                                </h2>
+
+                                <p class="text-muted mb-4">
+                                    Log in once in the Playwright-controlled Edge window, then paste
+                                    protected URLs below. The dashboard will visit and scan every URL
+                                    automatically using the same authenticated session.
+                                </p>
+
+                                <form asp-action="ScanBatch"
+                                      method="post"
+                                      id="authenticatedBatchForm">
+                                    @Html.AntiForgeryToken()
+
+                                    <input asp-for="BatchInput.SessionId"
+                                           type="hidden"
+                                           value="@Model.SessionId.GetValueOrDefault()" />
+
+                                    <div asp-validation-summary="ModelOnly"
+                                         class="text-danger mb-3">
+                                    </div>
+
+                                    <div class="row g-3">
+                                        <div class="col-md-3">
+                                            <label asp-for="BatchInput.NumberOfUrls"
+                                                   class="form-label">
+                                            </label>
+
+                                            <input asp-for="BatchInput.NumberOfUrls"
+                                                   class="form-control"
+                                                   type="number"
+                                                   min="1"
+                                                   max="25"
+                                                   placeholder="Example: 5" />
+
+                                            <span asp-validation-for="BatchInput.NumberOfUrls"
+                                                  class="text-danger">
+                                            </span>
+                                        </div>
+
+                                        <div class="col-md-9">
+                                            <label asp-for="BatchInput.Urls"
+                                                   class="form-label">
+                                            </label>
+
+                                            <textarea asp-for="BatchInput.Urls"
+                                                      class="form-control"
+                                                      rows="7"
+                                                      placeholder="https://protected-app.example/page-1&#10;https://protected-app.example/page-2"></textarea>
+
+                                            <span asp-validation-for="BatchInput.Urls"
+                                                  class="text-danger">
+                                            </span>
+
+                                            <div class="form-text">
+                                                Enter one complete HTTP or HTTPS URL per line. Blank
+                                                lines are ignored. Maximum: 25 URLs.
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="alert alert-info mt-3 mb-3">
+                                        <strong>Before running:</strong>
+                                        Confirm that the Edge browser is still open and that you are
+                                        already signed in to the protected application.
+                                    </div>
+
+                                    <button type="submit"
+                                            class="btn btn-primary"
+                                            id="authenticatedBatchButton">
+                                        <span id="authenticatedBatchButtonText">
+                                            Run Authenticated Batch
+                                        </span>
+
+                                        <span id="authenticatedBatchSpinner"
+                                              class="spinner-border spinner-border-sm ms-2 d-none"
+                                              aria-hidden="true">
+                                        </span>
+                                    </button>
+
+                                    <div id="authenticatedBatchProgress"
+                                         class="alert alert-primary mt-3 mb-0 d-none"
+                                         role="status"
+                                         aria-live="polite">
+                                        <strong>Authenticated batch is running.</strong>
+                                        Edge is automatically visiting and scanning each protected URL.
+                                        Keep both browser windows open until the dashboard returns.
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                        @if (Model.LastBatchResult is not null)
+                        {
+                            <div class="card shadow-sm mb-4">
+                                <div class="card-header bg-white">
+                                    <div class="d-flex flex-wrap justify-content-between
+                                        align-items-center gap-2">
+                                        <h2 class="h5 mb-0">
+                                            Latest Authenticated Batch Results
+                                        </h2>
+
+                                        <div class="d-flex gap-2">
+                                            <span class="badge bg-primary">
+                                                Requested:
+                                                @Model.LastBatchResult.RequestedCount
+                                            </span>
+
+                                            <span class="badge bg-success">
+                                                Succeeded:
+                                                @Model.LastBatchResult.SucceededCount
+                                            </span>
+
+                                            @if (Model.LastBatchResult.FailedCount > 0)
+                                            {
+                                                <span class="badge bg-danger">
+                                                    Failed:
+                                                    @Model.LastBatchResult.FailedCount
+                                                </span>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="card-body p-0">
+                                    <div class="table-responsive">
+                                        <table class="table table-hover align-middle mb-0">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th scope="col">URL</th>
+                                                    <th scope="col">Result</th>
+                                                    <th scope="col">Step</th>
+                                                    <th scope="col">Violations</th>
+                                                    <th scope="col">Needs Review</th>
+                                                    <th scope="col">Affected Elements</th>
+                                                </tr>
+                                            </thead>
+
+                                            <tbody>
+                                                @foreach (
+                                                    AuthenticatedAuditBatchItemResult item
+                                                    in Model.LastBatchResult.Items)
+                                                {
+                                                    <tr>
+                                                        <td class="text-break">
+                                                            <a href="@item.Url"
+                                                               target="_blank"
+                                                               rel="noopener noreferrer">
+                                                                @item.Url
+                                                            </a>
+
+                                                            @if (!string.IsNullOrWhiteSpace(
+                                                                item.ErrorMessage))
+                                                            {
+                                                                <div class="small text-danger mt-1">
+                                                                    @item.ErrorMessage
+                                                                </div>
+                                                            }
+                                                        </td>
+
+                                                        <td>
+                                                            @if (item.Succeeded)
+                                                            {
+                                                                <span class="badge bg-success">
+                                                                    Saved
+                                                                </span>
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="badge bg-danger">
+                                                                    Failed
+                                                                </span>
+                                                            }
+                                                        </td>
+
+                                                        <td>
+                                                            @if (item.StepNumber.HasValue)
+                                                            {
+                                                                <span>
+                                                                    @item.StepNumber
+                                                                </span>
+
+                                                                @if (!string.IsNullOrWhiteSpace(
+                                                                    item.StepName))
+                                                                {
+                                                                    <div class="small text-muted">
+                                                                        @item.StepName
+                                                                    </div>
+                                                                }
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="text-muted">—</span>
+                                                            }
+                                                        </td>
+
+                                                        <td>
+                                                            @item.ViolationRuleCount
+                                                        </td>
+
+                                                        <td>
+                                                            @item.NeedsReviewRuleCount
+                                                        </td>
+
+                                                        <td>
+                                                            @item.AffectedElementCount
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <div class="card-footer bg-white text-muted small">
+                                    Full rule-level findings are available in Authenticated Audit
+                                    History after the session is completed.
+                                </div>
+                            </div>
+                        }
+
                         <div class="alert alert-secondary">
                             <ol class="mb-0">
                                 <li>
-                                    Use the Playwright browser to log in.
+                                    Use the Playwright-controlled Edge browser to sign in.
                                 </li>
                                 <li>
-                                    Navigate manually to the state you want to audit.
-                                </li>
-                                <li>
-                                    Return here and select
+                                    For one page, navigate to the desired state and select
                                     <strong>Scan Current Step</strong>.
                                 </li>
                                 <li>
-                                    Repeat for each additional rendered state.
+                                    For multiple known pages, paste their URLs into
+                                    <strong>Authenticated Batch Analysis</strong>.
                                 </li>
                                 <li>
-                                    Use
-                                    <strong>Complete and Close Browser</strong>
-                                    when finished.
+                                    Select <strong>Run Authenticated Batch</strong>.
+                                    Edge will visit and scan each URL automatically.
+                                </li>
+                                <li>
+                                    Select <strong>Complete and Close Browser</strong>
+                                    when the audit is finished.
                                 </li>
                             </ol>
                         </div>
@@ -179,7 +412,7 @@
                         <form asp-controller="AuthenticatedAudits"
                               asp-action="Scan"
                               method="post"
-                              class="d-inline">
+                              id="authenticatedAuditScanForm">
 
                             <input type="hidden"
                                    name="SessionId"
@@ -202,9 +435,26 @@
                                    value="@Model.StartedAt?.ToString("O")" />
 
                             <button type="submit"
-                                    class="btn btn-success">
-                                Scan Current Step
+                                    class="btn btn-primary"
+                                    id="authenticatedAuditScanButton">
+                                <span id="authenticatedAuditScanButtonText">
+                                    Scan Current Step
+                                </span>
+
+                                <span id="authenticatedAuditScanSpinner"
+                                      class="spinner-border spinner-border-sm ms-2 d-none"
+                                      aria-hidden="true">
+                                </span>
                             </button>
+
+                            <div id="authenticatedAuditScanProgress"
+                                 class="alert alert-primary mt-3 mb-0 d-none"
+                                 role="status"
+                                 aria-live="polite">
+                                <strong>Scanning the current protected page.</strong>
+                                Keep the Playwright-controlled Edge window open while axe analyzes and
+                                saves the rendered page.
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -229,7 +479,8 @@
 
                         <form asp-controller="AuthenticatedAudits"
                               asp-action="Stop"
-                              method="post">
+                              method="post"
+                              id="authenticatedAuditStopForm">
 
                             <input type="hidden"
                                    name="SessionId"
@@ -275,10 +526,18 @@
                                 </label>
                             </div>
 
-                            <button type="submit"
-                                    class="btn btn-outline-danger">
+                            <button type="submit" class="btn btn-danger">
                                 Complete and Close Browser
                             </button>
+
+                            <div id="authenticatedAuditStopProgress"
+                                 class="alert alert-secondary mt-3 mb-0 d-none"
+                                 role="status"
+                                 aria-live="polite">
+                                <strong>Completing the authenticated audit.</strong>
+                                Please wait while the audit run is finalized and the
+                                Playwright-controlled Edge browser closes.
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -441,6 +700,61 @@
     }
 </div>
 
-@section Scripts {
+@section Scripts
+{
     <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const form =
+                document.getElementById("authenticatedBatchForm");
+
+            const button =
+                document.getElementById("authenticatedBatchButton");
+
+            const buttonText =
+                document.getElementById(
+                    "authenticatedBatchButtonText");
+
+            const spinner =
+                document.getElementById(
+                    "authenticatedBatchSpinner");
+
+            const progress =
+                document.getElementById(
+                    "authenticatedBatchProgress");
+
+            if (form === null || button === null) {
+                return;
+            }
+
+            let submitted = false;
+
+            form.addEventListener("submit", function (event) {
+                if (submitted) {
+                    event.preventDefault();
+                    return;
+                }
+
+                submitted = true;
+
+                if (buttonText !== null) {
+                    buttonText.textContent =
+                        "Scanning Protected URLs";
+                }
+
+                if (spinner !== null) {
+                    spinner.classList.remove("d-none");
+                }
+
+                if (progress !== null) {
+                    progress.classList.remove("d-none");
+                }
+
+                window.setTimeout(function () {
+                    button.disabled = true;
+                }, 0);
+            });
+        });
+    </script>
 }
