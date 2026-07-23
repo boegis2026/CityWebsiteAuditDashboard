@@ -69,6 +69,20 @@ internal sealed class AuthenticatedAuditBrowserSession : IAsyncDisposable
     /// </summary>
     public SemaphoreSlim OperationLock { get; } = new(1, 1);
 
+    /*
+    * Progress is kept only in memory for the active browser session.
+    * It is not saved as audit history in SQL Server.
+    */
+    public AuthenticatedAuditProgressResult Progress { get; set; }
+        = new()
+        {
+            IsScanning = false,
+            Stage = "Idle",
+            StagePercent = 0,
+            CurrentPageNumber = 0,
+            TotalPageCount = null
+        };
+
     public ValueTask DisposeAsync()
     {
         /*

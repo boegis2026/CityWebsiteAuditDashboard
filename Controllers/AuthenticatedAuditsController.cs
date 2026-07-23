@@ -23,15 +23,19 @@ public sealed class AuthenticatedAuditsController : Controller
     private readonly IAuthenticatedAuditService _authenticatedAuditService;
     private readonly ILogger<AuthenticatedAuditsController> _logger;
     private readonly ApplicationDbContext _dbContext;
+    private readonly IAuthenticatedAuditPdfReportService
+        _authenticatedAuditPdfReportService;
 
     public AuthenticatedAuditsController(
     IAuthenticatedAuditService authenticatedAuditService,
     ApplicationDbContext dbContext,
-    ILogger<AuthenticatedAuditsController> logger)
+    ILogger<AuthenticatedAuditsController> logger,
+    IAuthenticatedAuditPdfReportService authenticatedAuditPdfReportService)
     {
         _authenticatedAuditService = authenticatedAuditService;
         _dbContext = dbContext;
         _logger = logger;
+        _authenticatedAuditPdfReportService = authenticatedAuditPdfReportService;
     }
 
     [HttpGet]
@@ -189,7 +193,8 @@ public sealed class AuthenticatedAuditsController : Controller
             await _dbContext.AuthenticatedAuditRuns
                 .AsNoTracking()
                 .Include(run => run.Steps)
-                    .ThenInclude(step => step.Findings)
+                .ThenInclude(step => step.Findings)
+                .ThenInclude(finding => finding.Nodes)
                 .SingleOrDefaultAsync(
                     run => run.Id == id,
                     cancellationToken);
@@ -245,7 +250,8 @@ public sealed class AuthenticatedAuditsController : Controller
                          * Element HTML and entered form values were never stored.
                          */
                         Findings = step.Findings
-                            .OrderBy(finding => finding.FindingType)
+                            // Show the highest-impact WCAG A and AA findings first.
+                            .OrderBy(finding => finding.PriorityRank)
                             .ThenBy(finding => finding.RuleId)
                             .Select(finding =>
                                 new AuthenticatedAuditFindingDetailsViewModel
@@ -257,8 +263,25 @@ public sealed class AuthenticatedAuditsController : Controller
                                     Help = finding.Help,
                                     Description = finding.Description,
                                     HelpUrl = finding.HelpUrl,
+                                    WcagTags =
+                                        finding.WcagTags,
+                                    WcagLevel =
+                                        finding.WcagLevel,
+                                    PriorityRank =
+                                        finding.PriorityRank,
                                     AffectedElementCount =
-                                        finding.AffectedElementCount
+                                        finding.AffectedElementCount,
+                                    Nodes =
+                                        finding.Nodes
+                                            .OrderBy(node => node.Id)
+                                            .Select(node =>
+                                                new AuthenticatedAuditFindingNodeDetailsViewModel
+                                                {
+                                                    Target = node.Target,
+                                                    Html = node.Html,
+                                                    FailureSummary = node.FailureSummary
+                                                })
+                                            .ToList()
                                 })
                             .ToList()
                     })
@@ -266,6 +289,39 @@ public sealed class AuthenticatedAuditsController : Controller
         };
 
         return View(model);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> DownloadPdf(
+    int id,
+    CancellationToken cancellationToken)
+    {
+        /*
+         * Reuse the existing Details action so the dashboard and PDF receive
+         * the same audit data, ordering, WCAG information, and affected nodes.
+         */
+        IActionResult detailsResult =
+            await Details(
+                id,
+                cancellationToken);
+
+        if (detailsResult is not ViewResult viewResult ||
+            viewResult.Model is not AuthenticatedAuditDetailsViewModel audit)
+        {
+            return detailsResult;
+        }
+
+        byte[] pdfBytes =
+            _authenticatedAuditPdfReportService.CreatePdf(audit);
+
+        string safeApplicationName =
+            CreateSafeReportFileName(
+                audit.ApplicationName);
+
+        return File(
+            pdfBytes,
+            "application/pdf",
+            $"{safeApplicationName}-Accessibility-Audit-{id}.pdf");
     }
 
     [HttpPost]
@@ -757,5 +813,42 @@ public sealed class AuthenticatedAuditsController : Controller
                 SessionId = input.SessionId
             }
         };
+    }
+
+    [HttpGet]
+    public IActionResult Progress(Guid sessionId)
+    {
+        AuthenticatedAuditProgressResult? progress =
+            _authenticatedAuditService.GetProgress(sessionId);
+
+        if (progress is null)
+        {
+            return NotFound();
+        }
+
+        return Json(progress);
+    }
+
+    private static string CreateSafeReportFileName(
+    string? applicationName)
+    {
+        string fileName =
+            string.IsNullOrWhiteSpace(applicationName)
+                ? "Authenticated-Application"
+                : applicationName.Trim();
+
+        // Replace characters that Windows does not allow in file names.
+        foreach (char invalidCharacter
+                 in Path.GetInvalidFileNameChars())
+        {
+            fileName =
+                fileName.Replace(
+                    invalidCharacter,
+                    '-');
+        }
+
+        return string.IsNullOrWhiteSpace(fileName)
+            ? "Authenticated-Application"
+            : fileName;
     }
 }

@@ -25,6 +25,9 @@ namespace CityWebsiteAuditDashboard.Data
         // authenticated rendered-state scan.
         public DbSet<AuthenticatedAuditFinding> AuthenticatedAuditFindings { get; set; }
 
+        public DbSet<AuthenticatedAuditFindingNode> AuthenticatedAuditFindingNodes
+            { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -60,6 +63,27 @@ namespace CityWebsiteAuditDashboard.Data
                 entity.HasIndex(step => step.ScannedAt);
 
 
+            });
+
+            modelBuilder.Entity<AuthenticatedAuditFindingNode>(entity =>
+            {
+                entity.Property(node => node.Target)
+                    .HasMaxLength(2000);
+
+                entity.Property(node => node.Html)
+                    .HasMaxLength(10000);
+
+                entity.Property(node => node.FailureSummary)
+                    .HasMaxLength(4000);
+
+                /*
+                 * A finding may affect multiple page elements. Deleting the finding
+                 * should also delete its saved affected-element records.
+                 */
+                entity.HasOne(node => node.AuthenticatedAuditFinding)
+                    .WithMany(finding => finding.Nodes)
+                    .HasForeignKey(node => node.AuthenticatedAuditFindingId)
+                    .OnDelete(DeleteBehavior.Cascade);
             });
 
             modelBuilder.Entity<AuthenticatedAuditFinding>(entity =>

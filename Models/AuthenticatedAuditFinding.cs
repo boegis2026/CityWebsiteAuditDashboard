@@ -47,6 +47,40 @@ public sealed class AuthenticatedAuditFinding
 
     public string? WcagLevel { get; set; }
 
+    /*
+    * Severity is considered first. Within the same severity,
+    * WCAG Level A is prioritized before Level AA, followed by
+    * best-practice or other rules without an A/AA designation.
+    *
+    * This is calculated from existing data and is not stored in SQL Server.
+    */
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public int PriorityRank
+    {
+        get
+        {
+            int impactRank =
+                Impact?.Trim().ToLowerInvariant() switch
+                {
+                    "critical" => 0,
+                    "serious" => 3,
+                    "moderate" => 6,
+                    "minor" => 9,
+                    _ => 99
+                };
+
+            int levelRank =
+                WcagLevel?.Trim().ToUpperInvariant() switch
+                {
+                    "A" => 1,
+                    "AA" => 2,
+                    _ => 3
+                };
+
+            return impactRank + levelRank;
+        }
+    }
+
     /// <summary>
     /// Number of page elements reported under this rule.
     ///
@@ -54,6 +88,10 @@ public sealed class AuthenticatedAuditFinding
     /// so user entered permit information is not accidentally persisted.
     /// </summary>
     public int AffectedElementCount { get; set; }
+
+    // Stores the exact affected elements returned by axe-core.
+    public ICollection<AuthenticatedAuditFindingNode> Nodes { get; set; }
+        = new List<AuthenticatedAuditFindingNode>();
 
     public AuthenticatedAuditStep AuthenticatedAuditStep { get; set; } = null!;
 }

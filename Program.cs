@@ -31,6 +31,11 @@ builder.Services.AddSingleton<
     IAuthenticatedAuditService,
     AuthenticatedAuditService>();
 
+// Generates downloadable authenticated accessibility audit reports.
+builder.Services.AddScoped<
+    IAuthenticatedAuditPdfReportService,
+    AuthenticatedAuditPdfReportService>();
+
 /*
  * A Playwright browser session cannot survive an application restart.
  * This startup service marks any leftover Running database records as

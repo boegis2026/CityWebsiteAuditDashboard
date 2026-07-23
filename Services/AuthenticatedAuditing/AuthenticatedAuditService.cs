@@ -255,6 +255,16 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         }
     }
 
+    public AuthenticatedAuditProgressResult? GetProgress(
+        Guid sessionId)
+    {
+        return _sessions.TryGetValue(
+            sessionId,
+            out AuthenticatedAuditBrowserSession? session)
+                ? session.Progress
+                : null;
+    }
+
     public async Task<AuthenticatedAuditStepResult> ScanCurrentStepAsync(
     Guid sessionId,
     CancellationToken cancellationToken = default)
@@ -285,6 +295,15 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            SetProgress(
+                session,
+                isScanning: true,
+                stage: "Opening page",
+                stagePercent: 10,
+                currentUrl: session.ActivePage?.Url,
+                currentPageNumber: session.NextStepNumber,
+                totalPageCount: null);
 
             /*
              * The session may have been removed while this request was waiting for
@@ -317,9 +336,27 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 // can clearly see which page state is about to be scanned.
                 await activePage.BringToFrontAsync();
 
+                SetProgress(
+                    session,
+                    isScanning: true,
+                    stage: "Waiting for rendering",
+                    stagePercent: 25,
+                    currentUrl: activePage.Url,
+                    currentPageNumber: session.NextStepNumber,
+                    totalPageCount: null);
+
                 cancellationToken.ThrowIfCancellationRequested();
 
                 await WaitForRenderedPageAsync(activePage);
+
+                SetProgress(
+                    session,
+                        isScanning: true,
+                        stage: "Running axe-core",
+                        stagePercent: 50,
+                        currentUrl: activePage.Url,
+                        currentPageNumber: session.NextStepNumber,
+                        totalPageCount: null);
 
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -330,6 +367,15 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 // This is a read-only accessibility scan. The service does not click
                 // Next, Submit, Finish, Pay, Certify, or any other workflow control.
                 AxeResult axeResult = await activePage.RunAxe();
+
+                SetProgress(
+                    session,
+                    isScanning: true,
+                    stage: "Processing results",
+                    stagePercent: 70,
+                    currentUrl: activePage.Url,
+                    currentPageNumber: session.NextStepNumber,
+                    totalPageCount: null);
 
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -388,6 +434,15 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             }
             catch (Exception exception)
             {
+                SetProgress(
+                    session,
+                        isScanning: false,
+                        stage: "Scan failed",
+                        stagePercent: 100,
+                        currentUrl: session.ActivePage?.Url,
+                        currentPageNumber: session.NextStepNumber,
+                        totalPageCount: null);
+
                 _logger.LogError(
                     exception,
                     "Step {StepNumber} failed for authenticated audit session {SessionId}.",
@@ -422,10 +477,28 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 };
             }
 
+            SetProgress(
+                session,
+                isScanning: true,
+                stage: "Saving to database",
+                stagePercent: 90,
+                currentUrl: activePage.Url,
+                currentPageNumber: session.NextStepNumber,
+                totalPageCount: null);
+
             int savedStepId = await SaveAuditStepAsync(
                 session.AuditRunId,
                 stepResult,
                 cancellationToken);
+
+            SetProgress(
+                session,
+                isScanning: false,
+                stage: "Complete",
+                stagePercent: 100,
+                currentUrl: activePage.Url,
+                currentPageNumber: session.NextStepNumber,
+                totalPageCount: null);
 
             session.LastSavedStepId = savedStepId;
             session.NextStepNumber++;
@@ -969,6 +1042,42 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                    || parsedUrl.Scheme == Uri.UriSchemeHttps);
     }
 
+    private static string GetWcagTags(IEnumerable<string>? tags)
+    {
+        // Keep only WCAG-related tags instead of storing every axe category tag.
+        return string.Join(", ",
+            (tags ?? Enumerable.Empty<string>())
+                .Where(tag =>
+                    tag.StartsWith("wcag", StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(tag => tag, StringComparer.OrdinalIgnoreCase));
+    }
+
+    private static string? GetWcagLevel(IEnumerable<string>? tags)
+    {
+        var tagSet = new HashSet<string>(
+            tags ?? Enumerable.Empty<string>(),
+            StringComparer.OrdinalIgnoreCase);
+
+        // Check AA first so AA findings receive the correct staff-facing level.
+        if (tagSet.Contains("wcag2aa") ||
+            tagSet.Contains("wcag21aa") ||
+            tagSet.Contains("wcag22aa"))
+        {
+            return "AA";
+        }
+
+        if (tagSet.Contains("wcag2a") ||
+            tagSet.Contains("wcag21a") ||
+            tagSet.Contains("wcag22a"))
+        {
+            return "A";
+        }
+
+        // Best-practice or non-WCAG rules do not receive an A/AA label.
+        return null;
+    }
+
     private async Task WaitForRenderedPageAsync(IPage page)
     {
         try
@@ -1220,6 +1329,31 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         return auditRun.Id;
     }
 
+    private static string? CreateFailureSummary(
+    AxeResultNode node)
+    {
+        /*
+         * The current axe .NET model does not provide one FailureSummary
+         * property, so combine the useful messages from its node checks.
+         */
+        IEnumerable<string?> messages =
+            (node.Any ?? Array.Empty<AxeResultCheck>())
+                .Concat(node.All ?? Array.Empty<AxeResultCheck>())
+                .Concat(node.None ?? Array.Empty<AxeResultCheck>())
+                .Select(check => check.Message?.Trim());
+
+        string summary = string.Join(
+            Environment.NewLine,
+            messages
+                .Where(message =>
+                    !string.IsNullOrWhiteSpace(message))
+                .Distinct(StringComparer.OrdinalIgnoreCase));
+
+        return string.IsNullOrWhiteSpace(summary)
+            ? null
+            : summary;
+    }
+
     private static List<AuthenticatedAuditFindingResult>
     CreateFindingResults(AxeResult axeResult)
     {
@@ -1285,13 +1419,61 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     Description =
                         LimitLength(axeItem.Description, 2000),
 
-                    HelpUrl =
-                        LimitLength(axeItem.HelpUrl, 2048),
+                    HelpUrl = axeItem.HelpUrl,
+
+                    // Preserve WCAG metadata so findings can later be grouped and prioritized.
+                    WcagTags =
+                        GetWcagTags(axeItem.Tags),
+
+                    WcagLevel =
+                        GetWcagLevel(axeItem.Tags),
 
                     AffectedElementCount =
-                        axeItem.Nodes?.Count() ?? 0
-                });
+                        axeItem.Nodes?.Count() ?? 0,
+
+                    // Keep the exact affected elements for details pages and reports.
+                    Nodes =
+                        axeItem.Nodes?
+                            .Select(node =>
+                                new AuthenticatedAuditFindingNodeResult
+                                {
+                                    Target =
+                                        node.Target?.ToString()
+                                        ?? string.Empty,
+
+                                    Html =
+                                        node.Html,
+
+                                    FailureSummary =
+                                        CreateFailureSummary(node)
+                                })
+                        .ToList()
+                    ?? new List<AuthenticatedAuditFindingNodeResult>()
+                    });
         }
+    }
+
+    private static void SetProgress(
+    AuthenticatedAuditBrowserSession session,
+    bool isScanning,
+    string stage,
+    int stagePercent,
+    string? currentUrl,
+    int currentPageNumber,
+    int? totalPageCount)
+    {
+        session.Progress = new AuthenticatedAuditProgressResult
+        {
+            IsScanning = isScanning,
+            Stage = stage,
+
+            // Prevent an accidental value below 0 or above 100.
+            StagePercent = Math.Clamp(stagePercent, 0, 100),
+
+            CurrentUrl = currentUrl,
+            CurrentPageNumber = currentPageNumber,
+            TotalPageCount = totalPageCount
+        };
     }
 
     private async Task<int> SaveAuditStepAsync(
@@ -1338,34 +1520,61 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         * as AuthenticatedAuditStepId for each related finding.
          */
         foreach (AuthenticatedAuditFindingResult findingResult
-                 in stepResult.Findings)
+         in stepResult.Findings)
         {
-            auditStep.Findings.Add(
-                new AuthenticatedAuditFinding
-                {
-                    FindingType =
-                        LimitLength(findingResult.FindingType, 50)
-                        ?? "Unknown",
+            var auditFinding = new AuthenticatedAuditFinding
+            {
+                FindingType =
+                    LimitLength(findingResult.FindingType, 50)
+                    ?? "Unknown",
 
-                    RuleId =
-                        LimitLength(findingResult.RuleId, 200)
-                        ?? string.Empty,
+                RuleId =
+                    LimitLength(findingResult.RuleId, 200)
+                    ?? string.Empty,
 
-                    Impact =
-                        LimitLength(findingResult.Impact, 50),
+                Impact =
+                    LimitLength(findingResult.Impact, 50),
 
-                    Help =
-                        LimitLength(findingResult.Help, 500),
+                Help =
+                    LimitLength(findingResult.Help, 500),
 
-                    Description =
-                        LimitLength(findingResult.Description, 2000),
+                Description =
+                    LimitLength(findingResult.Description, 2000),
 
-                    HelpUrl =
-                        LimitLength(findingResult.HelpUrl, 2048),
+                HelpUrl =
+                    LimitLength(findingResult.HelpUrl, 2048),
 
-                    AffectedElementCount =
-                        findingResult.AffectedElementCount
-                });
+                // Preserve WCAG metadata for filtering and prioritization.
+                WcagTags =
+                    LimitLength(findingResult.WcagTags, 1000)
+                    ?? string.Empty,
+
+                WcagLevel =
+                    LimitLength(findingResult.WcagLevel, 10),
+
+                AffectedElementCount =
+                    findingResult.AffectedElementCount
+            };
+
+            foreach (AuthenticatedAuditFindingNodeResult nodeResult
+                     in findingResult.Nodes)
+            {
+                auditFinding.Nodes.Add(
+                    new AuthenticatedAuditFindingNode
+                    {
+                        Target =
+                            LimitLength(nodeResult.Target, 2000)
+                            ?? string.Empty,
+
+                        Html =
+                            LimitLength(nodeResult.Html, 10000),
+
+                        FailureSummary =
+                            LimitLength(nodeResult.FailureSummary, 4000)
+                    });
+            }
+
+            auditStep.Findings.Add(auditFinding);
         }
 
         dbContext.AuthenticatedAuditSteps.Add(auditStep);

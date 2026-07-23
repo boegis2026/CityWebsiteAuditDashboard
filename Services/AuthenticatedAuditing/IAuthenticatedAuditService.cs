@@ -64,4 +64,8 @@ public interface IAuthenticatedAuditService
     /// </summary>
     Task InterruptAllSessionsAsync(
         CancellationToken cancellationToken = default);
+
+    // Returns the live in-memory progress for an active browser session.
+    AuthenticatedAuditProgressResult? GetProgress(
+        Guid sessionId);
 }

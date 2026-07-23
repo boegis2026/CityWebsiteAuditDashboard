@@ -667,6 +667,60 @@
                                 saves the rendered page.
                             </div>
                         </form>
+
+                        @* Updated by JavaScript while the authenticated scan is running. *@
+                        <div id="authenticatedAuditProgressPanel"
+                             class="card border-primary mt-3 d-none"
+                             aria-live="polite"
+                             aria-atomic="true">
+
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    Authenticated Scan Progress
+                                </h5>
+
+                                <div class="mb-2">
+                                    <strong>Current page:</strong>
+                                    <span id="authenticatedAuditCurrentUrl">
+                                        Preparing scan...
+                                    </span>
+                                </div>
+
+                                <div class="mb-2">
+                                    <strong>Saved step:</strong>
+                                    <span id="authenticatedAuditCurrentStep">
+                                        —
+                                    </span>
+                                </div>
+
+                                <div class="mb-2">
+                                    <strong>Current stage:</strong>
+                                    <span id="authenticatedAuditCurrentStage">
+                                        Opening page
+                                    </span>
+                                </div>
+
+                                <div class="progress"
+                                     role="progressbar"
+                                     aria-label="Current page scan stage"
+                                     aria-valuemin="0"
+                                     aria-valuemax="100">
+
+                                    <div id="authenticatedAuditProgressBar"
+                                         class="progress-bar progress-bar-striped progress-bar-animated"
+                                         style="width: 0%;"
+                                         aria-valuenow="0">
+                                        0%
+                                    </div>
+                                </div>
+
+                                <div class="form-text mt-2">
+                                    This percentage represents the current scan stage,
+                                    not the percentage of the page DOM analyzed.
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
             </div>
@@ -1249,6 +1303,185 @@
 
             updateAuthenticatedBatchStatus();
         }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const scanForm =
+                document.getElementById(
+                    "authenticatedAuditScanForm");
+
+            if (!scanForm) {
+                return;
+            }
+
+            const progressPanel =
+                document.getElementById(
+                    "authenticatedAuditProgressPanel");
+
+            const currentUrlElement =
+                document.getElementById(
+                    "authenticatedAuditCurrentUrl");
+
+            const currentStepElement =
+                document.getElementById(
+                    "authenticatedAuditCurrentStep");
+
+            const currentStageElement =
+                document.getElementById(
+                    "authenticatedAuditCurrentStage");
+
+            const progressBar =
+                document.getElementById(
+                    "authenticatedAuditProgressBar");
+
+            let progressTimer = null;
+
+            function updateAuthenticatedAuditProgress(progress) {
+                const stagePercent =
+                    Math.max(
+                        0,
+                        Math.min(
+                            Number(progress.stagePercent) || 0,
+                            100));
+
+                currentUrlElement.textContent =
+                    progress.currentUrl ||
+                    "Preparing page...";
+
+                currentStepElement.textContent =
+                    progress.currentPageNumber > 0
+                        ? progress.currentPageNumber
+                        : "—";
+
+                currentStageElement.textContent =
+                    progress.stage ||
+                    "Preparing scan";
+
+                progressBar.style.width =
+                    `${stagePercent}%`;
+
+                progressBar.textContent =
+                    `${stagePercent}%`;
+
+                progressBar.setAttribute(
+                    "aria-valuenow",
+                    stagePercent);
+            }
+
+            async function loadAuthenticatedAuditProgress(
+                sessionId) {
+                try {
+                    const progressUrl =
+                        "@Url.Action("Progress", "AuthenticatedAudits")"
+                        + `?sessionId=${encodeURIComponent(sessionId)}`;
+
+                    const response =
+                        await fetch(
+                            progressUrl,
+                            {
+                                cache: "no-store",
+                                credentials: "same-origin"
+                            });
+
+                    if (!response.ok) {
+                        return;
+                    }
+
+                    const progress =
+                        await response.json();
+
+                    updateAuthenticatedAuditProgress(
+                        progress);
+                }
+                catch {
+                    /*
+                     * A temporary polling error should not stop
+                     * the authenticated audit already running.
+                     */
+                }
+            }
+
+            scanForm.addEventListener(
+                "submit",
+                async event => {
+                    event.preventDefault();
+
+                    const sessionInput =
+                        scanForm.querySelector(
+                            '[name="sessionId"]');
+
+                    const sessionId =
+                        sessionInput?.value;
+
+                    if (!sessionId) {
+                        scanForm.submit();
+                        return;
+                    }
+
+                    progressPanel.classList.remove(
+                        "d-none");
+
+                    updateAuthenticatedAuditProgress({
+                        stage: "Opening page",
+                        stagePercent: 10,
+                        currentUrl: null,
+                        currentPageNumber: 0
+                    });
+
+                    const submitButton =
+                        scanForm.querySelector(
+                            'button[type="submit"], input[type="submit"]');
+
+                    if (submitButton) {
+                        submitButton.disabled = true;
+                    }
+
+                    progressTimer =
+                        window.setInterval(
+                            () =>
+                                loadAuthenticatedAuditProgress(
+                                    sessionId),
+                            100);
+                    await loadAuthenticatedAuditProgress(sessionId);
+
+                    try {
+                        const response =
+                            await fetch(
+                                scanForm.action,
+                                {
+                                    method: "POST",
+                                    body: new FormData(scanForm),
+                                    credentials: "same-origin"
+                                });
+
+                        window.clearInterval(
+                            progressTimer);
+
+                        await loadAuthenticatedAuditProgress(
+                            sessionId);
+
+                        /*
+                         * Preserve the controller's existing
+                         * Post/Redirect/Get workflow.
+                         */
+                        window.location.href =
+                            response.url ||
+                            "@Url.Action("Index", "AuthenticatedAudits")";
+                    }
+                    catch {
+                        window.clearInterval(
+                            progressTimer);
+
+                        if (submitButton) {
+                            submitButton.disabled = false;
+                        }
+
+                        currentStageElement.textContent =
+                            "The scan request could not be completed.";
+
+                        progressBar.classList.remove(
+                            "progress-bar-animated");
+                    }
+                });
 
         });
     </script>

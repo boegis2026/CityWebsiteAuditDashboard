@@ -22,6 +22,14 @@ public sealed class AuthenticatedAuditDetailsViewModel
 
     public string? ErrorMessage { get; init; }
 
+    public string? RequestedUrl { get; init; }
+
+    public string? FinalUrl { get; init; }
+
+    public bool WasRedirected { get; init; }
+
+    public long? ScanDurationMilliseconds { get; init; }
+
     public IReadOnlyList<AuthenticatedAuditStepDetailsViewModel> Steps
     { get; init; }
         = Array.Empty<AuthenticatedAuditStepDetailsViewModel>();
@@ -68,7 +76,17 @@ public sealed class AuthenticatedAuditStepDetailsViewModel
 
     public int ViolationRuleCount { get; init; }
 
+    public string WcagTags { get; set; } = string.Empty;
+
+    public string? WcagLevel { get; set; }
+
+    public int PriorityRank { get; set; }
+
     public int AffectedElementCount { get; init; }
+
+    // Exact page elements affected by this axe-core rule.
+    public List<AuthenticatedAuditFindingNodeDetailsViewModel> Nodes
+    { get; set; } = new();
 
     public int NeedsReviewRuleCount { get; init; }
 
@@ -110,5 +128,24 @@ public sealed class AuthenticatedAuditFindingDetailsViewModel
 
     public string? HelpUrl { get; init; }
 
+    public string WcagTags { get; init; } = string.Empty;
+
+    public string? WcagLevel { get; init; }
+
+    public int PriorityRank { get; init; }
+
     public int AffectedElementCount { get; init; }
+
+    // Exact elements affected by this axe-core rule.
+    public List<AuthenticatedAuditFindingNodeDetailsViewModel> Nodes
+    { get; init; } = new();
+}
+
+public sealed class AuthenticatedAuditFindingNodeDetailsViewModel
+{
+    public string Target { get; set; } = string.Empty;
+
+    public string? Html { get; set; }
+
+    public string? FailureSummary { get; set; }
 }

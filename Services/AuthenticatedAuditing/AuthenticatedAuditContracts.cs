@@ -103,7 +103,24 @@ public sealed class AuthenticatedAuditFindingResult
 
     public string? HelpUrl { get; init; }
 
+    public string WcagTags { get; set; } = string.Empty;
+
+    public string? WcagLevel { get; set; }
+
     public int AffectedElementCount { get; init; }
+
+    // Carries each exact affected element from axe-core to the database layer.
+    public List<AuthenticatedAuditFindingNodeResult> Nodes { get; set; }
+        = new();
+}
+
+public sealed class AuthenticatedAuditFindingNodeResult
+{
+    public string Target { get; set; } = string.Empty;
+
+    public string? Html { get; set; }
+
+    public string? FailureSummary { get; set; }
 }
 
 /// <summary>
@@ -167,4 +184,49 @@ public sealed class AuthenticatedAuditBatchItemResult
     /// Time spent navigating to and analyzing this individual URL.
     /// </summary>
     public long DurationMilliseconds { get; init; }
+}
+
+public sealed class AuthenticatedAuditProgressResult
+{
+    public bool IsScanning { get; init; }
+
+    public string Stage { get; init; } = "Idle";
+
+    /*
+     * This is an honest stage-based percentage, not a claim that axe-core
+     * has scanned a specific percentage of the page's DOM.
+     */
+    public int StagePercent { get; init; }
+
+    public string? CurrentUrl { get; init; }
+
+    public int CurrentPageNumber { get; init; }
+
+    // Null means the total is unknown, such as manual form navigation.
+    public int? TotalPageCount { get; init; }
+
+    public int? BatchPercent
+    {
+        get
+        {
+            // Manual form workflows do not have a reliable known total.
+            if (!TotalPageCount.HasValue ||
+                TotalPageCount.Value <= 0)
+            {
+                return null;
+            }
+
+            int completedPages =
+                Math.Max(CurrentPageNumber - 1, 0);
+
+            double progress =
+                completedPages + (StagePercent / 100.0);
+
+            return Math.Clamp(
+                (int)Math.Round(
+                    progress / TotalPageCount.Value * 100),
+                0,
+                100);
+        }
+    }
 }
