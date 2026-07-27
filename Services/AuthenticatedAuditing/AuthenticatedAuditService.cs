@@ -911,6 +911,55 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     };
                 }
 
+                /*
+                * Some dynamic workflow pages accept the first automatic click before
+                * their validation/navigation handlers are fully ready. Retry the
+                * advance once without scanning the same state again.
+                */
+                if (string.Equals(
+                    navigation.Status,
+                    "NoStateChange",
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    await Task.Delay(
+                        TimeSpan.FromSeconds(2),
+                        workflowCancellationToken);
+
+                    AuthenticatedAuditAutomaticNavigationResult retryNavigation =
+                        await AdvanceAutomaticStepAsync(
+                            sessionId,
+                            workflowCancellationToken);
+
+                    cycle =
+                        new AuthenticatedAuditAutomaticCycleResult
+                        {
+                            ScanSucceeded =
+                                cycle.ScanSucceeded,
+
+                            ScannedStepNumber =
+                                cycle.ScannedStepNumber,
+
+                            ScanResult =
+                                cycle.ScanResult,
+
+                            NavigationResult =
+                                retryNavigation,
+
+                            Message =
+                                retryNavigation.Message
+                        };
+
+                    /*
+                     * Replace the original NoStateChange cycle instead of adding another
+                     * scanned state to the workflow history.
+                     */
+                    cycles[cycles.Count - 1] =
+                        cycle;
+
+                    navigation =
+                        retryNavigation;
+                }
+
                 finalUrl =
                     navigation.UrlAfter ??
                     navigation.UrlBefore ??
@@ -966,7 +1015,18 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                 cycles
                         };
                     }
+
+                    /*
+                    * Some multi-step applications update the visible state before their
+                    * JavaScript controls and validation logic have finished initializing.
+                    * Allow the new rendered state to settle before scanning and filling it.
+                    */
+                    await Task.Delay(
+                        TimeSpan.FromSeconds(2),
+                        workflowCancellationToken);
+
                     continue;
+
                 }
 
                 /*
@@ -1239,23 +1299,17 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     activePage);
 
             /*
-             * A random/static page is valid, but it has no workflow
-             * action that should be clicked automatically.
+             * Unsafe pages such as authentication, CAPTCHA, payment, or file
+             * upload pages must still stop before anything is filled.
              */
-            if (!analysis.CanNavigateAutomatically)
+            if (string.Equals(
+                analysis.PageType,
+                "Unsupported",
+                StringComparison.OrdinalIgnoreCase))
             {
-                bool isStaticPage =
-                    string.Equals(
-                        analysis.PageType,
-                        "StaticPage",
-                        StringComparison.OrdinalIgnoreCase);
-
                 return new AuthenticatedAuditAutomaticNavigationResult
                 {
-                    Status =
-                        isStaticPage
-                            ? "StaticPage"
-                            : "ManualActionRequired",
+                    Status = "ManualActionRequired",
 
                     UrlBefore = urlBefore,
                     UrlAfter = activePage.Url,
@@ -1263,8 +1317,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     NavigationAttempted = false,
                     Navigated = false,
 
-                    RequiresManualInteraction =
-                        !isStaticPage,
+                    RequiresManualInteraction = true,
 
                     Message =
                         analysis.RecommendedAction,
@@ -1302,6 +1355,51 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
 
                     StopReason =
                         fillResult.StopReason
+                };
+            }
+
+            /*
+            * Some JavaScript applications enable their Next button only after
+            * change, focus-out, and validation processing have completed.
+            */
+            await activePage.EvaluateAsync(
+                """
+                () => {
+                    const activeElement =
+                        document.activeElement;
+
+                    if (activeElement instanceof HTMLElement) {
+                        activeElement.blur();
+                    }
+                }
+                """);
+
+            await Task.Delay(
+                TimeSpan.FromSeconds(2),
+                cancellationToken);
+
+            /*
+             * Only treat it as a static page after attempting to inspect/fill it.
+             * Some application screens contain controls without a normal <form>.
+             */
+            if (
+                string.Equals(
+                    analysis.PageType,
+                    "StaticPage",
+                    StringComparison.OrdinalIgnoreCase) &&
+                fillResult.FilledFieldCount == 0 &&
+                fillResult.SkippedFieldCount == 0)
+            {
+                return new AuthenticatedAuditAutomaticNavigationResult
+                {
+                    Status = "StaticPage",
+                    UrlBefore = urlBefore,
+                    UrlAfter = activePage.Url,
+                    NavigationAttempted = false,
+                    Navigated = false,
+                    RequiresManualInteraction = false,
+                    Message =
+                        "No fillable form controls or safe workflow action were detected."
                 };
             }
 
@@ -3183,7 +3281,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 }
 
                 if (hint.includes("address")) {
-                    return "200 N Spring St";
+                    return "200 N SPRING ST";
                 }
 
                 if (hint.includes("city")) {
@@ -3493,6 +3591,156 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             System.Text.Json.JsonSerializer.Deserialize<
                 AuthenticatedAuditFieldFillResult>(
                     resultJson);
+
+        /*
+        * Some address fields require selecting an autocomplete result after
+        * typing. Wait for the suggestion list, then select the first visible
+        * suggestion matching the entered address.
+        */
+        await Task.Delay(
+            TimeSpan.FromMilliseconds(750));
+
+        await page.EvaluateAsync(
+            """
+            () => {
+            const isVisible = element => {
+                if (!(element instanceof HTMLElement)) {
+                    return false;
+                }
+
+                const style = window.getComputedStyle(element);
+                const rectangle = element.getBoundingClientRect();
+
+                return (
+                    style.display !== "none" &&
+                    style.visibility !== "hidden" &&
+                    rectangle.width > 0 &&
+                    rectangle.height > 0
+                );
+            };
+
+            const getFieldText = input => {
+                const id = input.id || "";
+
+                const labelText =
+                    id
+                        ? document.querySelector(
+                            `label[for="${CSS.escape(id)}"]`
+                        )?.textContent || ""
+                        : "";
+
+                return [
+                    input.name,
+                    input.id,
+                    input.placeholder,
+                    input.getAttribute("aria-label"),
+                    labelText
+                ]
+                    .filter(Boolean)
+                    .join(" ")
+                    .toLowerCase();
+            };
+
+            const addressInput =
+                Array.from(
+                    document.querySelectorAll(
+                        'input:not([type="hidden"])'
+                    )
+                ).find(input => {
+                    const fieldText = getFieldText(input);
+
+                    return (
+                        isVisible(input) &&
+                        fieldText.includes("address") &&
+                        input.value.trim().length >= 3
+                    );
+                });
+
+            if (!addressInput) {
+                return false;
+            }
+
+            const addressValue =
+                addressInput.value
+                    .trim()
+                    .toUpperCase();
+
+            const inputRectangle =
+                addressInput.getBoundingClientRect();
+
+            const possibleSuggestions =
+                Array.from(
+                    document.querySelectorAll(
+                        [
+                            '[role="option"]',
+                            '[role="listitem"]',
+                            '[role="menuitem"]',
+                            '.autocomplete-suggestion',
+                            '.ui-autocomplete li',
+                            '.dropdown-menu li',
+                            '.dropdown-menu a',
+                            'mat-option',
+                            'ul li'
+                        ].join(",")
+                    )
+                );
+
+            const matchingSuggestion =
+                possibleSuggestions.find(element => {
+                    if (!isVisible(element)) {
+                        return false;
+                    }
+
+                    const text =
+                        (element.textContent || "")
+                            .trim()
+                            .toUpperCase();
+
+                    if (
+                        text !== addressValue &&
+                        !text.startsWith(addressValue)
+                    ) {
+                        return false;
+                    }
+
+                    const rectangle =
+                        element.getBoundingClientRect();
+
+                    return (
+                        rectangle.top >=
+                            inputRectangle.bottom - 5 &&
+                        rectangle.top <=
+                            inputRectangle.bottom + 300
+                    );
+                });
+
+            if (!matchingSuggestion) {
+                return false;
+            }
+
+            matchingSuggestion.dispatchEvent(
+                new MouseEvent(
+                    "mousedown",
+                    {
+                        bubbles: true,
+                        cancelable: true,
+                        view: window
+                    }));
+
+            matchingSuggestion.dispatchEvent(
+                new MouseEvent(
+                    "mouseup",
+                    {
+                        bubbles: true,
+                        cancelable: true,
+                        view: window
+                    }));
+
+            matchingSuggestion.click();
+
+            return true;
+        }
+        """);
 
         return result ??
             throw new InvalidOperationException(
