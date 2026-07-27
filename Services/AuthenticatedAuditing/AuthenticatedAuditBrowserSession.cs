@@ -1,4 +1,5 @@
 ﻿using Microsoft.Playwright;
+using System.Threading;
 
 namespace CityWebsiteAuditDashboard.Services.AuthenticatedAuditing;
 
@@ -10,6 +11,11 @@ namespace CityWebsiteAuditDashboard.Services.AuthenticatedAuditing;
 /// </summary>
 internal sealed class AuthenticatedAuditBrowserSession : IAsyncDisposable
 {
+    private int _automaticWorkflowRunning;
+
+    private CancellationTokenSource?
+        _automaticWorkflowCancellationSource;
+
     /// <summary>
     /// Public identifier used by the dashboard to reference this live session.
     /// </summary>
@@ -139,5 +145,68 @@ internal sealed class AuthenticatedAuditBrowserSession : IAsyncDisposable
                 // Background cleanup must not affect the completed audit run.
             }
         });
+    }
+
+    public bool IsAutomaticWorkflowRunning =>
+    Volatile.Read(
+        ref _automaticWorkflowRunning) == 1;
+
+    /*
+     * Returns false when another automatic workflow already owns
+     * this authenticated browser session.
+     */
+    public bool TryStartAutomaticWorkflow(
+    out CancellationToken cancellationToken)
+    {
+        if (Interlocked.CompareExchange(
+            ref _automaticWorkflowRunning,
+            1,
+            0) != 0)
+        {
+            cancellationToken = default;
+            return false;
+        }
+
+        CancellationTokenSource cancellationSource =
+            new();
+
+        Interlocked.Exchange(
+            ref _automaticWorkflowCancellationSource,
+            cancellationSource);
+
+        cancellationToken =
+            cancellationSource.Token;
+
+        return true;
+    }
+
+    public bool RequestAutomaticWorkflowStop()
+    {
+        CancellationTokenSource? cancellationSource =
+            Volatile.Read(
+                ref _automaticWorkflowCancellationSource);
+
+        if (cancellationSource is null)
+        {
+            return false;
+        }
+
+        cancellationSource.Cancel();
+
+        return true;
+    }
+
+    public void FinishAutomaticWorkflow()
+    {
+        CancellationTokenSource? cancellationSource =
+            Interlocked.Exchange(
+                ref _automaticWorkflowCancellationSource,
+                null);
+
+        cancellationSource?.Dispose();
+
+        Interlocked.Exchange(
+            ref _automaticWorkflowRunning,
+            0);
     }
 }

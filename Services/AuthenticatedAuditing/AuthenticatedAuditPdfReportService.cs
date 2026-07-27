@@ -32,10 +32,6 @@ public sealed class AuthenticatedAuditPdfReportService
 
         // Critical or Serious WCAG A/AA findings should receive attention first.
         int fixFirstFindingCount = allFindings.Count(finding =>
-            string.Equals(
-                finding.FindingType,
-                "Violation",
-                StringComparison.OrdinalIgnoreCase) &&
             (string.Equals(
                 finding.Impact,
                 "critical",
@@ -497,10 +493,6 @@ public sealed class AuthenticatedAuditPdfReportService
                     sourceStep?.Url);
 
                 bool isFixFirst =
-                    string.Equals(
-                        finding.FindingType,
-                        "Violation",
-                        StringComparison.OrdinalIgnoreCase) &&
                     (string.Equals(
                         finding.Impact,
                         "critical",

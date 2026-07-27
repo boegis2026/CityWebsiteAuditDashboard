@@ -613,6 +613,291 @@
                             </ol>
                         </div>
 
+                        <div class="card border-primary mb-3">
+                            <div class="card-body py-3">
+                                <div class="row text-center">
+                                    <div class="col-md-6">
+                                        <div class="text-muted small">
+                                            Scanned states
+                                        </div>
+
+                                        <div id="scannedStateCountValue"
+                                             class="fs-4 fw-bold">
+                                            @Model.ScannedStateCount
+                                        </div>
+
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <div class="text-muted small">
+                                            Current state
+                                        </div>
+
+                                        <div id="currentStateNumberValue"
+                                             class="fs-4 fw-bold">
+                                            @Model.CurrentStateNumber
+                                        </div>
+
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card shadow-sm mb-3">
+    <div class="card-body">
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <button
+                type="button"
+                id="analyzeCurrentStateButton"
+                class="btn btn-outline-primary"
+                data-session-id="@Model.SessionId"
+                onclick="analyzeAuthenticatedAuditState(this)">
+                Analyze Current State
+            </button>
+
+            <form
+                id="previewAutomaticStepForm"
+                asp-controller="AuthenticatedAudits"
+                asp-action="PreviewAutomaticStep"
+                method="post"
+                class="d-inline">
+
+                @Html.AntiForgeryToken()
+
+                <input
+                    type="hidden"
+                    name="sessionId"
+                    value="@Model.SessionId" />
+
+                <button
+                    type="button"
+                    id="previewAutomaticStepButton"
+                    class="btn btn-outline-warning"
+                    onclick="previewAuthenticatedAuditStep(this)">
+                    Preview Automatic Step
+                </button>
+            </form>
+
+            <span
+                id="automaticStepPreviewLoading"
+                class="text-muted d-none">
+                Preparing automatic step...
+            </span>
+
+            <form
+                id="advanceAutomaticStepForm"
+                asp-controller="AuthenticatedAudits"
+                asp-action="AdvanceAutomaticStep"
+                method="post"
+                class="d-inline">
+
+                @Html.AntiForgeryToken()
+
+                <input
+                    type="hidden"
+                    name="sessionId"
+                    value="@Model.SessionId" />
+
+                <button
+                    type="button"
+                    id="advanceAutomaticStepButton"
+                    class="btn btn-warning"
+                    onclick="advanceAuthenticatedAuditStep(this)">
+                    Advance One Automatic Step
+                </button>
+            </form>
+
+            <span
+                id="automaticStepAdvanceLoading"
+                class="text-muted d-none">
+                Advancing the workflow...
+            </span>
+
+            <form
+                id="scanAndAdvanceAutomaticStepForm"
+                asp-controller="AuthenticatedAudits"
+                asp-action="ScanAndAdvanceAutomaticStep"
+                method="post"
+                class="d-inline">
+
+                @Html.AntiForgeryToken()
+
+                <input
+                    type="hidden"
+                    name="sessionId"
+                    value="@Model.SessionId" />
+
+                <button
+                    type="button"
+                    id="scanAndAdvanceAutomaticStepButton"
+                    class="btn btn-primary"
+                    onclick="scanAndAdvanceAuthenticatedAuditStep(this)">
+                    Scan and Advance Once
+                </button>
+            </form>
+
+            <span
+                id="scanAndAdvanceLoading"
+                class="text-muted d-none">
+                Scanning and advancing...
+            </span>
+
+            <form
+                id="runAutomaticWorkflowForm"
+                asp-controller="AuthenticatedAudits"
+                asp-action="RunAutomaticWorkflow"
+                method="post"
+                class="mt-3">
+
+                @Html.AntiForgeryToken()
+
+                <input
+                    type="hidden"
+                    name="sessionId"
+                    value="@Model.SessionId" />
+
+                <div class="card border-primary">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            Automatic Workflow
+                        </h5>
+
+                        <p class="text-muted">
+                            Scans each rendered state, fills supported fields,
+                            and advances through safe Next or Continue actions.
+                            The browser remains open if manual input is required.
+                        </p>
+
+                        <div class="row align-items-end g-3">
+                            <div class="col-md-4">
+                                <label
+                                    for="automaticMaximumStateCount"
+                                    class="form-label">
+                                    Maximum states
+                                </label>
+
+                                <input
+                                    type="number"
+                                    id="automaticMaximumStateCount"
+                                    name="maximumStateCount"
+                                    class="form-control"
+                                    value="25"
+                                    min="1"
+                                    max="25"
+                                    required />
+                            </div>
+
+                            <div class="col-md-8">
+                                <button
+                                    type="button"
+                                    id="runAutomaticWorkflowButton"
+                                    class="btn btn-primary"
+                                    onclick="runAuthenticatedAuditWorkflow(this)">
+                                    Run Automatic Workflow
+                                </button>
+
+                                <button
+                                    type="button"
+                                    id="stopAutomaticWorkflowButton"
+                                    class="btn btn-outline-danger ms-2"
+                                    data-stop-url="@Url.Action(
+                                    "StopAutomaticWorkflow",
+                                    "AuthenticatedAudits")"
+                                    onclick="stopAuthenticatedAuditWorkflow(this)">
+                                    Stop Automatic Workflow
+                                </button>
+
+                                <span
+                                    id="automaticWorkflowLoading"
+                                    class="text-muted ms-2 d-none">
+                                    Scanning and navigating workflow states...
+                                </span>
+                            </div>
+                        </div>
+
+                        <div
+                            id="automaticWorkflowResult"
+                            class="mt-3 d-none"
+                            aria-live="polite">
+                        </div>
+                        <div
+                            id="automaticWorkflowStopResult"
+                            class="mt-2 d-none"
+                            aria-live="polite">
+                        </div>
+                    </div>
+                </div>
+            </form>
+
+            <form
+                id="fillCurrentStateForm"
+                asp-controller="AuthenticatedAudits"
+                asp-action="FillCurrentState"
+                method="post"
+                class="d-inline">
+    
+                @Html.AntiForgeryToken()
+
+                <input
+                    type="hidden"
+                    name="sessionId"
+                    value="@Model.SessionId" />
+
+                <button
+                    type="button"
+                    id="fillCurrentStateButton"
+                    class="btn btn-outline-success"
+                    onclick="fillAuthenticatedAuditState(this)">
+                    Fill Current State
+                </button>
+            </form>
+
+            <span
+                id="fieldFillLoading"
+                class="text-muted d-none">
+                Filling supported fields...
+            </span>
+
+            <span
+                id="navigationAnalysisLoading"
+                class="text-muted d-none">
+                Analyzing the rendered page...
+            </span>
+        </div>
+
+        <div
+            id="navigationAnalysisResult"
+            class="mt-3 d-none"
+            aria-live="polite">
+        </div>
+
+        <div
+            id="fieldFillResult"
+            class="mt-3 d-none"
+            aria-live="polite">
+        </div>
+
+        <div
+            id="automaticStepPreviewResult"
+            class="mt-3 d-none"
+            aria-live="polite">
+        </div>
+
+        <div
+            id="automaticStepAdvanceResult"
+            class="mt-3 d-none"
+            aria-live="polite">
+        </div>
+
+        <div
+            id="scanAndAdvanceResult"
+            class="mt-3 d-none"
+            aria-live="polite">
+        </div>
+
+    </div>
+</div>
+
                         @*
                             These hidden fields preserve the information needed
                             to redisplay the session after the Scan POST request.
@@ -1482,7 +1767,1238 @@
                             "progress-bar-animated");
                     }
                 });
-
         });
+    </script>
+
+    <script>
+        async function analyzeAuthenticatedAuditState(button)
+        {
+            const loadingText =
+                document.getElementById(
+                    "navigationAnalysisLoading");
+
+            const resultContainer =
+                document.getElementById(
+                    "navigationAnalysisResult");
+
+            if (!loadingText || !resultContainer)
+            {
+                alert(
+                    "The navigation analysis result controls were not found.");
+
+                return;
+            }
+
+            const sessionId =
+                button.dataset.sessionId;
+
+            button.disabled = true;
+
+            loadingText.classList.remove("d-none");
+
+            resultContainer.className =
+                "alert alert-secondary mt-3 mb-0";
+
+            resultContainer.textContent =
+                "Analyzing the current rendered state...";
+
+            try
+            {
+                const endpoint =
+                    '@Url.Action(
+                                            "AnalyzeCurrentState",
+                                            "AuthenticatedAudits")';
+
+                const requestUrl =
+                    `${endpoint}?sessionId=${
+                        encodeURIComponent(sessionId)}`;
+
+                const response =
+                    await fetch(
+                        requestUrl,
+                        {
+                            method: "GET",
+                            headers:
+                            {
+                                "Accept": "application/json"
+                            }
+                        });
+
+                const responseText =
+                    await response.text();
+
+                let result;
+
+                try
+                {
+                    result =
+                        JSON.parse(responseText);
+                }
+                catch
+                {
+                    throw new Error(
+                        "The server returned an unexpected response. " +
+                        `HTTP status: ${response.status}.`);
+                }
+
+                if (!response.ok)
+                {
+                    throw new Error(
+                        result.message ??
+                        "The current state could not be analyzed.");
+                }
+
+                resultContainer.className =
+                    result.canNavigateAutomatically
+                        ? "alert alert-success mt-3 mb-0"
+                        : "alert alert-info mt-3 mb-0";
+
+                resultContainer.replaceChildren();
+
+                const heading =
+                    document.createElement("div");
+
+                heading.className =
+                    "fw-bold mb-2";
+
+                heading.textContent =
+                    `Page type: ${result.pageType}`;
+
+                const counts =
+                    document.createElement("div");
+
+                counts.textContent =
+                    `Forms: ${result.formCount} | ` +
+                    `Required fields: ${result.requiredFieldCount} | ` +
+                    `Possible Next actions: ` +
+                    `${result.candidateNextActionCount}`;
+
+                const recommendation =
+                    document.createElement("div");
+
+                recommendation.className =
+                    "mt-2";
+
+                recommendation.textContent =
+                    result.recommendedAction ??
+                    "No recommendation was returned.";
+
+                resultContainer.append(
+                    heading,
+                    counts,
+                    recommendation);
+
+                if (result.stopReason)
+                {
+                    const stopReason =
+                        document.createElement("div");
+
+                    stopReason.className =
+                        "mt-2 fw-semibold text-danger";
+
+                    stopReason.textContent =
+                        `Stop reason: ${result.stopReason}`;
+
+                    resultContainer.append(stopReason);
+                }
+            }
+            catch (error)
+            {
+                console.error(error);
+
+                resultContainer.className =
+                    "alert alert-danger mt-3 mb-0";
+
+                resultContainer.textContent =
+                    error instanceof Error
+                        ? error.message
+                        : "The current state could not be analyzed.";
+            }
+            finally
+            {
+                button.disabled = false;
+
+                loadingText.classList.add("d-none");
+            }
+        }
+    </script>
+
+    <script>
+        async function fillAuthenticatedAuditState(button)
+        {
+            const form =
+                document.getElementById(
+                    "fillCurrentStateForm");
+
+            const loadingText =
+                document.getElementById(
+                    "fieldFillLoading");
+
+            const resultContainer =
+                document.getElementById(
+                    "fieldFillResult");
+
+            if (!form || !loadingText || !resultContainer)
+            {
+                alert(
+                    "The field-filling controls were not found.");
+
+                return;
+            }
+
+            button.disabled = true;
+            loadingText.classList.remove("d-none");
+
+            resultContainer.className =
+                "alert alert-secondary mt-3 mb-0";
+
+            resultContainer.textContent =
+                "Filling supported fields on the current page...";
+
+            try
+            {
+                const response =
+                    await fetch(
+                        form.action,
+                        {
+                            method: "POST",
+                            body: new FormData(form),
+                            headers:
+                            {
+                                "Accept": "application/json"
+                            }
+                        });
+
+                const responseText =
+                    await response.text();
+
+                let result;
+
+                try
+                {
+                    result =
+                        JSON.parse(responseText);
+                }
+                catch
+                {
+                    throw new Error(
+                        "The server returned an unexpected response. " +
+                        `HTTP status: ${response.status}.`);
+                }
+
+                if (!response.ok)
+                {
+                    throw new Error(
+                        result.message ??
+                        "The current state could not be filled.");
+                }
+
+                resultContainer.className =
+                    result.requiresManualInteraction
+                        ? "alert alert-warning mt-3 mb-0"
+                        : "alert alert-success mt-3 mb-0";
+
+                resultContainer.replaceChildren();
+
+                const heading =
+                    document.createElement("div");
+
+                heading.className =
+                    "fw-bold mb-2";
+
+                heading.textContent =
+                    result.requiresManualInteraction
+                        ? "Manual interaction required"
+                        : "Field filling completed";
+
+                const counts =
+                    document.createElement("div");
+
+                counts.textContent =
+                    `Filled fields: ${result.filledFieldCount} | ` +
+                    `Skipped fields: ${result.skippedFieldCount}`;
+
+                resultContainer.append(
+                    heading,
+                    counts);
+
+                if (result.stopReason)
+                {
+                    const stopReason =
+                        document.createElement("div");
+
+                    stopReason.className =
+                        "mt-2 fw-semibold";
+
+                    stopReason.textContent =
+                        `Reason: ${result.stopReason}`;
+
+                    resultContainer.append(stopReason);
+                }
+            }
+            catch (error)
+            {
+                console.error(error);
+
+                resultContainer.className =
+                    "alert alert-danger mt-3 mb-0";
+
+                resultContainer.textContent =
+                    error instanceof Error
+                        ? error.message
+                        : "The current state could not be filled.";
+            }
+            finally
+            {
+                button.disabled = false;
+                loadingText.classList.add("d-none");
+            }
+        }
+    </script>
+
+    <script>
+        async function previewAuthenticatedAuditStep(button)
+        {
+            const form =
+                document.getElementById(
+                    "previewAutomaticStepForm");
+
+            const loadingText =
+                document.getElementById(
+                    "automaticStepPreviewLoading");
+
+            const resultContainer =
+                document.getElementById(
+                    "automaticStepPreviewResult");
+
+            if (!form || !loadingText || !resultContainer)
+            {
+                alert(
+                    "The automatic-step preview controls were not found.");
+
+                return;
+            }
+
+            button.disabled = true;
+            loadingText.classList.remove("d-none");
+
+            resultContainer.className =
+                "alert alert-secondary mt-3 mb-0";
+
+            resultContainer.textContent =
+                "Analyzing, filling, and locating a safe Next action...";
+
+            try
+            {
+                const response =
+                    await fetch(
+                        form.action,
+                        {
+                            method: "POST",
+                            body: new FormData(form),
+                            headers:
+                            {
+                                "Accept": "application/json"
+                            }
+                        });
+
+                const responseText =
+                    await response.text();
+
+                let result;
+
+                try
+                {
+                    result =
+                        JSON.parse(responseText);
+                }
+                catch
+                {
+                    throw new Error(
+                        "The server returned an unexpected response. " +
+                        `HTTP status: ${response.status}.`);
+                }
+
+                if (!response.ok)
+                {
+                    throw new Error(
+                        result.message ??
+                        "The automatic step could not be previewed.");
+                }
+
+                resultContainer.className =
+                    result.requiresManualInteraction
+                        ? "alert alert-warning mt-3 mb-0"
+                        : result.status === "ReadyToAdvance"
+                            ? "alert alert-success mt-3 mb-0"
+                            : "alert alert-info mt-3 mb-0";
+
+                resultContainer.replaceChildren();
+
+                const heading =
+                    document.createElement("div");
+
+                heading.className =
+                    "fw-bold mb-2";
+
+                heading.textContent =
+                    `Status: ${result.status}`;
+
+                const counts =
+                    document.createElement("div");
+
+                counts.textContent =
+                    `Filled fields: ${result.filledFieldCount} | ` +
+                    `Skipped fields: ${result.skippedFieldCount}`;
+
+                resultContainer.append(
+                    heading,
+                    counts);
+
+                if (result.actionText)
+                {
+                    const action =
+                        document.createElement("div");
+
+                    action.className =
+                        "mt-2 fw-semibold";
+
+                    action.textContent =
+                        `Safe action found: ${result.actionText}`;
+
+                    resultContainer.append(action);
+                }
+
+                if (result.message)
+                {
+                    const message =
+                        document.createElement("div");
+
+                    message.className = "mt-2";
+                    message.textContent = result.message;
+
+                    resultContainer.append(message);
+                }
+
+                if (result.stopReason)
+                {
+                    const stopReason =
+                        document.createElement("div");
+
+                    stopReason.className =
+                        "mt-2 fw-semibold text-danger";
+
+                    stopReason.textContent =
+                        `Stop reason: ${result.stopReason}`;
+
+                    resultContainer.append(stopReason);
+                }
+            }
+            catch (error)
+            {
+                console.error(error);
+
+                resultContainer.className =
+                    "alert alert-danger mt-3 mb-0";
+
+                resultContainer.textContent =
+                    error instanceof Error
+                        ? error.message
+                        : "The automatic step could not be previewed.";
+            }
+            finally
+            {
+                button.disabled = false;
+                loadingText.classList.add("d-none");
+            }
+        }
+    </script>
+
+    <script>
+        async function advanceAuthenticatedAuditStep(button)
+        {
+            const form =
+                document.getElementById(
+                    "advanceAutomaticStepForm");
+
+            const loadingText =
+                document.getElementById(
+                    "automaticStepAdvanceLoading");
+
+            const resultContainer =
+                document.getElementById(
+                    "automaticStepAdvanceResult");
+
+            if (!form || !loadingText || !resultContainer)
+            {
+                alert(
+                    "The automatic-step controls were not found.");
+
+                return;
+            }
+
+            button.disabled = true;
+
+            loadingText.classList.remove("d-none");
+
+            resultContainer.className =
+                "alert alert-secondary mt-3 mb-0";
+
+            resultContainer.textContent =
+                "Filling fields and advancing one safe step...";
+
+            try
+            {
+                const response =
+                    await fetch(
+                        form.action,
+                        {
+                            method: "POST",
+                            body: new FormData(form),
+                            headers:
+                            {
+                                "Accept": "application/json"
+                            }
+                        });
+
+                const responseText =
+                    await response.text();
+
+                let result;
+
+                try
+                {
+                    result =
+                        JSON.parse(responseText);
+                }
+                catch
+                {
+                    throw new Error(
+                        "The server returned an unexpected response. " +
+                        `HTTP status: ${response.status}.`);
+                }
+
+                if (!response.ok)
+                {
+                    throw new Error(
+                        result.message ??
+                        "The automatic step could not be completed.");
+                }
+
+                resultContainer.className =
+                    result.navigated
+                        ? "alert alert-success mt-3 mb-0"
+                        : result.requiresManualInteraction
+                            ? "alert alert-warning mt-3 mb-0"
+                            : "alert alert-info mt-3 mb-0";
+
+                resultContainer.replaceChildren();
+
+                const heading =
+                    document.createElement("div");
+
+                heading.className =
+                    "fw-bold mb-2";
+
+                heading.textContent =
+                    `Status: ${result.status}`;
+
+                const counts =
+                    document.createElement("div");
+
+                counts.textContent =
+                    `Filled fields: ${result.filledFieldCount} | ` +
+                    `Skipped fields: ${result.skippedFieldCount}`;
+
+                resultContainer.append(
+                    heading,
+                    counts);
+
+                if (result.actionText)
+                {
+                    const action =
+                        document.createElement("div");
+
+                    action.className =
+                        "mt-2 fw-semibold";
+
+                    action.textContent =
+                        `Clicked action: ${result.actionText}`;
+
+                    resultContainer.append(action);
+                }
+
+                if (result.urlBefore || result.urlAfter)
+                {
+                    const urls =
+                        document.createElement("div");
+
+                    urls.className =
+                        "mt-2 small";
+
+                    urls.textContent =
+                        `Before: ${result.urlBefore ?? "Unknown"} | ` +
+                        `After: ${result.urlAfter ?? "Unknown"}`;
+
+                    resultContainer.append(urls);
+                }
+
+                if (result.message)
+                {
+                    const message =
+                        document.createElement("div");
+
+                    message.className = "mt-2";
+                    message.textContent = result.message;
+
+                    resultContainer.append(message);
+                }
+
+                if (result.stopReason)
+                {
+                    const stopReason =
+                        document.createElement("div");
+
+                    stopReason.className =
+                        "mt-2 fw-semibold text-danger";
+
+                    stopReason.textContent =
+                        `Stop reason: ${result.stopReason}`;
+
+                    resultContainer.append(stopReason);
+                }
+            }
+            catch (error)
+            {
+                console.error(error);
+
+                resultContainer.className =
+                    "alert alert-danger mt-3 mb-0";
+
+                resultContainer.textContent =
+                    error instanceof Error
+                        ? error.message
+                        : "The automatic step could not be completed.";
+            }
+            finally
+            {
+                button.disabled = false;
+
+                loadingText.classList.add("d-none");
+            }
+        }
+    </script>
+
+    <script>
+        async function scanAndAdvanceAuthenticatedAuditStep(button)
+        {
+            const form =
+                document.getElementById(
+                    "scanAndAdvanceAutomaticStepForm");
+
+            const loadingText =
+                document.getElementById(
+                    "scanAndAdvanceLoading");
+
+            const resultContainer =
+                document.getElementById(
+                    "scanAndAdvanceResult");
+
+            if (!form || !loadingText || !resultContainer)
+            {
+                alert(
+                    "The scan-and-advance controls were not found.");
+
+                return;
+            }
+
+            button.disabled = true;
+            loadingText.classList.remove("d-none");
+
+            resultContainer.className =
+                "alert alert-secondary mt-3 mb-0";
+
+            resultContainer.textContent =
+                "Scanning the current state and attempting one safe advance...";
+
+            try
+            {
+                const response =
+                    await fetch(
+                        form.action,
+                        {
+                            method: "POST",
+                            body: new FormData(form),
+                            headers:
+                            {
+                                "Accept": "application/json"
+                            }
+                        });
+
+                const responseText =
+                    await response.text();
+
+                let result;
+
+                try
+                {
+                    result =
+                        JSON.parse(responseText);
+                }
+                catch
+                {
+                    throw new Error(
+                        "The server returned an unexpected response. " +
+                        `HTTP status: ${response.status}.`);
+                }
+
+                if (!response.ok)
+                {
+                    throw new Error(
+                        result.message ??
+                        "The scan-and-advance cycle failed.");
+                }
+
+                const navigation =
+                    result.navigationResult;
+
+                const scannedStateCountValue =
+                    document.getElementById(
+                    "scannedStateCountValue");
+
+                const currentStateNumberValue =
+                    document.getElementById(
+                    "currentStateNumberValue");
+
+                const scannedStepNumber =
+                    Number(result.scannedStepNumber);
+
+                if (Number.isInteger(scannedStepNumber))
+                    {
+                        if (scannedStateCountValue)
+                        {
+                            scannedStateCountValue.textContent =
+                                String(scannedStepNumber);
+                        }
+
+                        if (currentStateNumberValue)
+                        {
+                            currentStateNumberValue.textContent =
+                                String(scannedStepNumber + 1);
+                        }
+                    }
+
+                resultContainer.className =
+                    navigation?.navigated
+                        ? "alert alert-success mt-3 mb-0"
+                        : navigation?.requiresManualInteraction
+                            ? "alert alert-warning mt-3 mb-0"
+                            : "alert alert-info mt-3 mb-0";
+
+                resultContainer.replaceChildren();
+
+                const heading =
+                    document.createElement("div");
+
+                heading.className =
+                    "fw-bold mb-2";
+
+                heading.textContent =
+                    result.scanSucceeded
+                        ? `Scanned state ${result.scannedStepNumber}`
+                        : "The state was not scanned";
+
+                resultContainer.append(heading);
+
+                if (navigation)
+                {
+                    const status =
+                        document.createElement("div");
+
+                    status.textContent =
+                        `Navigation status: ${navigation.status}`;
+
+                    resultContainer.append(status);
+
+                    if (navigation.actionText)
+                    {
+                        const action =
+                            document.createElement("div");
+
+                        action.className =
+                            "mt-2 fw-semibold";
+
+                        action.textContent =
+                            `Clicked action: ${navigation.actionText}`;
+
+                        resultContainer.append(action);
+                    }
+
+                    if (navigation.message)
+                    {
+                        const message =
+                            document.createElement("div");
+
+                        message.className = "mt-2";
+                        message.textContent =
+                            navigation.message;
+
+                        resultContainer.append(message);
+                    }
+
+                    if (navigation.stopReason)
+                    {
+                        const stopReason =
+                            document.createElement("div");
+
+                        stopReason.className =
+                            "mt-2 fw-semibold text-danger";
+
+                        stopReason.textContent =
+                            `Stop reason: ${navigation.stopReason}`;
+
+                        resultContainer.append(stopReason);
+                    }
+                }
+
+                if (result.message)
+                {
+                    const cycleMessage =
+                        document.createElement("div");
+
+                    cycleMessage.className =
+                        "mt-2";
+
+                    cycleMessage.textContent =
+                        result.message;
+
+                    resultContainer.append(cycleMessage);
+                }
+            }
+            catch (error)
+            {
+                console.error(error);
+
+                resultContainer.className =
+                    "alert alert-danger mt-3 mb-0";
+
+                resultContainer.textContent =
+                    error instanceof Error
+                        ? error.message
+                        : "The scan-and-advance cycle failed.";
+            }
+            finally
+            {
+                button.disabled = false;
+                loadingText.classList.add("d-none");
+            }
+        }
+    </script>
+
+    <script>
+        async function runAuthenticatedAuditWorkflow(button)
+        {
+            const form =
+                document.getElementById(
+                    "runAutomaticWorkflowForm");
+
+            const loadingText =
+                document.getElementById(
+                    "automaticWorkflowLoading");
+
+            const resultContainer =
+                document.getElementById(
+                    "automaticWorkflowResult");
+
+            if (!form || !loadingText || !resultContainer)
+            {
+                alert(
+                    "The automatic workflow controls were not found.");
+
+                return;
+            }
+
+            const maximumInput =
+                document.getElementById(
+                    "automaticMaximumStateCount");
+
+            const maximumStateCount =
+                Number(maximumInput?.value);
+
+            if (
+                !Number.isInteger(maximumStateCount) ||
+                maximumStateCount < 1 ||
+                maximumStateCount > 25)
+            {
+                alert(
+                    "Maximum states must be between 1 and 25.");
+
+                return;
+            }
+
+            button.disabled = true;
+
+            loadingText.classList.remove(
+                "d-none");
+
+            resultContainer.className =
+                "alert alert-secondary mt-3 mb-0";
+
+            resultContainer.textContent =
+                "The automatic workflow is running. " +
+                "Do not close the controlled Edge window.";
+
+            try
+            {
+                const response =
+                    await fetch(
+                        form.action,
+                        {
+                            method: "POST",
+                            body: new FormData(form),
+                            headers:
+                            {
+                                "Accept": "application/json"
+                            }
+                        });
+
+                const responseText =
+                    await response.text();
+
+                let result;
+
+                try
+                {
+                    result =
+                        JSON.parse(responseText);
+                }
+                catch
+                {
+                    throw new Error(
+                        "The server returned an unexpected response. " +
+                        `HTTP status: ${response.status}.`);
+                }
+
+                if (!response.ok)
+                {
+                    throw new Error(
+                        result.message ??
+                        "The automatic workflow could not be completed.");
+                }
+
+                const scannedStateCountValue =
+                    document.getElementById(
+                        "scannedStateCountValue");
+
+                const currentStateNumberValue =
+                    document.getElementById(
+                        "currentStateNumberValue");
+
+                const lastCycle =
+                    Array.isArray(result.cycles)
+                        ? result.cycles[result.cycles.length - 1]
+                        : null;
+
+                const lastScannedStepNumber =
+                    Number(lastCycle?.scannedStepNumber);
+
+                if (Number.isInteger(lastScannedStepNumber))
+                {
+                    if (scannedStateCountValue)
+                    {
+                        scannedStateCountValue.textContent =
+                            String(lastScannedStepNumber);
+                    }
+
+                    if (currentStateNumberValue)
+                    {
+                        currentStateNumberValue.textContent =
+                            String(lastScannedStepNumber + 1);
+                    }
+                }
+
+                    const stoppedSafely =
+                        result.status === "ManualActionRequired" ||
+                        result.status === "MaximumReached" ||
+                        result.status === "LoopDetected" ||
+                        result.status === "StoppedByUser";
+
+                resultContainer.className =
+                    result.status === "Completed"
+                        ? "alert alert-success mt-3 mb-0"
+                        : stoppedSafely
+                        ? "alert alert-warning mt-3 mb-0"
+                        : "alert alert-danger mt-3 mb-0";
+
+                resultContainer.replaceChildren();
+
+                const heading =
+                    document.createElement("div");
+
+                heading.className =
+                    "fw-bold fs-5 mb-2";
+
+                heading.textContent =
+                    `Automatic workflow: ${result.status}`;
+
+                const counts =
+                    document.createElement("div");
+
+                counts.textContent =
+                    `Scanned states: ${result.scannedStateCount} | ` +
+                    `Successful advances: ${result.advancedStateCount} | ` +
+                    `Maximum allowed: ${result.maximumStateCount}`;
+
+                resultContainer.append(
+                    heading,
+                    counts);
+
+                if (result.finalUrl)
+                {
+                    const finalUrl =
+                        document.createElement("div");
+
+                    finalUrl.className =
+                        "mt-2 small text-break";
+
+                    finalUrl.textContent =
+                        `Final URL: ${result.finalUrl}`;
+
+                    resultContainer.append(
+                        finalUrl);
+                }
+
+                if (result.message)
+                {
+                    const message =
+                        document.createElement("div");
+
+                    message.className = "mt-2";
+                    message.textContent = result.message;
+
+                    resultContainer.append(
+                        message);
+                }
+
+                if (result.stopReason)
+                {
+                    const stopReason =
+                        document.createElement("div");
+
+                    stopReason.className =
+                        "mt-2 fw-semibold";
+
+                    stopReason.textContent =
+                        `Stop reason: ${result.stopReason}`;
+
+                    resultContainer.append(
+                        stopReason);
+                }
+
+                if (
+                    result.status === "ManualActionRequired" ||
+                    result.status === "LoopDetected" ||
+                    result.status === "StoppedByUser")
+                {
+                    const resumeInstructions =
+                        document.createElement("div");
+
+                    resumeInstructions.className =
+                        "alert alert-light border mt-3 mb-0";
+
+                    if (result.status === "LoopDetected")
+                {
+                    resumeInstructions.textContent =
+                        "The workflow returned to an earlier state. Review or " +
+                        "advance the current page manually in Edge, then click " +
+                        "Resume Automatic Workflow.";
+                }
+                else if (result.status === "StoppedByUser")
+                {
+                    resumeInstructions.textContent =
+                        "The automatic workflow was stopped. Review the current " +
+                        "Edge page, then click Resume Automatic Workflow when ready.";
+                }
+                else
+                {
+                    resumeInstructions.textContent =
+                        "Complete the current step manually in the controlled " +
+                        "Edge window, then click Resume Automatic Workflow.";
+                }
+
+                    button.textContent =
+                        "Resume Automatic Workflow";
+                }
+                else
+                {
+                    button.textContent =
+                        "Run Automatic Workflow";
+                }
+
+                if (
+                    Array.isArray(result.cycles) &&
+                    result.cycles.length > 0)
+                {
+                    const cycleSummary =
+                        document.createElement("div");
+
+                    cycleSummary.className =
+                        "mt-3";
+
+                    const cycleHeading =
+                        document.createElement("div");
+
+                    cycleHeading.className =
+                        "fw-semibold mb-2";
+
+                    cycleHeading.textContent =
+                        "State history";
+
+                    cycleSummary.append(
+                        cycleHeading);
+
+                    const list =
+                        document.createElement("ol");
+
+                    list.className =
+                        "mb-0";
+
+                    for (const cycle of result.cycles)
+                    {
+                        const item =
+                            document.createElement("li");
+
+                        const navigation =
+                            cycle.navigationResult;
+
+                        item.textContent =
+                            `State ${cycle.scannedStepNumber ?? "Unknown"}: ` +
+                            `${navigation?.status ?? "No navigation result"}`;
+
+                        list.append(item);
+                    }
+
+                    cycleSummary.append(list);
+
+                    resultContainer.append(
+                        cycleSummary);
+                }
+            }
+            catch (error)
+            {
+                console.error(error);
+
+                resultContainer.className =
+                    "alert alert-danger mt-3 mb-0";
+
+                resultContainer.textContent =
+                    error instanceof Error
+                        ? error.message
+                        : "The automatic workflow could not be completed.";
+            }
+            finally
+            {
+                button.disabled = false;
+
+                loadingText.classList.add(
+                    "d-none");
+            }
+        }
+    </script>
+
+    <script>
+        async function stopAuthenticatedAuditWorkflow(button)
+        {
+            const form =
+                document.getElementById(
+                    "runAutomaticWorkflowForm");
+
+            const resultContainer =
+                document.getElementById(
+                    "automaticWorkflowStopResult");
+
+            const stopUrl =
+                button.dataset.stopUrl;
+
+            if (!form || !resultContainer || !stopUrl)
+            {
+                alert(
+                    "The automatic-workflow stop controls were not found.");
+
+                return;
+            }
+
+            button.disabled = true;
+
+            resultContainer.className =
+                "alert alert-secondary mt-2 mb-0";
+
+            resultContainer.textContent =
+                "Requesting automatic workflow stop...";
+
+            try
+            {
+                const response =
+                    await fetch(
+                        stopUrl,
+                        {
+                            method: "POST",
+                            body: new FormData(form),
+                            headers:
+                            {
+                                "Accept": "application/json"
+                            }
+                        });
+
+                const responseText =
+                    await response.text();
+
+                let result;
+
+                try
+                {
+                    result =
+                        JSON.parse(responseText);
+                }
+                catch
+                {
+                    throw new Error(
+                        "The server returned an unexpected response. " +
+                        `HTTP status: ${response.status}.`);
+                }
+
+                if (!response.ok)
+                {
+                    throw new Error(
+                        result.message ??
+                        "The stop request could not be completed.");
+                }
+
+                resultContainer.className =
+                    result.stopRequested
+                        ? "alert alert-warning mt-2 mb-0"
+                        : "alert alert-info mt-2 mb-0";
+
+                resultContainer.textContent =
+                    result.message ??
+                    "The stop request was processed.";
+            }
+            catch (error)
+            {
+                console.error(error);
+
+                resultContainer.className =
+                    "alert alert-danger mt-2 mb-0";
+
+                resultContainer.textContent =
+                    error instanceof Error
+                        ? error.message
+                        : "The stop request could not be completed.";
+            }
+            finally
+            {
+                button.disabled = false;
+            }
+        }
     </script>
 }

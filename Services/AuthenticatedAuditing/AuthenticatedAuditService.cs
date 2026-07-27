@@ -660,6 +660,1146 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         };
     }
 
+    public async Task<AuthenticatedAuditNavigationAnalysisResult>
+    AnalyzeCurrentStateAsync(
+        Guid sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_sessions.TryGetValue(
+            sessionId,
+            out AuthenticatedAuditBrowserSession? session))
+        {
+            throw new KeyNotFoundException(
+                "The authenticated audit session was not found.");
+        }
+
+        await session.OperationLock.WaitAsync(cancellationToken);
+
+        try
+        {
+            if (session.IsStopping ||
+                !_sessions.ContainsKey(sessionId))
+            {
+                throw new KeyNotFoundException(
+                    "The authenticated audit session is no longer active.");
+            }
+
+            if (!session.Browser.IsConnected)
+            {
+                throw new InvalidOperationException(
+                    "The authenticated browser is no longer connected.");
+            }
+
+            /*
+             * Reuse the same page-selection behavior as manual scanning.
+             * This supports protected applications that opened in a newer tab.
+             */
+            IPage activePage =
+                SelectPageForAudit(session);
+
+            session.ActivePage = activePage;
+
+            await activePage.BringToFrontAsync();
+
+            return await AnalyzePageForAutomaticNavigationAsync(
+                activePage);
+        }
+        finally
+        {
+            session.OperationLock.Release();
+        }
+    }
+
+    public bool RequestAutomaticWorkflowStop(
+    Guid sessionId)
+    {
+        if (!_sessions.TryGetValue(
+            sessionId,
+            out AuthenticatedAuditBrowserSession? session))
+        {
+            throw new KeyNotFoundException(
+                "The authenticated audit session was not found.");
+        }
+
+        return session.RequestAutomaticWorkflowStop();
+    }
+
+    public async Task<AuthenticatedAuditAutomaticRunResult>
+    RunAutomaticWorkflowAsync(
+        Guid sessionId,
+        int maximumStateCount = 25,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_sessions.TryGetValue(
+            sessionId,
+            out AuthenticatedAuditBrowserSession? session))
+        {
+            throw new KeyNotFoundException(
+                "The authenticated audit session was not found.");
+        }
+
+        if (!session.TryStartAutomaticWorkflow(
+            out CancellationToken sessionCancellationToken))
+        {
+            throw new InvalidOperationException(
+                "An automatic workflow is already running for this session.");
+        }
+
+        /*
+         * Stop when either the dashboard request is canceled or the user
+         * explicitly requests that the automatic workflow stop.
+         */
+        using CancellationTokenSource linkedCancellationSource =
+            CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken,
+                sessionCancellationToken);
+
+        CancellationToken workflowCancellationToken =
+            linkedCancellationSource.Token;
+
+        /*
+         * Prevent an invalid or excessive automatic run.
+         * Twenty-five states is the proof-of-concept safety limit.
+         */
+        int safeMaximumStateCount =
+            Math.Clamp(
+                maximumStateCount,
+                1,
+                25);
+
+        var cycles =
+            new List<AuthenticatedAuditAutomaticCycleResult>();
+
+        /*
+         * Contains only states that have already been scanned.
+         * This prevents the navigator from repeatedly cycling through
+         * an earlier workflow state.
+         */
+        var scannedStateSignatures =
+            new HashSet<string>(
+                StringComparer.Ordinal);
+
+        int advancedStateCount = 0;
+        string? finalUrl = null;
+
+        try
+        {
+            for (int stateIndex = 0;
+                stateIndex < safeMaximumStateCount;
+                stateIndex++)
+            {
+                workflowCancellationToken.ThrowIfCancellationRequested();
+
+                /*
+                 * Scan the last permitted state, but do not click Next.
+                 * This prevents automation from entering an additional
+                 * unscanned state after reaching the configured limit.
+                 */
+                if (stateIndex == safeMaximumStateCount - 1)
+                {
+                    AuthenticatedAuditStepResult finalScanResult =
+                        await ScanCurrentStepAsync(
+                            sessionId,
+                            workflowCancellationToken);
+
+                    var limitNavigationResult =
+                        new AuthenticatedAuditAutomaticNavigationResult
+                        {
+                            Status = "MaximumReached",
+
+                            NavigationAttempted = false,
+                            Navigated = false,
+
+                            RequiresManualInteraction = false,
+
+                            Message =
+                                "The final permitted state was scanned. " +
+                                "No additional navigation was attempted.",
+
+                            StopReason =
+                                "The configured maximum state count was reached."
+                        };
+
+                    cycles.Add(
+                        new AuthenticatedAuditAutomaticCycleResult
+                        {
+                            ScanSucceeded = true,
+
+                            ScannedStepNumber =
+                                finalScanResult.StepNumber,
+
+                            ScanResult =
+                                finalScanResult,
+
+                            NavigationResult =
+                                limitNavigationResult,
+
+                            Message =
+                                "The state was scanned without advancing."
+                        });
+
+                    return new AuthenticatedAuditAutomaticRunResult
+                    {
+                        Status = "MaximumReached",
+
+                        ScannedStateCount =
+                            cycles.Count,
+
+                        AdvancedStateCount =
+                            advancedStateCount,
+
+                        MaximumStateCount =
+                            safeMaximumStateCount,
+
+                        ReachedMaximumStateCount = true,
+
+                        FinalUrl =
+                            finalUrl,
+
+                        Message =
+                            $"The automatic workflow stopped after scanning " +
+                            $"the maximum of {safeMaximumStateCount} states.",
+
+                        StopReason =
+                            "The safety limit was reached. The browser remains " +
+                            "on the final scanned state.",
+
+                        Cycles =
+                            cycles
+                    };
+                }
+
+                AuthenticatedAuditAutomaticCycleResult cycle =
+                    await ScanAndAdvanceAutomaticStepAsync(
+                        sessionId,
+                        workflowCancellationToken);
+
+                cycles.Add(cycle);
+
+                AuthenticatedAuditAutomaticNavigationResult?
+                    navigation =
+                        cycle.NavigationResult;
+
+                if (navigation is null)
+                {
+                    return new AuthenticatedAuditAutomaticRunResult
+                    {
+                        Status = "Failed",
+
+                        ScannedStateCount =
+                            cycles.Count,
+
+                        AdvancedStateCount =
+                            advancedStateCount,
+
+                        MaximumStateCount =
+                            safeMaximumStateCount,
+
+                        ReachedMaximumStateCount = false,
+
+                        FinalUrl =
+                            finalUrl,
+
+                        Message =
+                            "The current state was scanned, but no navigation result was returned.",
+
+                        StopReason =
+                            "The automatic cycle returned an incomplete result.",
+
+                        Cycles =
+                            cycles
+                    };
+                }
+
+                finalUrl =
+                    navigation.UrlAfter ??
+                    navigation.UrlBefore ??
+                    finalUrl;
+
+                if (!string.IsNullOrWhiteSpace(
+                                navigation.StateSignatureBefore))
+                {
+                    scannedStateSignatures.Add(
+                        navigation.StateSignatureBefore);
+                }
+
+                if (navigation.Navigated)
+                {
+                    advancedStateCount++;
+
+                    /*
+                    * The destination has not been scanned during this cycle yet.
+                    * If its signature already exists, the workflow returned to an
+                    * earlier scanned state and should stop before scanning it again.
+                    */
+                    if (
+                        !string.IsNullOrWhiteSpace(
+                            navigation.StateSignatureAfter) &&
+                        scannedStateSignatures.Contains(
+                            navigation.StateSignatureAfter))
+                    {
+                        return new AuthenticatedAuditAutomaticRunResult
+                        {
+                            Status = "LoopDetected",
+
+                            ScannedStateCount =
+                                cycles.Count,
+
+                            AdvancedStateCount =
+                                advancedStateCount,
+
+                            MaximumStateCount =
+                                safeMaximumStateCount,
+
+                            ReachedMaximumStateCount = false,
+
+                            FinalUrl =
+                                finalUrl,
+
+                            Message =
+                                "Automatic navigation stopped because the workflow returned to a previously scanned state.",
+
+                            StopReason =
+                                "A repeated rendered state was detected. The browser remains open for manual review.",
+
+                            Cycles =
+                                cycles
+                        };
+                    }
+                    continue;
+                }
+
+                /*
+                 * A static page or a state with no additional safe action
+                 * is a normal completion. The current state was still
+                 * scanned and saved before navigation stopped.
+                 */
+                bool completedNormally =
+                    string.Equals(
+                        navigation.Status,
+                        "StaticPage",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(
+                        navigation.Status,
+                        "NoSafeAction",
+                        StringComparison.OrdinalIgnoreCase);
+
+                if (completedNormally)
+                {
+                    return new AuthenticatedAuditAutomaticRunResult
+                    {
+                        Status = "Completed",
+
+                        ScannedStateCount =
+                            cycles.Count,
+
+                        AdvancedStateCount =
+                            advancedStateCount,
+
+                        MaximumStateCount =
+                            safeMaximumStateCount,
+
+                        ReachedMaximumStateCount = false,
+
+                        FinalUrl =
+                            finalUrl,
+
+                        Message =
+                            "The supported workflow states were scanned and no additional safe navigation action was found.",
+
+                        StopReason =
+                            navigation.StopReason,
+
+                        Cycles =
+                            cycles
+                    };
+                }
+
+                /*
+                 * Validation failures, unsupported fields, authentication,
+                 * CAPTCHA, final actions, and other uncertain states stop
+                 * automation while leaving the browser open for manual use.
+                 */
+                return new AuthenticatedAuditAutomaticRunResult
+                {
+                    Status = "ManualActionRequired",
+
+                    ScannedStateCount =
+                        cycles.Count,
+
+                    AdvancedStateCount =
+                        advancedStateCount,
+
+                    MaximumStateCount =
+                        safeMaximumStateCount,
+
+                    ReachedMaximumStateCount = false,
+
+                    FinalUrl =
+                        finalUrl,
+
+                    Message =
+                        "Automatic navigation stopped. The browser remains open so the workflow can continue manually.",
+
+                    StopReason =
+                        navigation.StopReason ??
+                        navigation.Message,
+
+                    Cycles =
+                        cycles
+                };
+            }
+
+            /*
+             * The loop should normally return from one of the conditions
+             * above, but this protects against an unexpected fall-through.
+             */
+            return new AuthenticatedAuditAutomaticRunResult
+            {
+                Status = "MaximumReached",
+
+                ScannedStateCount =
+                    cycles.Count,
+
+                AdvancedStateCount =
+                    advancedStateCount,
+
+                MaximumStateCount =
+                    safeMaximumStateCount,
+
+                ReachedMaximumStateCount = true,
+
+                FinalUrl =
+                    finalUrl,
+
+                Message =
+                    "The automatic workflow reached its configured state limit.",
+
+                StopReason =
+                    "The safety limit was reached.",
+
+                Cycles =
+                    cycles
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            return new AuthenticatedAuditAutomaticRunResult
+            {
+                Status = "StoppedByUser",
+
+                ScannedStateCount =
+                    cycles.Count,
+
+                AdvancedStateCount =
+                    advancedStateCount,
+
+                MaximumStateCount =
+                    safeMaximumStateCount,
+
+                ReachedMaximumStateCount = false,
+
+                FinalUrl =
+                    finalUrl,
+
+                Message =
+                    "The automatic workflow was stopped. " +
+                    "The authenticated browser remains open.",
+
+                StopReason =
+                    "The user requested that automatic navigation stop.",
+
+                Cycles =
+                    cycles
+            };
+        }
+        catch (Exception exception)
+        {
+            return new AuthenticatedAuditAutomaticRunResult
+            {
+                Status = "Failed",
+
+                ScannedStateCount =
+                    cycles.Count,
+
+                AdvancedStateCount =
+                    advancedStateCount,
+
+                MaximumStateCount =
+                    safeMaximumStateCount,
+
+                ReachedMaximumStateCount = false,
+
+                FinalUrl =
+                    finalUrl,
+
+                Message =
+                    "The automatic workflow encountered an unexpected error.",
+
+                StopReason =
+                    exception.Message,
+
+                Cycles =
+                    cycles
+            };
+        }
+
+        finally
+        {
+            /*
+             * Release the session even when the workflow completes,
+             * stops for manual input, reaches its limit, is canceled,
+             * or encounters an exception.
+             */
+            session.FinishAutomaticWorkflow();
+        }
+    }
+
+    public async Task<AuthenticatedAuditAutomaticCycleResult>
+    ScanAndAdvanceAutomaticStepAsync(
+        Guid sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        /*
+         * Each existing operation manages the session lock itself.
+         * Do not acquire OperationLock here or the calls would deadlock.
+         */
+        AuthenticatedAuditStepResult scanResult =
+            await ScanCurrentStepAsync(
+                sessionId,
+                cancellationToken);
+
+        AuthenticatedAuditAutomaticNavigationResult navigationResult =
+            await AdvanceAutomaticStepAsync(
+                sessionId,
+                cancellationToken);
+
+        return new AuthenticatedAuditAutomaticCycleResult
+        {
+            ScanSucceeded = true,
+
+            ScannedStepNumber =
+                scanResult.StepNumber,
+
+            ScanResult =
+                scanResult,
+
+            NavigationResult =
+                navigationResult,
+
+            Message =
+                navigationResult.Navigated
+                    ? "The current state was scanned and the workflow advanced."
+                    : "The current state was scanned, but automatic navigation stopped."
+        };
+    }
+
+    public async Task<AuthenticatedAuditAutomaticNavigationResult>
+    AdvanceAutomaticStepAsync(
+        Guid sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_sessions.TryGetValue(
+            sessionId,
+            out AuthenticatedAuditBrowserSession? session))
+        {
+            throw new KeyNotFoundException(
+                "The authenticated audit session was not found.");
+        }
+
+        await session.OperationLock.WaitAsync(cancellationToken);
+
+        try
+        {
+            if (session.IsStopping ||
+                !_sessions.ContainsKey(sessionId))
+            {
+                throw new KeyNotFoundException(
+                    "The authenticated audit session is no longer active.");
+            }
+
+            if (!session.Browser.IsConnected)
+            {
+                throw new InvalidOperationException(
+                    "The authenticated browser is no longer connected.");
+            }
+
+            IPage activePage =
+                SelectPageForAudit(session);
+
+            session.ActivePage = activePage;
+
+            await activePage.BringToFrontAsync();
+
+            string urlBefore =
+                activePage.Url;
+
+            AuthenticatedAuditNavigationAnalysisResult analysis =
+                await AnalyzePageForAutomaticNavigationAsync(
+                    activePage);
+
+            /*
+             * A random/static page is valid, but it has no workflow
+             * action that should be clicked automatically.
+             */
+            if (!analysis.CanNavigateAutomatically)
+            {
+                bool isStaticPage =
+                    string.Equals(
+                        analysis.PageType,
+                        "StaticPage",
+                        StringComparison.OrdinalIgnoreCase);
+
+                return new AuthenticatedAuditAutomaticNavigationResult
+                {
+                    Status =
+                        isStaticPage
+                            ? "StaticPage"
+                            : "ManualActionRequired",
+
+                    UrlBefore = urlBefore,
+                    UrlAfter = activePage.Url,
+
+                    NavigationAttempted = false,
+                    Navigated = false,
+
+                    RequiresManualInteraction =
+                        !isStaticPage,
+
+                    Message =
+                        analysis.RecommendedAction,
+
+                    StopReason =
+                        analysis.StopReason
+                };
+            }
+
+            AuthenticatedAuditFieldFillResult fillResult =
+                await FillSafeFieldsAsync(activePage);
+
+            if (fillResult.RequiresManualInteraction)
+            {
+                return new AuthenticatedAuditAutomaticNavigationResult
+                {
+                    Status = "ManualActionRequired",
+
+                    UrlBefore = urlBefore,
+                    UrlAfter = activePage.Url,
+
+                    FilledFieldCount =
+                        fillResult.FilledFieldCount,
+
+                    SkippedFieldCount =
+                        fillResult.SkippedFieldCount,
+
+                    NavigationAttempted = false,
+                    Navigated = false,
+
+                    RequiresManualInteraction = true,
+
+                    Message =
+                        "Automatic navigation stopped before clicking anything.",
+
+                    StopReason =
+                        fillResult.StopReason
+                };
+            }
+
+            AuthenticatedAuditNextActionResult nextAction =
+                await FindSafeNextActionAsync(activePage);
+
+            if (!nextAction.Found ||
+                string.IsNullOrWhiteSpace(nextAction.Selector))
+            {
+                return new AuthenticatedAuditAutomaticNavigationResult
+                {
+                    Status =
+                        nextAction.RequiresManualInteraction
+                            ? "ManualActionRequired"
+                            : "NoSafeAction",
+
+                    UrlBefore = urlBefore,
+                    UrlAfter = activePage.Url,
+
+                    FilledFieldCount =
+                        fillResult.FilledFieldCount,
+
+                    SkippedFieldCount =
+                        fillResult.SkippedFieldCount,
+
+                    NavigationAttempted = false,
+                    Navigated = false,
+
+                    RequiresManualInteraction =
+                        nextAction.RequiresManualInteraction,
+
+                    Message =
+                        "No safe automatic navigation action was selected.",
+
+                    StopReason =
+                        nextAction.StopReason
+                };
+            }
+
+            /*
+             * Check a link or form destination before clicking. Automatic
+             * navigation must not leave the current website origin.
+             */
+            string? intendedDestination =
+                await activePage.EvaluateAsync<string?>(
+                    """
+                () => {
+                    const action =
+                        document.querySelector(
+                            '[data-city-audit-next-action="true"]');
+
+                    if (!action) {
+                        return null;
+                    }
+
+                    if (
+                        action instanceof HTMLAnchorElement &&
+                        action.href) {
+                        return action.href;
+                    }
+
+                    const form =
+                        action.closest("form");
+
+                    return form?.action || null;
+                }
+                """);
+
+            if (
+                !string.IsNullOrWhiteSpace(
+                    intendedDestination) &&
+                Uri.TryCreate(
+                    urlBefore,
+                    UriKind.Absolute,
+                    out Uri? currentUri) &&
+                Uri.TryCreate(
+                    intendedDestination,
+                    UriKind.Absolute,
+                    out Uri? destinationUri))
+            {
+                bool sameOrigin =
+                    string.Equals(
+                        currentUri.Scheme,
+                        destinationUri.Scheme,
+                        StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(
+                        currentUri.Host,
+                        destinationUri.Host,
+                        StringComparison.OrdinalIgnoreCase) &&
+                    currentUri.Port ==
+                        destinationUri.Port;
+
+                if (!sameOrigin)
+                {
+                    return new AuthenticatedAuditAutomaticNavigationResult
+                    {
+                        Status = "ManualActionRequired",
+
+                        UrlBefore = urlBefore,
+                        UrlAfter = activePage.Url,
+
+                        FilledFieldCount =
+                            fillResult.FilledFieldCount,
+
+                        SkippedFieldCount =
+                            fillResult.SkippedFieldCount,
+
+                        ActionText =
+                            nextAction.ActionText,
+
+                        NavigationAttempted = false,
+                        Navigated = false,
+
+                        RequiresManualInteraction = true,
+
+                        Message =
+                            "Automatic navigation did not click the action.",
+
+                        StopReason =
+                            "The selected action would leave the current website origin."
+                    };
+                }
+            }
+
+            string signatureBefore =
+                await GetAutomaticNavigationStateSignatureAsync(
+                    activePage);
+
+            ILocator actionLocator =
+                activePage.Locator(
+                    nextAction.Selector);
+
+            int matchingActionCount =
+                await actionLocator.CountAsync();
+
+            if (matchingActionCount != 1)
+            {
+                return new AuthenticatedAuditAutomaticNavigationResult
+                {
+                    Status = "ManualActionRequired",
+
+                    UrlBefore = urlBefore,
+                    UrlAfter = activePage.Url,
+
+                    FilledFieldCount =
+                        fillResult.FilledFieldCount,
+
+                    SkippedFieldCount =
+                        fillResult.SkippedFieldCount,
+
+                    ActionText =
+                        nextAction.ActionText,
+
+                    NavigationAttempted = false,
+                    Navigated = false,
+
+                    RequiresManualInteraction = true,
+
+                    Message =
+                        "The action was not clicked.",
+
+                    StopReason =
+                        "The selected Next action changed or was no longer unique."
+                };
+            }
+
+            await actionLocator.ScrollIntoViewIfNeededAsync();
+
+            await actionLocator.ClickAsync(
+                new LocatorClickOptions
+                {
+                    Timeout = 15000
+                });
+
+            bool renderedStateChanged = false;
+
+            string signatureAfter =
+                signatureBefore;
+
+            IPage pageAfter =
+                activePage;
+
+            /*
+             * Poll because many multi-step forms update the DOM without
+             * changing the URL or performing a normal page navigation.
+             */
+            for (int attempt = 0;
+                 attempt < 20;
+                 attempt++)
+            {
+                await Task.Delay(
+                    TimeSpan.FromMilliseconds(500),
+                    cancellationToken);
+
+                try
+                {
+                    pageAfter =
+                        SelectPageForAudit(session);
+
+                    session.ActivePage =
+                        pageAfter;
+
+                    signatureAfter =
+                        await GetAutomaticNavigationStateSignatureAsync(
+                            pageAfter);
+
+                    if (!string.Equals(
+                        signatureBefore,
+                        signatureAfter,
+                        StringComparison.Ordinal))
+                    {
+                        renderedStateChanged = true;
+                        break;
+                    }
+                }
+                catch (PlaywrightException)
+                {
+                    /*
+                     * The old page may be temporarily unavailable while
+                     * navigation or a new browser tab is being created.
+                     */
+                }
+            }
+
+            await pageAfter.BringToFrontAsync();
+
+            return new AuthenticatedAuditAutomaticNavigationResult
+            {
+                Status =
+                    renderedStateChanged
+                        ? "Advanced"
+                        : "NoStateChange",
+
+                UrlBefore = urlBefore,
+                UrlAfter = pageAfter.Url,
+
+                StateSignatureBefore =
+                    signatureBefore,
+
+                StateSignatureAfter =
+                    signatureAfter,
+
+                FilledFieldCount =
+                    fillResult.FilledFieldCount,
+
+                SkippedFieldCount =
+                    fillResult.SkippedFieldCount,
+
+                ActionText =
+                    nextAction.ActionText,
+
+                NavigationAttempted = true,
+
+                Navigated =
+                    renderedStateChanged,
+
+                RequiresManualInteraction =
+                    !renderedStateChanged,
+
+                Message =
+                    renderedStateChanged
+                        ? "The workflow advanced to a new rendered state."
+                        : "The action was clicked, but no new rendered state was detected.",
+
+                StopReason =
+                    renderedStateChanged
+                        ? null
+                        : "The form may have validation errors or require manual input."
+            };
+        }
+        finally
+        {
+            session.OperationLock.Release();
+        }
+    }
+
+    public async Task<AuthenticatedAuditAutomaticNavigationResult>
+    PreviewAutomaticStepAsync(
+        Guid sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_sessions.TryGetValue(
+            sessionId,
+            out AuthenticatedAuditBrowserSession? session))
+        {
+            throw new KeyNotFoundException(
+                "The authenticated audit session was not found.");
+        }
+
+        await session.OperationLock.WaitAsync(cancellationToken);
+
+        try
+        {
+            if (session.IsStopping ||
+                !_sessions.ContainsKey(sessionId))
+            {
+                throw new KeyNotFoundException(
+                    "The authenticated audit session is no longer active.");
+            }
+
+            if (!session.Browser.IsConnected)
+            {
+                throw new InvalidOperationException(
+                    "The authenticated browser is no longer connected.");
+            }
+
+            IPage activePage =
+                SelectPageForAudit(session);
+
+            session.ActivePage = activePage;
+
+            await activePage.BringToFrontAsync();
+
+            string urlBefore =
+                activePage.Url;
+
+            AuthenticatedAuditNavigationAnalysisResult analysis =
+                await AnalyzePageForAutomaticNavigationAsync(
+                    activePage);
+
+            /*
+             * A static page is a normal result. It can be scanned once,
+             * but there is no workflow action to advance.
+             */
+            if (!analysis.CanNavigateAutomatically)
+            {
+                bool requiresManualInteraction =
+                    !string.Equals(
+                        analysis.PageType,
+                        "StaticPage",
+                        StringComparison.OrdinalIgnoreCase);
+
+                return new AuthenticatedAuditAutomaticNavigationResult
+                {
+                    Status =
+                        requiresManualInteraction
+                            ? "ManualActionRequired"
+                            : "StaticPage",
+
+                    UrlBefore = urlBefore,
+                    UrlAfter = activePage.Url,
+
+                    NavigationAttempted = false,
+                    Navigated = false,
+
+                    RequiresManualInteraction =
+                        requiresManualInteraction,
+
+                    Message =
+                        analysis.RecommendedAction,
+
+                    StopReason =
+                        analysis.StopReason
+                };
+            }
+
+            AuthenticatedAuditFieldFillResult fillResult =
+                await FillSafeFieldsAsync(activePage);
+
+            if (fillResult.RequiresManualInteraction)
+            {
+                return new AuthenticatedAuditAutomaticNavigationResult
+                {
+                    Status = "ManualActionRequired",
+
+                    UrlBefore = urlBefore,
+                    UrlAfter = activePage.Url,
+
+                    FilledFieldCount =
+                        fillResult.FilledFieldCount,
+
+                    SkippedFieldCount =
+                        fillResult.SkippedFieldCount,
+
+                    NavigationAttempted = false,
+                    Navigated = false,
+
+                    RequiresManualInteraction = true,
+
+                    Message =
+                        "The supported fields were inspected, but manual interaction is required.",
+
+                    StopReason =
+                        fillResult.StopReason
+                };
+            }
+
+            AuthenticatedAuditNextActionResult nextAction =
+                await FindSafeNextActionAsync(activePage);
+
+            if (!nextAction.Found)
+            {
+                return new AuthenticatedAuditAutomaticNavigationResult
+                {
+                    Status =
+                        nextAction.RequiresManualInteraction
+                            ? "ManualActionRequired"
+                            : "NoSafeAction",
+
+                    UrlBefore = urlBefore,
+                    UrlAfter = activePage.Url,
+
+                    FilledFieldCount =
+                        fillResult.FilledFieldCount,
+
+                    SkippedFieldCount =
+                        fillResult.SkippedFieldCount,
+
+                    NavigationAttempted = false,
+                    Navigated = false,
+
+                    RequiresManualInteraction =
+                        nextAction.RequiresManualInteraction,
+
+                    Message =
+                        "The current fields were processed, but no safe navigation action was selected.",
+
+                    StopReason =
+                        nextAction.StopReason
+                };
+            }
+
+            return new AuthenticatedAuditAutomaticNavigationResult
+            {
+                Status = "ReadyToAdvance",
+
+                UrlBefore = urlBefore,
+                UrlAfter = activePage.Url,
+
+                FilledFieldCount =
+                    fillResult.FilledFieldCount,
+
+                SkippedFieldCount =
+                    fillResult.SkippedFieldCount,
+
+                ActionText =
+                    nextAction.ActionText,
+
+                NavigationAttempted = false,
+                Navigated = false,
+
+                RequiresManualInteraction = false,
+
+                Message =
+                    "The current state is filled and a safe Next action is ready. No button has been clicked yet."
+            };
+        }
+        finally
+        {
+            session.OperationLock.Release();
+        }
+    }
+
+    public async Task<AuthenticatedAuditFieldFillResult>
+    FillCurrentStateAsync(
+        Guid sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_sessions.TryGetValue(
+            sessionId,
+            out AuthenticatedAuditBrowserSession? session))
+        {
+            throw new KeyNotFoundException(
+                "The authenticated audit session was not found.");
+        }
+
+        await session.OperationLock.WaitAsync(cancellationToken);
+
+        try
+        {
+            if (session.IsStopping ||
+                !_sessions.ContainsKey(sessionId))
+            {
+                throw new KeyNotFoundException(
+                    "The authenticated audit session is no longer active.");
+            }
+
+            if (!session.Browser.IsConnected)
+            {
+                throw new InvalidOperationException(
+                    "The authenticated browser is no longer connected.");
+            }
+
+            IPage activePage =
+                SelectPageForAudit(session);
+
+            session.ActivePage = activePage;
+
+            await activePage.BringToFrontAsync();
+
+            return await FillSafeFieldsAsync(activePage);
+        }
+        finally
+        {
+            session.OperationLock.Release();
+        }
+    }
+
     public async Task StopSessionAsync(
     Guid sessionId,
     bool markLastStepAsFinal,
@@ -1327,6 +2467,1036 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         await dbContext.SaveChangesAsync(cancellationToken);
 
         return auditRun.Id;
+    }
+
+    private static async Task<AuthenticatedAuditNavigationAnalysisResult>
+    AnalyzePageForAutomaticNavigationAsync(IPage page)
+    {
+        /*
+         * This only inspects the rendered page. It does not fill fields,
+         * click buttons, submit forms, or change the manual scan workflow.
+         */
+        return await page.EvaluateAsync<
+            AuthenticatedAuditNavigationAnalysisResult>(
+            """
+        () => {
+            const isVisibleAndEnabled = element => {
+                if (!(element instanceof HTMLElement)) {
+                    return false;
+                }
+
+                const style = window.getComputedStyle(element);
+                const rectangle = element.getBoundingClientRect();
+
+                return style.display !== "none" &&
+                    style.visibility !== "hidden" &&
+                    rectangle.width > 0 &&
+                    rectangle.height > 0 &&
+                    !element.hasAttribute("disabled") &&
+                    element.getAttribute("aria-disabled") !== "true";
+            };
+
+            const getActionText = element => {
+                return [
+                    element.innerText,
+                    element.textContent,
+                    element.getAttribute("aria-label"),
+                    element.getAttribute("title"),
+                    element.getAttribute("name"),
+                    element.getAttribute("value")
+                ]
+                    .filter(value => value)
+                    .join(" ")
+                    .replace(/\s+/g, " ")
+                    .trim();
+            };
+
+            const visibleForms =
+                Array.from(document.querySelectorAll("form"))
+                    .filter(isVisibleAndEnabled);
+
+            const requiredFields =
+                Array.from(
+                    document.querySelectorAll(
+                        "input[required], select[required], textarea[required], " +
+                        "[aria-required='true']"))
+                    .filter(isVisibleAndEnabled);
+
+            const visibleFormControls =
+                Array.from(
+                    document.querySelectorAll(
+                        "input:not([type='hidden']):not([type='button'])" +
+                        ":not([type='submit']):not([type='reset'])" +
+                        ":not([type='image']), select, textarea"))
+                    .filter(isVisibleAndEnabled);
+
+            const hasVisibleForm =
+                visibleForms.length > 0;
+
+            const hasWorkflowControls =
+                visibleFormControls.length > 0 ||
+                requiredFields.length > 0;
+
+            const possibleActions =
+                Array.from(
+                    document.querySelectorAll(
+                        "button, input[type='button'], " +
+                        "input[type='submit'], a[href], " +
+                        "[role='button']"))
+                    .filter(isVisibleAndEnabled);
+
+            const safeNextPattern =
+                /\b(next|continue|proceed|start|begin|advance)\b/i;
+
+            const unsafeActionPattern =
+                /\b(submit|finalize|certify|pay|payment|purchase|checkout|place order|sign|signature|send application)\b/i;
+
+            const candidateNextActions =
+                possibleActions.filter(element => {
+
+                    const actionText =
+                        getActionText(element);
+
+                    const isFormAssociatedAction =
+                        element.closest("form") !== null ||
+                        (
+                            element instanceof HTMLButtonElement &&
+                            element.form !== null
+                        ) ||
+                        (
+                            element instanceof HTMLInputElement &&
+                            element.form !== null
+                        );
+
+                    /*
+                    * A random page containing a Start or Continue link is not
+                    * automatically treated as a form workflow.
+                    *
+                    * When a visible form exists, the action must belong to it.
+                    * Formless JavaScript workflows remain supported when visible
+                    * input controls are present.
+                    */
+                    return hasWorkflowControls &&
+                        safeNextPattern.test(actionText) &&
+                        !unsafeActionPattern.test(actionText) &&
+                        (
+                            !hasVisibleForm ||
+                            isFormAssociatedAction
+                        );
+                });
+
+            const hasCaptcha =
+                document.querySelector(
+                    "iframe[src*='recaptcha'], " +
+                    "iframe[src*='hcaptcha'], " +
+                    "[id*='captcha' i], " +
+                    "[class*='captcha' i], " +
+                    "input[name*='captcha' i]") !== null;
+
+            const hasFileUpload =
+                Array.from(
+                    document.querySelectorAll("input[type='file']"))
+                    .some(isVisibleAndEnabled);
+
+            const hasPasswordField =
+                Array.from(
+                    document.querySelectorAll("input[type='password']"))
+                    .some(isVisibleAndEnabled);
+
+            const hasPaymentField =
+                document.querySelector(
+                    "[autocomplete='cc-number'], " +
+                    "[autocomplete='cc-csc'], " +
+                    "[autocomplete='cc-exp'], " +
+                    "input[name*='cardnumber' i], " +
+                    "input[name*='creditcard' i]") !== null;
+
+            let stopReason = null;
+
+            if (hasCaptcha) {
+                stopReason =
+                    "CAPTCHA detected. Manual interaction is required.";
+            }
+            else if (hasFileUpload) {
+                stopReason =
+                    "File upload detected. Manual interaction is required.";
+            }
+            else if (hasPaymentField) {
+                stopReason =
+                    "Payment fields detected. Automatic navigation is disabled.";
+            }
+            else if (hasPasswordField) {
+                stopReason =
+                    "Authentication fields detected. Sign in manually first.";
+            }
+
+            let pageType = "StaticPage";
+
+            if (stopReason) {
+                pageType = "Unsupported";
+            }
+            else if (
+                hasWorkflowControls &&
+                candidateNextActions.length > 0) {
+                pageType = "NavigableWorkflow";
+            }
+            else if (
+                hasVisibleForm ||
+                hasWorkflowControls) {
+                pageType = "Form";
+            }
+
+            let recommendedAction;
+
+            if (stopReason) {
+                recommendedAction = "Continue manually.";
+            }
+            else if (candidateNextActions.length > 0) {
+                recommendedAction =
+                    "The page may support automatic navigation.";
+            }
+            else if (
+                visibleForms.length > 0 ||
+                requiredFields.length > 0) {
+                recommendedAction =
+                    "Form detected, but no safe Next action was found.";
+            }
+            else {
+                recommendedAction =
+                    "Scan this page once and stop normally.";
+            }
+
+            return {
+                PageType: pageType,
+                FormCount: visibleForms.length,
+                RequiredFieldCount: requiredFields.length,
+                CandidateNextActionCount:
+                    candidateNextActions.length,
+                CanNavigateAutomatically:
+                    stopReason === null &&
+                    hasWorkflowControls &&
+                    candidateNextActions.length > 0,
+                RecommendedAction: recommendedAction,
+                StopReason: stopReason
+            };
+        }
+        """);
+    }
+
+    private static async Task<AuthenticatedAuditNextActionResult>
+    FindSafeNextActionAsync(IPage page)
+    {
+        string resultJson =
+            await page.EvaluateAsync<string>(
+                """
+            () => JSON.stringify((() => {
+                const markerAttribute =
+                    "data-city-audit-next-action";
+
+                /*
+                 * Remove an old marker in case this page was analyzed
+                 * previously.
+                 */
+                document
+                    .querySelectorAll(
+                        `[${markerAttribute}]`)
+                    .forEach(element =>
+                        element.removeAttribute(
+                            markerAttribute));
+
+                const isVisibleAndEnabled = element => {
+                    if (!(element instanceof HTMLElement)) {
+                        return false;
+                    }
+
+                    const style =
+                        window.getComputedStyle(element);
+
+                    const rectangle =
+                        element.getBoundingClientRect();
+
+                    return style.display !== "none" &&
+                        style.visibility !== "hidden" &&
+                        rectangle.width > 0 &&
+                        rectangle.height > 0 &&
+                        !element.hasAttribute("disabled") &&
+                        element.getAttribute("aria-disabled") !==
+                            "true";
+                };
+
+                const getActionText = element => {
+                    return [
+                        element.innerText,
+                        element.textContent,
+                        element.getAttribute("aria-label"),
+                        element.getAttribute("title"),
+                        element.getAttribute("value"),
+                        element.getAttribute("name")
+                    ]
+                        .filter(value => value)
+                        .join(" ")
+                        .replace(/\s+/g, " ")
+                        .trim();
+                };
+
+                const safePattern =
+                    /\b(next|continue|proceed|start|begin|advance)\b/i;
+
+                const unsafePattern =
+                    /\b(submit|finalize|certify|pay|payment|purchase|checkout|place order|sign|signature|send application|complete application|finish)\b/i;
+
+                const actions =
+                    Array.from(
+                        document.querySelectorAll(
+                            "button, " +
+                            "input[type='button'], " +
+                            "input[type='submit'], " +
+                            "a[href], " +
+                            "[role='button']"))
+                        .filter(isVisibleAndEnabled);
+
+                const unsafeVisibleAction =
+                    actions.find(element =>
+                        unsafePattern.test(
+                            getActionText(element)));
+
+                const candidates =
+                    actions.filter(element => {
+                        const text =
+                            getActionText(element);
+
+                        return safePattern.test(text) &&
+                            !unsafePattern.test(text);
+                    });
+
+                if (candidates.length === 0) {
+                    return {
+                        Found: false,
+                        ActionText: null,
+                        Selector: null,
+                        CandidateCount: 0,
+                        RequiresManualInteraction:
+                            unsafeVisibleAction !== undefined,
+                        StopReason:
+                            unsafeVisibleAction
+                                ? "Only a final or potentially irreversible action was detected."
+                                : "No safe Next or Continue action was detected."
+                    };
+                }
+
+                /*
+                 * Prefer an actual button before a link or generic
+                 * role=button element.
+                 */
+                const selected =
+                    candidates.find(element =>
+                element instanceof HTMLButtonElement) ??
+                    candidates.find(element =>
+                element instanceof HTMLInputElement) ??
+                    candidates[0];
+
+                selected.setAttribute(
+                    markerAttribute,
+                    "true");
+
+                return {
+                    Found: true,
+                    ActionText:
+                        getActionText(selected) ||
+                        "Next action",
+                    Selector:
+                        `[${markerAttribute}="true"]`,
+                    CandidateCount:
+                        candidates.length,
+                    RequiresManualInteraction: false,
+                    StopReason: null
+                };
+            })())
+            """);
+
+        AuthenticatedAuditNextActionResult? result =
+            System.Text.Json.JsonSerializer.Deserialize<
+                AuthenticatedAuditNextActionResult>(
+                    resultJson);
+
+        return result ??
+            throw new InvalidOperationException(
+                "The next-action analysis result could not be read.");
+    }
+
+    private static async Task<string>
+    GetAutomaticNavigationStateSignatureAsync(IPage page)
+    {
+        /*
+         * Creates a lightweight description of the rendered state.
+         * It lets automatic navigation detect a new step even when the
+         * application's URL does not change.
+         */
+        return await page.EvaluateAsync<string>(
+            """
+        () => {
+            const normalize = value =>
+                (value ?? "")
+                    .replace(/\s+/g, " ")
+                    .trim();
+
+            const headings =
+                Array.from(
+                    document.querySelectorAll(
+                        "h1, h2, [role='heading']"))
+                    .map(element =>
+                        normalize(element.textContent))
+                    .filter(Boolean)
+                    .slice(0, 20);
+
+            const fields =
+                Array.from(
+                    document.querySelectorAll(
+                        "input:not([type='hidden']), " +
+                        "select, textarea"))
+                    .map(element => ({
+                        id: element.id ?? "",
+                        name:
+                            element.getAttribute("name") ?? "",
+                        type:
+                            element.getAttribute("type") ??
+                            element.tagName,
+                        label:
+                            normalize(
+                                element.getAttribute(
+                                    "aria-label"))
+                    }))
+                    .slice(0, 100);
+
+            const actions =
+                Array.from(
+                    document.querySelectorAll(
+                        "button, input[type='submit'], " +
+                        "input[type='button'], [role='button']"))
+                    .map(element =>
+                        normalize(
+                            element.innerText ||
+                            element.textContent ||
+                            element.getAttribute("value") ||
+                            element.getAttribute("aria-label")))
+                    .filter(Boolean)
+                    .slice(0, 50);
+
+            return JSON.stringify({
+                url: window.location.href,
+                title: document.title,
+                headings,
+                fields,
+                actions
+            });
+        }
+        """);
+    }
+
+    private static async Task<AuthenticatedAuditFieldFillResult>
+    FillSafeFieldsAsync(IPage page)
+    {
+        /*
+         * Fill ordinary rendered form controls with harmless test values.
+         * This method never clicks buttons or submits the form.
+         */
+        string resultJson =
+            await page.EvaluateAsync<string>(
+        """
+        () => JSON.stringify((() => {
+            const filledDescriptions = [];
+            const skippedDescriptions = [];
+
+            const isVisibleAndEnabled = element => {
+                if (!(element instanceof HTMLElement)) {
+                    return false;
+                }
+
+                const style =
+                    window.getComputedStyle(element);
+
+                const rectangle =
+                    element.getBoundingClientRect();
+
+                return style.display !== "none" &&
+                    style.visibility !== "hidden" &&
+                    rectangle.width > 0 &&
+                    rectangle.height > 0 &&
+                    !element.hasAttribute("disabled") &&
+                    element.getAttribute("aria-disabled") !== "true";
+            };
+
+            const getDescription = element => {
+                const id = element.id?.trim();
+
+                let labelText = "";
+
+                if (id) {
+                    const explicitLabel =
+                        document.querySelector(
+                            `label[for="${CSS.escape(id)}"]`);
+
+                    labelText =
+                        explicitLabel?.textContent?.trim() ?? "";
+                }
+
+                if (!labelText) {
+                    labelText =
+                        element.closest("label")
+                            ?.textContent
+                            ?.trim() ?? "";
+                }
+
+                return (
+                    labelText ||
+                    element.getAttribute("aria-label") ||
+                    element.getAttribute("name") ||
+                    element.getAttribute("placeholder") ||
+                    element.id ||
+                    element.getAttribute("type") ||
+                    element.tagName
+                )
+                    .replace(/\s+/g, " ")
+                    .trim();
+            };
+
+            const getFieldHint = element => {
+                return [
+                    getDescription(element),
+                    element.getAttribute("name"),
+                    element.id,
+                    element.getAttribute("autocomplete"),
+                    element.getAttribute("placeholder")
+                ]
+                    .filter(value => value)
+                    .join(" ")
+                    .toLowerCase();
+            };
+
+            const setNativeValue = (element, value) => {
+                let prototype;
+
+                if (element instanceof HTMLSelectElement) {
+                    prototype =
+                        HTMLSelectElement.prototype;
+                }
+                else if (
+                    element instanceof HTMLTextAreaElement) {
+                    prototype =
+                        HTMLTextAreaElement.prototype;
+                }
+                else {
+                    prototype =
+                        HTMLInputElement.prototype;
+                }
+
+                const valueSetter =
+                    Object.getOwnPropertyDescriptor(
+                        prototype,
+                        "value")
+                    ?.set;
+
+                if (valueSetter) {
+                    valueSetter.call(element, value);
+                }
+                else {
+                    element.value = value;
+                }
+
+                element.dispatchEvent(
+                    new Event(
+                        "input",
+                        {
+                            bubbles: true
+                        }));
+
+                element.dispatchEvent(
+                    new Event(
+                        "change",
+                        {
+                            bubbles: true
+                        }));
+            };
+
+            const setNativeChecked = (
+                element,
+                checked) => {
+                const checkedSetter =
+                    Object.getOwnPropertyDescriptor(
+                        HTMLInputElement.prototype,
+                        "checked")
+                    ?.set;
+
+                if (checkedSetter) {
+                    checkedSetter.call(
+                        element,
+                        checked);
+                }
+                else {
+                    element.checked = checked;
+                }
+
+                element.dispatchEvent(
+                    new Event(
+                        "input",
+                        {
+                            bubbles: true
+                        }));
+
+                element.dispatchEvent(
+                    new Event(
+                        "change",
+                        {
+                            bubbles: true
+                        }));
+            };
+
+            const visibleElements =
+                elements =>
+                    Array.from(elements)
+                        .filter(isVisibleAndEnabled);
+
+            const captchaDetected =
+                document.querySelector(
+                    "iframe[src*='recaptcha'], " +
+                    "iframe[src*='hcaptcha'], " +
+                    "[id*='captcha' i], " +
+                    "[class*='captcha' i], " +
+                    "input[name*='captcha' i]") !== null;
+
+            if (captchaDetected) {
+                return {
+                    FilledFieldCount: 0,
+                    SkippedFieldCount: 0,
+                    RequiresManualInteraction: true,
+                    StopReason:
+                        "CAPTCHA detected. Manual interaction is required.",
+                    FilledFieldDescriptions: [],
+                    SkippedFieldDescriptions: []
+                };
+            }
+
+            const unsafeControls =
+                visibleElements(
+                    document.querySelectorAll(
+                        "input[type='password'], " +
+                        "input[type='file'], " +
+                        "[autocomplete='cc-number'], " +
+                        "[autocomplete='cc-csc'], " +
+                        "[autocomplete='cc-exp'], " +
+                        "input[name*='cardnumber' i], " +
+                        "input[name*='creditcard' i], " +
+                        "input[name*='routing' i], " +
+                        "input[name*='bankaccount' i], " +
+                        "input[name*='socialsecurity' i], " +
+                        "input[name*='ssn' i], " +
+                        "[name*='signature' i], " +
+                        "[id*='signature' i], " +
+                        "[aria-label*='signature' i]"));
+
+            if (unsafeControls.length > 0) {
+                return {
+                    FilledFieldCount: 0,
+                    SkippedFieldCount:
+                        unsafeControls.length,
+                    RequiresManualInteraction: true,
+                    StopReason:
+                        "A password, file upload, payment, sensitive-information, or signature field was detected.",
+                    FilledFieldDescriptions: [],
+                    SkippedFieldDescriptions:
+                        unsafeControls.map(
+                            getDescription)
+                };
+            }
+
+            /*
+             * Avoid automatically accepting certifications,
+             * legal agreements, or consent statements.
+             */
+            const unsafeAgreementPattern =
+                /\b(certify|attest|signature|authorize|consent|agree|terms and conditions)\b/i;
+
+            const agreementControl =
+                visibleElements(
+                    document.querySelectorAll(
+                        "input[type='checkbox']"))
+                    .find(element =>
+                        unsafeAgreementPattern.test(
+                            getDescription(element)));
+
+            if (agreementControl) {
+                return {
+                    FilledFieldCount: 0,
+                    SkippedFieldCount: 1,
+                    RequiresManualInteraction: true,
+                    StopReason:
+                        "A certification, consent, or agreement checkbox requires manual review.",
+                    FilledFieldDescriptions: [],
+                    SkippedFieldDescriptions:
+                    [
+                        getDescription(
+                            agreementControl)
+                    ]
+                };
+            }
+
+            const controlSet =
+                new Set([
+                    ...document.querySelectorAll(
+                        "form input, " +
+                        "form select, " +
+                        "form textarea"),
+                    ...document.querySelectorAll(
+                        "input[required], " +
+                        "select[required], " +
+                        "textarea[required], " +
+                        "[aria-required='true']")
+                ]);
+
+            const controls =
+                Array.from(controlSet);
+
+            const handledRadioGroups =
+                new Set();
+
+            const getTextValue = element => {
+                const hint =
+                    getFieldHint(element);
+
+                if (
+                    hint.includes("first name") ||
+                    hint.includes("firstname")) {
+                    return "Alex";
+                }
+
+                if (
+                    hint.includes("last name") ||
+                    hint.includes("lastname") ||
+                    hint.includes("surname")) {
+                    return "Tester";
+                }
+
+                if (
+                    hint.includes("full name") ||
+                    hint === "name") {
+                    return "Alex Tester";
+                }
+
+                if (hint.includes("address")) {
+                    return "200 N Spring St";
+                }
+
+                if (hint.includes("city")) {
+                    return "Los Angeles";
+                }
+
+                if (
+                    hint.includes("state") ||
+                    hint.includes("province")) {
+                    return "CA";
+                }
+
+                if (
+                    hint.includes("zip") ||
+                    hint.includes("postal")) {
+                    return "90012";
+                }
+
+                return "Accessibility audit test";
+            };
+
+            for (const element of controls) {
+                const description =
+                    getDescription(element);
+
+                if (!isVisibleAndEnabled(element)) {
+                    skippedDescriptions.push(
+                        `${description}: hidden or disabled`);
+
+                    continue;
+                }
+
+                if (
+                    element.hasAttribute("readonly") ||
+                    element.getAttribute("aria-readonly") ===
+                        "true") {
+                    skippedDescriptions.push(
+                        `${description}: read only`);
+
+                    continue;
+                }
+
+                if (
+                    element instanceof HTMLSelectElement) {
+                    if (element.value) {
+                        skippedDescriptions.push(
+                            `${description}: already has a value`);
+
+                        continue;
+                    }
+
+                    const option =
+                        Array.from(element.options)
+                            .find(candidate =>
+                                !candidate.disabled &&
+                                candidate.value !== "");
+
+                    if (!option) {
+                        skippedDescriptions.push(
+                            `${description}: no selectable option`);
+
+                        continue;
+                    }
+
+                    setNativeValue(
+                        element,
+                        option.value);
+
+                    filledDescriptions.push(
+                        `${description}: selected ${option.text}`);
+
+                    continue;
+                }
+
+                if (
+                    element instanceof
+                        HTMLTextAreaElement) {
+                    if (element.value.trim()) {
+                        skippedDescriptions.push(
+                            `${description}: already has a value`);
+
+                        continue;
+                    }
+
+                    setNativeValue(
+                        element,
+                        "Accessibility audit test response.");
+
+                    filledDescriptions.push(
+                        description);
+
+                    continue;
+                }
+
+                if (!(
+                    element instanceof HTMLInputElement)) {
+                    skippedDescriptions.push(
+                        `${description}: unsupported control`);
+
+                    continue;
+                }
+
+                const type =
+                    (element.type || "text")
+                        .toLowerCase();
+
+                if ([
+                    "hidden",
+                    "button",
+                    "submit",
+                    "reset",
+                    "image"
+                ].includes(type)) {
+                    continue;
+                }
+
+                if (type === "checkbox") {
+                    if (element.checked) {
+                        skippedDescriptions.push(
+                            `${description}: already checked`);
+
+                        continue;
+                    }
+
+                    setNativeChecked(
+                        element,
+                        true);
+
+                    filledDescriptions.push(
+                        description);
+
+                    continue;
+                }
+
+                if (type === "radio") {
+                    const groupKey =
+                        element.name
+                            ? `name:${element.name}`
+                            : `id:${element.id}`;
+
+                    if (handledRadioGroups.has(groupKey)) {
+                        continue;
+                    }
+
+                    handledRadioGroups.add(groupKey);
+
+                    let radioGroup;
+
+                    if (element.name) {
+                        radioGroup =
+                            visibleElements(
+                                document.querySelectorAll(
+                                    `input[type='radio'][name="${
+                                        CSS.escape(element.name)}"]`));
+                    }
+                    else {
+                        radioGroup = [element];
+                    }
+
+                    if (
+                        radioGroup.some(
+                            radio => radio.checked)) {
+                        skippedDescriptions.push(
+                            `${description}: group already selected`);
+
+                        continue;
+                    }
+
+                    const firstRadio =
+                        radioGroup[0];
+
+                    if (!firstRadio) {
+                        skippedDescriptions.push(
+                            `${description}: no available option`);
+
+                        continue;
+                    }
+
+                    setNativeChecked(
+                        firstRadio,
+                        true);
+
+                    filledDescriptions.push(
+                        getDescription(firstRadio));
+
+                    continue;
+                }
+
+                if (element.value.trim()) {
+                    skippedDescriptions.push(
+                        `${description}: already has a value`);
+
+                    continue;
+                }
+
+                let value;
+
+                switch (type) {
+                    case "email":
+                        value =
+                            "accessibility.audit@example.com";
+                        break;
+
+                    case "tel":
+                        value =
+                            "2135550100";
+                        break;
+
+                    case "url":
+                        value =
+                            "https://example.com";
+                        break;
+
+                    case "number":
+                    case "range":
+                    {
+                        const minimum =
+                            Number(element.min);
+
+                        const maximum =
+                            Number(element.max);
+
+                        value =
+                            Number.isFinite(minimum)
+                                ? minimum
+                                : 1;
+
+                        if (
+                            Number.isFinite(maximum) &&
+                            value > maximum) {
+                            value = maximum;
+                        }
+
+                        value =
+                            String(value);
+
+                        break;
+                    }
+
+                    case "date":
+                        value =
+                            element.min ||
+                            new Date()
+                                .toISOString()
+                                .slice(0, 10);
+                        break;
+
+                    case "month":
+                        value =
+                            new Date()
+                                .toISOString()
+                                .slice(0, 7);
+                        break;
+
+                    case "time":
+                        value = "09:00";
+                        break;
+
+                    case "datetime-local":
+                        value =
+                            new Date()
+                                .toISOString()
+                                .slice(0, 16);
+                        break;
+
+                    case "text":
+                    case "search":
+                        value =
+                            getTextValue(element);
+                        break;
+
+                    default:
+                        skippedDescriptions.push(
+                            `${description}: unsupported input type ${type}`);
+
+                        continue;
+                }
+
+                setNativeValue(
+                    element,
+                    value);
+
+                filledDescriptions.push(
+                    description);
+            }
+            return {
+                FilledFieldCount:
+                    filledDescriptions.length,
+
+                SkippedFieldCount:
+                    skippedDescriptions.length,
+
+                RequiresManualInteraction: false,
+
+                StopReason: null,
+
+                FilledFieldDescriptions:
+                    filledDescriptions,
+
+                SkippedFieldDescriptions:
+                    skippedDescriptions
+            };
+        })())
+        """);
+
+        AuthenticatedAuditFieldFillResult? result =
+            System.Text.Json.JsonSerializer.Deserialize<
+                AuthenticatedAuditFieldFillResult>(
+                    resultJson);
+
+        return result ??
+            throw new InvalidOperationException(
+                "The field-filling result could not be read.");
     }
 
     private static string? CreateFailureSummary(

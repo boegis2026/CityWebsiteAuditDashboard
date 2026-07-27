@@ -829,6 +829,341 @@ public sealed class AuthenticatedAuditsController : Controller
         return Json(progress);
     }
 
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AdvanceAutomaticStep(
+    Guid sessionId,
+    CancellationToken cancellationToken)
+    {
+        try
+        {
+            AuthenticatedAuditAutomaticNavigationResult result =
+                await _authenticatedAuditService
+                    .AdvanceAutomaticStepAsync(
+                        sessionId,
+                        cancellationToken);
+
+            return Json(result);
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(new
+            {
+                message = exception.Message
+            });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(new
+            {
+                message = exception.Message
+            });
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(
+                exception,
+                "Authenticated audit session {SessionId} could not advance one automatic navigation step.",
+                sessionId);
+
+            return StatusCode(
+                StatusCodes.Status500InternalServerError,
+                new
+                {
+                    message =
+                        "The automatic navigation step could not be completed."
+                });
+        }
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ScanAndAdvanceAutomaticStep(
+    Guid sessionId,
+    CancellationToken cancellationToken)
+    {
+        try
+        {
+            AuthenticatedAuditAutomaticCycleResult result =
+                await _authenticatedAuditService
+                    .ScanAndAdvanceAutomaticStepAsync(
+                        sessionId,
+                        cancellationToken);
+
+            return Json(result);
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(new
+            {
+                message = exception.Message
+            });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(new
+            {
+                message = exception.Message
+            });
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(
+                exception,
+                "Authenticated audit session {SessionId} could not scan and advance one automatic step.",
+                sessionId);
+
+            return StatusCode(
+                StatusCodes.Status500InternalServerError,
+                new
+                {
+                    message =
+                        "The automatic scan-and-advance cycle could not be completed."
+                });
+        }
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> PreviewAutomaticStep(
+    Guid sessionId,
+    CancellationToken cancellationToken)
+    {
+        try
+        {
+            AuthenticatedAuditAutomaticNavigationResult result =
+                await _authenticatedAuditService
+                    .PreviewAutomaticStepAsync(
+                        sessionId,
+                        cancellationToken);
+
+            return Json(result);
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(new
+            {
+                message = exception.Message
+            });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(new
+            {
+                message = exception.Message
+            });
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(
+                exception,
+                "Authenticated audit session {SessionId} could not preview an automatic navigation step.",
+                sessionId);
+
+            return StatusCode(
+                StatusCodes.Status500InternalServerError,
+                new
+                {
+                    message =
+                        "The automatic navigation step could not be previewed."
+                });
+        }
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public IActionResult StopAutomaticWorkflow(
+    Guid sessionId)
+    {
+        try
+        {
+            bool stopRequested =
+                _authenticatedAuditService
+                    .RequestAutomaticWorkflowStop(
+                        sessionId);
+
+            return Json(new
+            {
+                stopRequested,
+
+                message =
+                    stopRequested
+                        ? "The automatic workflow stop was requested."
+                        : "No automatic workflow is currently running."
+            });
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(new
+            {
+                message = exception.Message
+            });
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(
+                exception,
+                "Authenticated audit session {SessionId} could not stop the automatic workflow.",
+                sessionId);
+
+            return StatusCode(
+                StatusCodes.Status500InternalServerError,
+                new
+                {
+                    message =
+                        "The automatic workflow stop request could not be completed."
+                });
+        }
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RunAutomaticWorkflow(
+    Guid sessionId,
+    int maximumStateCount = 25,
+    CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            AuthenticatedAuditAutomaticRunResult result =
+                await _authenticatedAuditService
+                    .RunAutomaticWorkflowAsync(
+                        sessionId,
+                        maximumStateCount,
+                        cancellationToken);
+
+            return Json(result);
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(new
+            {
+                message = exception.Message
+            });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(new
+            {
+                message = exception.Message
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            return BadRequest(new
+            {
+                message =
+                    "The automatic workflow was canceled."
+            });
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(
+                exception,
+                "Authenticated audit session {SessionId} could not run the automatic workflow.",
+                sessionId);
+
+            return StatusCode(
+                StatusCodes.Status500InternalServerError,
+                new
+                {
+                    message =
+                        "The automatic workflow could not be completed."
+                });
+        }
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> FillCurrentState(
+    Guid sessionId,
+    CancellationToken cancellationToken)
+    {
+        try
+        {
+            AuthenticatedAuditFieldFillResult result =
+                await _authenticatedAuditService.FillCurrentStateAsync(
+                    sessionId,
+                    cancellationToken);
+
+            return Json(result);
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(new
+            {
+                message = exception.Message
+            });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(new
+            {
+                message = exception.Message
+            });
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(
+                exception,
+                "Authenticated audit session {SessionId} could not fill the current rendered state.",
+                sessionId);
+
+            return StatusCode(
+                StatusCodes.Status500InternalServerError,
+                new
+                {
+                    message =
+                        "The current rendered state could not be filled."
+                });
+        }
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> AnalyzeCurrentState(
+    Guid sessionId,
+    CancellationToken cancellationToken)
+    {
+        try
+        {
+            AuthenticatedAuditNavigationAnalysisResult analysis =
+                await _authenticatedAuditService.AnalyzeCurrentStateAsync(
+                    sessionId,
+                    cancellationToken);
+
+            return Json(analysis);
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(new
+            {
+                message = exception.Message
+            });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(new
+            {
+                message = exception.Message
+            });
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(
+                exception,
+                "Authenticated audit session {SessionId} could not analyze the current rendered state.",
+                sessionId);
+
+            return StatusCode(
+                StatusCodes.Status500InternalServerError,
+                new
+                {
+                    message =
+                        "The current rendered state could not be analyzed."
+                });
+        }
+    }
+
     private static string CreateSafeReportFileName(
     string? applicationName)
     {

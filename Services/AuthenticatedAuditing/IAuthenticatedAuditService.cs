@@ -42,6 +42,73 @@ public interface IAuthenticatedAuditService
     /// The user signs in once before starting the batch. Authentication cookies
     /// and session storage remain available for every URL in the batch.
     /// </summary>
+
+    /*
+    * Inspects the current rendered page without filling fields,
+    * clicking buttons, navigating, or saving another audit step.
+    */
+    Task<AuthenticatedAuditNavigationAnalysisResult>
+        AnalyzeCurrentStateAsync(
+            Guid sessionId,
+            CancellationToken cancellationToken = default);
+
+    /*
+    * Fills supported fields on the current rendered page.
+    * Does not click, navigate, submit, or save an audit step.
+    */
+    Task<AuthenticatedAuditFieldFillResult>
+        FillCurrentStateAsync(
+            Guid sessionId,
+            CancellationToken cancellationToken = default);
+
+    /*
+    * Prepares the current rendered state for automatic navigation.
+    * It analyzes the page, fills supported fields, and identifies a safe
+    * Next action, but does not click or submit anything.
+    */
+    Task<AuthenticatedAuditAutomaticNavigationResult>
+        PreviewAutomaticStepAsync(
+            Guid sessionId,
+            CancellationToken cancellationToken = default);
+
+    /*
+     * Fills the current state and clicks one safe Next/Continue action.
+     * It does not scan or save a state and does not run a navigation loop.
+     */
+    Task<AuthenticatedAuditAutomaticNavigationResult>
+        AdvanceAutomaticStepAsync(
+            Guid sessionId,
+            CancellationToken cancellationToken = default);
+
+    /*
+    * Scans the current rendered state and then attempts one guarded
+    * automatic advance. Existing manual scanning remains available.
+    */
+    Task<AuthenticatedAuditAutomaticCycleResult>
+        ScanAndAdvanceAutomaticStepAsync(
+            Guid sessionId,
+            CancellationToken cancellationToken = default);
+
+    /*
+    * Repeatedly scans and advances through supported rendered states.
+    * Stops safely when no Next action exists, manual input is required,
+    * or the maximum number of states is reached.
+    *
+    * Existing manual scanning remains available.
+    */
+    Task<AuthenticatedAuditAutomaticRunResult>
+        RunAutomaticWorkflowAsync(
+            Guid sessionId,
+            int maximumStateCount = 25,
+            CancellationToken cancellationToken = default);
+
+    /*
+    * Requests cancellation of the currently running automatic workflow.
+    * Returns false when no automatic workflow is running.
+    */
+    bool RequestAutomaticWorkflowStop(
+        Guid sessionId);
+
     Task<AuthenticatedAuditBatchResult> ScanBatchAsync(
         Guid sessionId,
         IReadOnlyList<string> urls,

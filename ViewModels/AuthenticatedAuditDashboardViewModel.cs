@@ -42,6 +42,14 @@ public sealed class AuthenticatedAuditDashboardViewModel
 
     public Guid? SessionId { get; set; }
 
+    // The last saved step number is also the number of states scanned.
+    public int ScannedStateCount =>
+        LastStepResult?.StepNumber ?? 0;
+
+    // The next scan will save the following workflow state.
+    public int CurrentStateNumber =>
+        ScannedStateCount + 1;
+
     public string? ApplicationName { get; set; }
 
     public string? StartingUrl { get; set; }

@@ -230,3 +230,137 @@ public sealed class AuthenticatedAuditProgressResult
         }
     }
 }
+
+public sealed class AuthenticatedAuditNavigationAnalysisResult
+{
+    // Examples: StaticPage, Form, NavigableWorkflow, Unsupported.
+    public string PageType { get; init; } = "Unknown";
+
+    public int FormCount { get; init; }
+
+    public int RequiredFieldCount { get; init; }
+
+    public int CandidateNextActionCount { get; init; }
+
+    public bool CanNavigateAutomatically { get; init; }
+
+    public string? RecommendedAction { get; init; }
+
+    public string? StopReason { get; init; }
+}
+
+public sealed class AuthenticatedAuditAutomaticNavigationResult
+{
+    // Examples: Advanced, StaticPage, ManualActionRequired, Failed.
+    public string Status { get; init; } = "Unknown";
+
+    public string? UrlBefore { get; init; }
+    public string? UrlAfter { get; init; }
+
+    /*
+    * Rendered-state signatures allow the full workflow to detect when
+    * navigation returns to a state that was already processed.
+    */
+    public string? StateSignatureBefore { get; init; }
+
+    public string? StateSignatureAfter { get; init; }
+
+    public int FilledFieldCount { get; init; }
+    public int SkippedFieldCount { get; init; }
+
+    public string? ActionText { get; init; }
+
+    // True only when a safe Next/Continue action was clicked.
+    public bool NavigationAttempted { get; init; }
+
+    // True only when the rendered state or URL actually changed.
+    public bool Navigated { get; init; }
+
+    public bool RequiresManualInteraction { get; init; }
+
+    public string? Message { get; init; }
+    public string? StopReason { get; init; }
+}
+
+public sealed class AuthenticatedAuditFieldFillResult
+{
+    public int FilledFieldCount { get; init; }
+
+    public int SkippedFieldCount { get; init; }
+
+    /*
+     * True when the page contains something the automatic navigator
+     * should not attempt, such as payment, password, file upload,
+     * CAPTCHA, or an electronic signature.
+     */
+    public bool RequiresManualInteraction { get; init; }
+
+    public string? StopReason { get; init; }
+
+    public List<string> FilledFieldDescriptions { get; init; }
+        = new();
+
+    public List<string> SkippedFieldDescriptions { get; init; }
+        = new();
+}
+
+public sealed class AuthenticatedAuditNextActionResult
+{
+    public bool Found { get; init; }
+
+    public string? ActionText { get; init; }
+
+    /*
+     * A temporary data attribute is assigned to the selected element so
+     * Playwright can locate that exact action later without guessing.
+     */
+    public string? Selector { get; init; }
+
+    public int CandidateCount { get; init; }
+
+    public bool RequiresManualInteraction { get; init; }
+
+    public string? StopReason { get; init; }
+}
+
+public sealed class AuthenticatedAuditAutomaticCycleResult
+{
+    public bool ScanSucceeded { get; init; }
+
+    public int? ScannedStepNumber { get; init; }
+
+    public AuthenticatedAuditStepResult? ScanResult { get; init; }
+
+    public AuthenticatedAuditAutomaticNavigationResult?
+        NavigationResult
+    { get; init; }
+
+    public string? Message { get; init; }
+}
+
+public sealed class AuthenticatedAuditAutomaticRunResult
+{
+    // Examples: Completed, ManualActionRequired, MaximumReached, Failed.
+    public string Status { get; init; } = "Unknown";
+
+    public int ScannedStateCount { get; init; }
+
+    public int AdvancedStateCount { get; init; }
+
+    public int MaximumStateCount { get; init; }
+
+    public bool ReachedMaximumStateCount { get; init; }
+
+    public string? FinalUrl { get; init; }
+
+    public string? Message { get; init; }
+
+    public string? StopReason { get; init; }
+
+    /*
+     * Keeps the outcome of every scan-and-advance cycle so the
+     * dashboard can show exactly what happened.
+     */
+    public List<AuthenticatedAuditAutomaticCycleResult> Cycles
+    { get; init; } = new();
+}
