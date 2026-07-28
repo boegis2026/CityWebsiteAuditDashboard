@@ -912,52 +912,69 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 }
 
                 /*
-                * Some dynamic workflow pages accept the first automatic click before
-                * their validation/navigation handlers are fully ready. Retry the
-                * advance once without scanning the same state again.
+                * Dynamic workflow pages may render before their validation and
+                * navigation handlers are completely ready. Retry the advance a
+                * few times without rescanning or creating duplicate states.
                 */
                 if (string.Equals(
                     navigation.Status,
                     "NoStateChange",
                     StringComparison.OrdinalIgnoreCase))
                 {
-                    await Task.Delay(
-                        TimeSpan.FromSeconds(2),
-                        workflowCancellationToken);
+                    const int maximumAdvanceRetries = 3;
 
-                    AuthenticatedAuditAutomaticNavigationResult retryNavigation =
-                        await AdvanceAutomaticStepAsync(
-                            sessionId,
+                    for (
+                        int retryAttempt = 1;
+                        retryAttempt <= maximumAdvanceRetries;
+                        retryAttempt++)
+                    {
+                        await Task.Delay(
+                            TimeSpan.FromMilliseconds(2500),
                             workflowCancellationToken);
 
-                    cycle =
-                        new AuthenticatedAuditAutomaticCycleResult
+                        AuthenticatedAuditAutomaticNavigationResult
+                            retryNavigation =
+                                await AdvanceAutomaticStepAsync(
+                                    sessionId,
+                                    workflowCancellationToken);
+
+                        cycle =
+                            new AuthenticatedAuditAutomaticCycleResult
+                            {
+                                ScanSucceeded =
+                                    cycle.ScanSucceeded,
+
+                                ScannedStepNumber =
+                                    cycle.ScannedStepNumber,
+
+                                ScanResult =
+                                    cycle.ScanResult,
+
+                                NavigationResult =
+                                    retryNavigation,
+
+                                Message =
+                                    retryNavigation.Message
+                            };
+
+                        /*
+                         * Replace the failed navigation attempt. Do not add another
+                         * scanned state because the page was already scanned.
+                         */
+                        cycles[cycles.Count - 1] =
+                            cycle;
+
+                        navigation =
+                            retryNavigation;
+
+                        if (!string.Equals(
+                            navigation.Status,
+                            "NoStateChange",
+                            StringComparison.OrdinalIgnoreCase))
                         {
-                            ScanSucceeded =
-                                cycle.ScanSucceeded,
-
-                            ScannedStepNumber =
-                                cycle.ScannedStepNumber,
-
-                            ScanResult =
-                                cycle.ScanResult,
-
-                            NavigationResult =
-                                retryNavigation,
-
-                            Message =
-                                retryNavigation.Message
-                        };
-
-                    /*
-                     * Replace the original NoStateChange cycle instead of adding another
-                     * scanned state to the workflow history.
-                     */
-                    cycles[cycles.Count - 1] =
-                        cycle;
-
-                    navigation =
-                        retryNavigation;
+                            break;
+                        }
+                    }
                 }
 
                 finalUrl =
@@ -2822,6 +2839,85 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             "true";
                 };
 
+                /*
+                * A visible final-action button means the workflow has reached a
+                * review or submission page. Stop before considering navigation
+                * links such as "Start" in the progress bar.
+                */
+                const isFinalActionVisible = element => {
+                    if (!(element instanceof HTMLElement)) {
+                        return false;
+                    }
+
+                    const style =
+                        window.getComputedStyle(element);
+
+                    const rectangle =
+                        element.getBoundingClientRect();
+
+                    return (
+                        style.display !== "none" &&
+                        style.visibility !== "hidden" &&
+                        rectangle.width > 0 &&
+                        rectangle.height > 0
+                    );
+                };
+
+                const finalActionPattern =
+                    /\b(submit|finalize|certify|pay|payment|purchase|checkout|place order|complete application|finish application)\b/i;
+
+                const finalAction =
+                    Array.from(
+                        document.querySelectorAll(
+                            [
+                                "button",
+                                "input[type='submit']",
+                                "input[type='button']",
+                                "[role='button']"
+                            ].join(",")
+                        )
+                    )
+                    .find(element => {
+                        if (!isFinalActionVisible(element)) {
+                            return false;
+                        }
+
+                        const actionText =
+                            (
+                                element.textContent ||
+                                element.value ||
+                                element.getAttribute("aria-label") ||
+                                ""
+                            )
+                                .replace(/\s+/g, " ")
+                                .trim();
+
+                        return finalActionPattern.test(
+                            actionText);
+                    });
+
+                if (finalAction) {
+                    const finalActionText =
+                        (
+                            finalAction.textContent ||
+                            finalAction.value ||
+                            finalAction.getAttribute("aria-label") ||
+                            "Final action"
+                        )
+                            .replace(/\s+/g, " ")
+                            .trim();
+
+                    return {
+                        Found: false,
+                        ActionText: finalActionText,
+                        Selector: null,
+                        CandidateCount: 0,
+                        RequiresManualInteraction: true,
+                        StopReason:
+                            `The workflow reached the final "${finalActionText}" page. Submission was left for manual review.`
+                    };
+                }
+
                 const getActionText = element => {
                     return [
                         element.innerText,
@@ -3254,9 +3350,6 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             const controls =
                 Array.from(controlSet);
 
-            const handledRadioGroups =
-                new Set();
-
             const getTextValue = element => {
                 const hint =
                     getFieldHint(element);
@@ -3417,55 +3510,11 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 }
 
                 if (type === "radio") {
-                    const groupKey =
-                        element.name
-                            ? `name:${element.name}`
-                            : `id:${element.id}`;
-
-                    if (handledRadioGroups.has(groupKey)) {
-                        continue;
-                    }
-
-                    handledRadioGroups.add(groupKey);
-
-                    let radioGroup;
-
-                    if (element.name) {
-                        radioGroup =
-                            visibleElements(
-                                document.querySelectorAll(
-                                    `input[type='radio'][name="${
-                                        CSS.escape(element.name)}"]`));
-                    }
-                    else {
-                        radioGroup = [element];
-                    }
-
-                    if (
-                        radioGroup.some(
-                            radio => radio.checked)) {
-                        skippedDescriptions.push(
-                            `${description}: group already selected`);
-
-                        continue;
-                    }
-
-                    const firstRadio =
-                        radioGroup[0];
-
-                    if (!firstRadio) {
-                        skippedDescriptions.push(
-                            `${description}: no available option`);
-
-                        continue;
-                    }
-
-                    setNativeChecked(
-                        firstRadio,
-                        true);
-
-                    filledDescriptions.push(
-                        getDescription(firstRadio));
+                        /*
+                        * Radio groups are handled later by the C# Playwright code.
+                        */
+                    skippedDescriptions.push(
+                        `${description}: handled later by Playwright`);
 
                     continue;
                 }
@@ -3597,150 +3646,427 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         * typing. Wait for the suggestion list, then select the first visible
         * suggestion matching the entered address.
         */
+        /*
+        * Select an address from the site's autocomplete dropdown using
+        * Playwright rather than a JavaScript element.click().
+        */
         await Task.Delay(
             TimeSpan.FromMilliseconds(750));
 
-        await page.EvaluateAsync(
-            """
-            () => {
-            const isVisible = element => {
-                if (!(element instanceof HTMLElement)) {
-                    return false;
-                }
-
-                const style = window.getComputedStyle(element);
-                const rectangle = element.getBoundingClientRect();
-
-                return (
-                    style.display !== "none" &&
-                    style.visibility !== "hidden" &&
-                    rectangle.width > 0 &&
-                    rectangle.height > 0
-                );
-            };
-
-            const getFieldText = input => {
-                const id = input.id || "";
-
-                const labelText =
-                    id
-                        ? document.querySelector(
-                            `label[for="${CSS.escape(id)}"]`
-                        )?.textContent || ""
-                        : "";
-
-                return [
-                    input.name,
-                    input.id,
-                    input.placeholder,
-                    input.getAttribute("aria-label"),
-                    labelText
-                ]
-                    .filter(Boolean)
-                    .join(" ")
-                    .toLowerCase();
-            };
-
-            const addressInput =
-                Array.from(
-                    document.querySelectorAll(
-                        'input:not([type="hidden"])'
-                    )
-                ).find(input => {
-                    const fieldText = getFieldText(input);
-
-                    return (
-                        isVisible(input) &&
-                        fieldText.includes("address") &&
-                        input.value.trim().length >= 3
-                    );
+        ILocator addressInputs =
+            page.GetByLabel(
+                "Address",
+                new()
+                {
+                    Exact = false
                 });
 
-            if (!addressInput) {
-                return false;
+        ILocator? addressInput = null;
+
+        for (
+            int index = 0;
+            index < await addressInputs.CountAsync();
+            index++)
+        {
+            ILocator candidate =
+                addressInputs.Nth(index);
+
+            if (
+                await candidate.IsVisibleAsync() &&
+                await candidate.IsEditableAsync())
+            {
+                addressInput = candidate;
+                break;
             }
+        }
 
-            const addressValue =
-                addressInput.value
-                    .trim()
-                    .toUpperCase();
+        /*
+         * Fallback in case the Address label is not properly connected
+         * to its input.
+         */
+        if (addressInput is null)
+        {
+            ILocator visibleInputs =
+                page.Locator("input:visible");
 
-            const inputRectangle =
-                addressInput.getBoundingClientRect();
+            for (
+                int index = 0;
+                index < await visibleInputs.CountAsync();
+                index++)
+            {
+                ILocator candidate =
+                    visibleInputs.Nth(index);
 
-            const possibleSuggestions =
-                Array.from(
-                    document.querySelectorAll(
-                        [
-                            '[role="option"]',
-                            '[role="listitem"]',
-                            '[role="menuitem"]',
-                            '.autocomplete-suggestion',
-                            '.ui-autocomplete li',
-                            '.dropdown-menu li',
-                            '.dropdown-menu a',
-                            'mat-option',
-                            'ul li'
-                        ].join(",")
-                    )
-                );
+                if (!await candidate.IsEditableAsync())
+                {
+                    continue;
+                }
 
-            const matchingSuggestion =
-                possibleSuggestions.find(element => {
-                    if (!isVisible(element)) {
+                string currentValue =
+                    await candidate.InputValueAsync();
+
+                if (string.Equals(
+                    currentValue.Trim(),
+                    "200 N SPRING ST",
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    addressInput = candidate;
+                    break;
+                }
+            }
+        }
+
+        if (addressInput is not null)
+        {
+            string addressValue =
+                (await addressInput.InputValueAsync())
+                    .Trim();
+
+            if (!string.IsNullOrWhiteSpace(addressValue))
+            {
+                /*
+                 * Wait for the site's address result to appear.
+                 */
+                await Task.Delay(
+                    TimeSpan.FromMilliseconds(750));
+
+                ILocator matchingResults =
+                    page.GetByText(
+                        addressValue,
+                        new()
+                        {
+                            Exact = true
+                        });
+
+                bool resultSelected = false;
+
+                /*
+                 * Search backward because autocomplete results are commonly
+                 * rendered after the input and hidden duplicate layouts.
+                 */
+                for (
+                    int index =
+                        await matchingResults.CountAsync() - 1;
+                    index >= 0;
+                    index--)
+                {
+                    ILocator matchingResult =
+                        matchingResults.Nth(index);
+
+                    if (await matchingResult.IsVisibleAsync())
+                    {
+                        await matchingResult.ClickAsync();
+
+                        resultSelected = true;
+                        break;
+                    }
+                }
+
+                /*
+                 * Keyboard fallback for autocomplete components that do not
+                 * expose the suggestion as ordinary visible text.
+                 */
+                if (
+                    !resultSelected &&
+                    await addressInput.IsEditableAsync())
+                {
+                    await addressInput.ClickAsync();
+                    await addressInput.PressAsync(
+                        "ArrowDown");
+
+                    await Task.Delay(
+                        TimeSpan.FromMilliseconds(150));
+
+                    await addressInput.PressAsync(
+                        "Enter");
+                }
+
+                /*
+                 * Give the page time to store the selected address and
+                 * remove the validation error.
+                 */
+                await Task.Delay(
+                    TimeSpan.FromMilliseconds(750));
+            }
+        }
+
+        /*
+        * Styled Yes/No controls may require a real browser click on their
+        * visible labels. The earlier JavaScript may check the radio input,
+        * but some applications do not process that as a user selection.
+        */
+        for (int radioGroupIndex = 0;
+             radioGroupIndex < 25;
+             radioGroupIndex++)
+        {
+            string radioChoiceSelector =
+                await page.EvaluateAsync<string>(
+                    """
+            () => {
+                const processedAttribute =
+                    "data-city-audit-radio-processed";
+
+                const clickAttribute =
+                    "data-city-audit-radio-click";
+
+                const isVisible = element => {
+                    if (!(element instanceof HTMLElement)) {
                         return false;
                     }
 
-                    const text =
-                        (element.textContent || "")
-                            .trim()
-                            .toUpperCase();
-
-                    if (
-                        text !== addressValue &&
-                        !text.startsWith(addressValue)
-                    ) {
-                        return false;
-                    }
+                    const style =
+                        window.getComputedStyle(element);
 
                     const rectangle =
                         element.getBoundingClientRect();
 
                     return (
-                        rectangle.top >=
-                            inputRectangle.bottom - 5 &&
-                        rectangle.top <=
-                            inputRectangle.bottom + 300
+                        style.display !== "none" &&
+                        style.visibility !== "hidden" &&
+                        rectangle.width > 0 &&
+                        rectangle.height > 0
                     );
-                });
+                };
 
-            if (!matchingSuggestion) {
-                return false;
+                /*
+                 * Remove the temporary click marker from the
+                 * previously processed option.
+                 */
+                document
+                    .querySelectorAll(
+                        `[${clickAttribute}]`)
+                    .forEach(element =>
+                        element.removeAttribute(
+                            clickAttribute));
+
+                const radios =
+                    Array.from(
+                        document.querySelectorAll(
+                            'input[type="radio"]'));
+
+                const visitedGroups =
+                    new Set();
+
+                for (const radio of radios) {
+                    const groupName =
+                        radio.name ||
+                        radio.id;
+
+                    if (!groupName) {
+                        continue;
+                    }
+
+                    const formIdentifier =
+                        radio.form?.id ||
+                        radio.form?.name ||
+                        "";
+
+                    const groupKey =
+                        `${formIdentifier}|${groupName}`;
+
+                    if (visitedGroups.has(groupKey)) {
+                        continue;
+                    }
+
+                    visitedGroups.add(groupKey);
+
+                    const group =
+                        radios.filter(candidate => {
+                            const candidateFormIdentifier =
+                                candidate.form?.id ||
+                                candidate.form?.name ||
+                                "";
+
+                            return (
+                                candidateFormIdentifier ===
+                                    formIdentifier &&
+                                (
+                                    candidate.name ||
+                                    candidate.id
+                                ) === groupName
+                            );
+                        });
+
+                    /*
+                     * Each group is processed only once during
+                     * this FillSafeFieldsAsync call.
+                     */
+                    if (
+                        group.some(candidate =>
+                            candidate.hasAttribute(
+                                processedAttribute))
+                    ) {
+                        continue;
+                    }
+
+                    group.forEach(candidate =>
+                        candidate.setAttribute(
+                            processedAttribute,
+                            "true"));
+
+                    /*
+                     * Preserve the choice already made by the
+                     * filler. If none was made, use the first
+                     * enabled option, matching existing behavior.
+                     */
+                    const getRadioOptionText = candidate => {
+                        let labelText = "";
+
+                        if (candidate.id) {
+                            labelText =
+                                document.querySelector(
+                                    `label[for="${
+                                        CSS.escape(candidate.id)
+                                    }"]`)
+                                ?.textContent || "";
+                        }
+
+                        if (!labelText) {
+                            labelText =
+                                candidate.closest("label")
+                                    ?.textContent || "";
+                        }
+
+                        return [
+                            labelText,
+                            candidate.getAttribute("aria-label"),
+                            candidate.value
+                        ]
+                            .filter(Boolean)
+                            .join(" ")
+                            .replace(/\s+/g, " ")
+                            .trim()
+                            .toLowerCase();
+                        };
+
+                        /*
+                        * Prefer No for ordinary Yes/No questions. This avoids opening
+                        * additional conditional fields during a demonstration audit.
+                        */
+                        const preferredNoRadio =
+                            group.find(candidate => {
+                                if (candidate.disabled) {
+                                    return false;
+                                }
+
+                                const optionText =
+                                    getRadioOptionText(candidate);
+
+                                return (
+                                    optionText === "no" ||
+                                    optionText.startsWith("no ") ||
+                                    candidate.value
+                                        ?.trim()
+                                        .toLowerCase() === "false" ||
+                                    candidate.value === "0"
+                                );
+                            });
+
+                        const selectedRadio =
+                            preferredNoRadio ||
+                            group.find(candidate =>
+                                candidate.checked &&
+                                !candidate.disabled) ||
+                            group.find(candidate =>
+                                !candidate.disabled);
+
+                    if (!selectedRadio) {
+                        continue;
+                    }
+
+                    let clickableElement = null;
+
+                    if (selectedRadio.id) {
+                        clickableElement =
+                            document.querySelector(
+                                `label[for="${
+                                    CSS.escape(
+                                        selectedRadio.id)
+                                }"]`);
+                    }
+
+                    if (!clickableElement) {
+                        clickableElement =
+                            selectedRadio.closest(
+                                "label");
+                    }
+
+                    /*
+                     * Styled radio buttons usually display the
+                     * label while hiding the input.
+                     */
+                    if (
+                        clickableElement &&
+                        isVisible(clickableElement)
+                    ) {
+                        clickableElement.setAttribute(
+                            clickAttribute,
+                            "true");
+
+                        return `[${clickAttribute}="true"]`;
+                    }
+
+                    if (isVisible(selectedRadio)) {
+                        selectedRadio.setAttribute(
+                            clickAttribute,
+                            "true");
+
+                        return `[${clickAttribute}="true"]`;
+                    }
+                }
+
+                return "";
+            }
+            """);
+
+            if (string.IsNullOrWhiteSpace(
+                radioChoiceSelector))
+            {
+                break;
             }
 
-            matchingSuggestion.dispatchEvent(
-                new MouseEvent(
-                    "mousedown",
+            ILocator radioChoiceLocator =
+                page.Locator(radioChoiceSelector);
+
+            try
+            {
+                await radioChoiceLocator.ClickAsync(
+                    new()
                     {
-                        bubbles: true,
-                        cancelable: true,
-                        view: window
-                    }));
+                        Timeout = 3000
+                    });
 
-            matchingSuggestion.dispatchEvent(
-                new MouseEvent(
-                    "mouseup",
-                    {
-                        bubbles: true,
-                        cancelable: true,
-                        view: window
-                    }));
-
-            matchingSuggestion.click();
-
-            return true;
+                await Task.Delay(
+                    TimeSpan.FromMilliseconds(200));
+            }
+            catch (PlaywrightException)
+            {
+                /*
+                 * Do not fail the entire audit because one optional
+                 * radio group could not be clicked.
+                 */
+            }
         }
-        """);
+
+        /*
+         * Remove temporary attributes after all groups are processed.
+         */
+        await page.EvaluateAsync(
+            """
+            () => {
+            document
+                .querySelectorAll(
+                    '[data-city-audit-radio-processed], ' +
+                    '[data-city-audit-radio-click]')
+                .forEach(element => {
+                    element.removeAttribute(
+                        "data-city-audit-radio-processed");
+
+                    element.removeAttribute(
+                        "data-city-audit-radio-click");
+                });
+            }
+            """);
 
         return result ??
             throw new InvalidOperationException(
