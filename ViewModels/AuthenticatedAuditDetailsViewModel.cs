@@ -148,4 +148,6 @@ public sealed class AuthenticatedAuditFindingNodeDetailsViewModel
     public string? Html { get; set; }
 
     public string? FailureSummary { get; set; }
+
+    public string? ElementFixGuidance { get; set; }
 }

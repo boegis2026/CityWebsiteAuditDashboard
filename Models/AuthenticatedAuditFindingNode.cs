@@ -1,4 +1,6 @@
-﻿namespace CityWebsiteAuditDashboard.Models;
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace CityWebsiteAuditDashboard.Models;
 
 public class AuthenticatedAuditFindingNode
 {
@@ -12,6 +14,9 @@ public class AuthenticatedAuditFindingNode
     public string? Html { get; set; }
 
     public string? FailureSummary { get; set; }
+
+    [StringLength(4000)]
+    public string? ElementFixGuidance { get; set; }
 
     public AuthenticatedAuditFinding AuthenticatedAuditFinding { get; set; }
         = null!;

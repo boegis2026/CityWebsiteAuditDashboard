@@ -2333,6 +2333,97 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         return null;
     }
 
+    private static string BuildElementFixGuidance(
+    string ruleId)
+    {
+        string normalizedRuleId =
+            ruleId.Trim().ToLowerInvariant();
+
+        string guidance =
+            normalizedRuleId switch
+            {
+                "label" =>
+                    "Add a visible <label> for this form control. " +
+                    "The label's for attribute must match the control's id. " +
+                    "When a visible label is not appropriate, provide an accessible name using aria-label or aria-labelledby.",
+
+                "button-name" =>
+                    "Give this button an accessible name using visible text, " +
+                    "aria-label, or aria-labelledby. The name should clearly describe the button's action.",
+
+                "link-name" =>
+                    "Add meaningful visible link text or provide an accessible name using aria-label or aria-labelledby. " +
+                    "The accessible name should describe the link's destination or purpose.",
+
+                "image-alt" =>
+                    "Add an alt attribute that describes the image's purpose. " +
+                    "Use alt=\"\" only when the image is decorative and should be ignored by assistive technology.",
+
+                "input-image-alt" =>
+                    "Add an alt attribute that describes the action performed by this image input.",
+
+                "select-name" =>
+                    "Associate this select control with a visible <label>, or provide an accessible name using " +
+                    "aria-label or aria-labelledby.",
+
+                "color-contrast" =>
+                    "Change this element's foreground or background color until it meets the required WCAG contrast ratio. " +
+                    "Normal text generally requires 4.5:1, while large text generally requires 3:1.",
+
+                "aria-valid-attr-value" =>
+                    "Correct or remove the invalid ARIA attribute value. " +
+                    "When the value references another element ID, confirm that the referenced element exists on the page.",
+
+                "aria-allowed-attr" =>
+                    "Remove the ARIA attribute that is not allowed for this element or change the element's role " +
+                    "to one that supports the attribute.",
+
+                "aria-required-attr" =>
+                    "Add the ARIA attribute required by this element's role and give it an appropriate value.",
+
+                "aria-required-children" =>
+                    "Add the required child roles inside this element, or change the parent role so that it matches " +
+                    "the element's actual structure.",
+
+                "aria-required-parent" =>
+                    "Place this element inside a parent with the required ARIA role, or change the element's role " +
+                    "to match its actual structure.",
+
+                "frame-title" =>
+                    "Add a concise and meaningful title attribute to this frame describing the content or purpose of the embedded page.",
+
+                "duplicate-id-aria" =>
+                    "Change this element's id so that every referenced ID on the page is unique. " +
+                    "Update any labels or ARIA attributes that reference the old ID.",
+
+                "nested-interactive" =>
+                    "Remove the interactive control nested inside this element. " +
+                    "Use one interactive element, or separate the controls so each can receive focus independently.",
+
+                "heading-order" =>
+                    "Change this heading level so the page follows a logical hierarchy without skipping heading levels.",
+
+                "html-has-lang" =>
+                    "Add a valid lang attribute to the page's <html> element, such as lang=\"en\".",
+
+                "document-title" =>
+                    "Add a meaningful <title> element inside the page's <head> that identifies the page or current workflow step.",
+
+                "landmark-one-main" =>
+                    "Place the page's primary content inside one <main> element or an element with role=\"main\". " +
+                    "Only one main landmark should be present.",
+
+                "region" =>
+                    "Place this content inside an appropriate landmark such as <main>, <nav>, <header>, <footer>, or an explicitly labeled region.",
+
+                _ =>
+                    "Review this element using the axe-core failure explanation below. " +
+                    "Update the element's HTML, accessible name, role, state, or relationship so the stated requirement is satisfied."
+            };
+
+        return guidance;
+    }
+
     private async Task WaitForRenderedPageAsync(IPage page)
     {
         try
@@ -4314,7 +4405,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             LimitLength(nodeResult.Html, 10000),
 
                         FailureSummary =
-                            LimitLength(nodeResult.FailureSummary, 4000)
+                            LimitLength(nodeResult.FailureSummary, 4000),
+
+                        ElementFixGuidance =
+                            LimitLength(
+                                    BuildElementFixGuidance(
+                                    findingResult.RuleId),
+                                4000)
                     });
             }
 

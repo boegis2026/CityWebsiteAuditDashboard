@@ -279,7 +279,8 @@ public sealed class AuthenticatedAuditsController : Controller
                                                 {
                                                     Target = node.Target,
                                                     Html = node.Html,
-                                                    FailureSummary = node.FailureSummary
+                                                    FailureSummary = node.FailureSummary,
+                                                    ElementFixGuidance = node.ElementFixGuidance
                                                 })
                                             .ToList()
                                 })
