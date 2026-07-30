@@ -2702,7 +2702,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     element.getAttribute("aria-disabled") !== "true";
             };
 
-            const getActionText = element => {
+            function getActionText(element) {
                 return [
                     element.innerText,
                     element.textContent,
@@ -2715,7 +2715,21 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     .join(" ")
                     .replace(/\s+/g, " ")
                     .trim();
-            };
+            }
+
+            const normalizeText = value =>
+                (value ?? "")
+                    .replace(/\s+/g, " ")
+                    .trim();
+
+            const isClaimsRefundHub =
+                window.location.pathname
+                    .toLowerCase()
+                    .includes(
+                        "/refunds/claims/home/newclaim") &&
+                /application requirements/i.test(
+                    normalizeText(
+                        document.body?.innerText));
 
             const visibleForms =
                 Array.from(document.querySelectorAll("form"))
@@ -2741,7 +2755,8 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
 
             const hasWorkflowControls =
                 visibleFormControls.length > 0 ||
-                requiredFields.length > 0;
+                requiredFields.length > 0 ||
+                isClaimsRefundHub;
 
             const possibleActions =
                 Array.from(
@@ -2751,6 +2766,76 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         "[role='button']"))
                     .filter(isVisibleAndEnabled);
 
+            const findClaimsRefundHubAction =
+                row => {
+                    const rowText =
+                        normalizeText(row.innerText);
+
+                    if (
+                        /submit application/i.test(
+                            rowText) ||
+                        /\battachments\b/i.test(
+                            rowText)) {
+                        return null;
+                    }
+
+                    const rowActions =
+                        Array.from(
+                            row.querySelectorAll(
+                                "button, " +
+                                "input[type='button'], " +
+                                "input[type='submit'], " +
+                                "a[href], " +
+                                "[role='button']"))
+                            .filter(
+                                isVisibleAndEnabled);
+
+                    /*
+                    * The first row should only be selected while
+                    * its actual Start control is available.
+                    */
+                    if (
+                        /start a new claim/i.test(
+                            rowText)) {
+                        return rowActions.find(
+                            action =>
+                                /\bstart\b/i.test(
+                                    getActionText(action))) ??
+                            null;
+                    }
+
+                    if (
+                        !/not completed/i.test(
+                            rowText)) {
+                        return null;
+                    }
+
+                    return (
+                        rowActions.find(
+                            action =>
+                                action instanceof
+                                    HTMLButtonElement) ??
+                        rowActions.find(
+                            action =>
+                                action instanceof
+                                    HTMLInputElement) ??
+                        rowActions.find(
+                            action =>
+                                action instanceof
+                                HTMLAnchorElement) ??
+                        rowActions[0] ??
+                        null
+                    );
+                };
+
+            const claimsRefundHubActions =
+                isClaimsRefundHub
+                    ? Array.from(
+                        document.querySelectorAll("tr"))
+                        .map(findClaimsRefundHubAction)
+                        .filter(action => action !== null)
+                    : [];
+
             const safeNextPattern =
                 /\b(next|continue|proceed|start|begin|advance)\b/i;
 
@@ -2758,7 +2843,9 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 /\b(submit|finalize|certify|pay|payment|purchase|checkout|place order|sign|signature|send application)\b/i;
 
             const candidateNextActions =
-                possibleActions.filter(element => {
+                isClaimsRefundHub
+                ? claimsRefundHubActions
+                :possibleActions.filter(element => {
 
                     const actionText =
                         getActionText(element);
@@ -2954,6 +3041,122 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     );
                 };
 
+                const normalizeText = value =>
+                    (value ?? "")
+                        .replace(/\s+/g, " ")
+                        .trim();
+
+                const isClaimsRefundHub =
+                    window.location.pathname
+                        .toLowerCase()
+                        .includes(
+                            "/refunds/claims/home/newclaim") &&
+                    /application requirements/i.test(
+                        normalizeText(
+                            document.body?.innerText));
+
+                if (isClaimsRefundHub) {
+                    const hubCandidates =
+                        Array.from(
+                            document.querySelectorAll("tr"))
+                            .map(row => {
+                                if (
+                                    !isVisibleAndEnabled(row)) {
+                                    return null;
+                                }
+
+                                const rowText =
+                                    normalizeText(
+                                        row.innerText);
+
+                                if (
+                                    /submit application/i.test(
+                                        rowText) ||
+                                    /\battachments\b/i.test(
+                                        rowText)) {
+                                    return null;
+                                }
+
+                                const rowActions =
+                                    Array.from(
+                                        row.querySelectorAll(
+                                            "button, " +
+                                            "input[type='button'], " +
+                                            "input[type='submit'], " +
+                                            "a[href], " +
+                                            "[role='button']"))
+                                        .filter(
+                                            isVisibleAndEnabled);
+
+                                let selectedAction = null;
+
+                                if (
+                                    /start a new claim/i.test(
+                                        rowText)) {
+                                    selectedAction =
+                                        rowActions.find(
+                                            action =>
+                                                /\bstart\b/i.test(
+                                                    getActionText(
+                                                        action))) ??
+                                        null;
+                                }
+                                else if (
+                                    /not completed/i.test(
+                                        rowText)) {
+                                    selectedAction =
+                                        rowActions.find(
+                                            action =>
+                                                action instanceof
+                                                    HTMLButtonElement) ??
+                                        rowActions.find(
+                                            action =>
+                                                action instanceof
+                                                    HTMLInputElement) ??
+                                        rowActions.find(
+                                            action =>
+                                                action instanceof
+                                                    HTMLAnchorElement) ??
+                                        rowActions[0] ??
+                                        null;
+                                }
+
+                                return selectedAction
+                                    ? {
+                                        Element:
+                                            selectedAction,
+                                        RowText:
+                                            rowText
+                                    }
+                                    : null;
+                            })
+                            .filter(
+                                candidate =>
+                                    candidate !== null);
+                                    
+                    if (hubCandidates.length > 0) {
+                        const selected =
+                            hubCandidates[0];
+
+                        selected.Element.setAttribute(
+                            markerAttribute,
+                            "true");
+
+                        return {
+                            Found: true,
+                            ActionText:
+                                selected.RowText,
+                            Selector:
+                                `[${markerAttribute}="true"]`,
+                            CandidateCount:
+                                hubCandidates.length,
+                            RequiresManualInteraction:
+                                false,
+                            StopReason: null
+                        };
+                    }
+                }
+
                 const finalActionPattern =
                     /\b(submit|finalize|certify|pay|payment|purchase|checkout|place order|complete application|finish application)\b/i;
 
@@ -3009,7 +3212,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     };
                 }
 
-                const getActionText = element => {
+                function getActionText(element) {
                     return [
                         element.innerText,
                         element.textContent,
@@ -3022,10 +3225,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         .join(" ")
                         .replace(/\s+/g, " ")
                         .trim();
-                };
+                }
 
                 const safePattern =
-                    /\b(next|continue|proceed|start|begin|advance)\b/i;
+                    /\b(next|continue|proceed|start|begin|advance|save)\b/i;
 
                 const unsafePattern =
                     /\b(submit|finalize|certify|pay|payment|purchase|checkout|place order|sign|signature|send application|complete application|finish)\b/i;
@@ -3364,20 +3567,15 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             const unsafeControls =
                 visibleElements(
                     document.querySelectorAll(
-                        "input[type='password'], " +
-                        "input[type='file'], " +
-                        "[autocomplete='cc-number'], " +
-                        "[autocomplete='cc-csc'], " +
-                        "[autocomplete='cc-exp'], " +
-                        "input[name*='cardnumber' i], " +
-                        "input[name*='creditcard' i], " +
-                        "input[name*='routing' i], " +
-                        "input[name*='bankaccount' i], " +
-                        "input[name*='socialsecurity' i], " +
-                        "input[name*='ssn' i], " +
-                        "[name*='signature' i], " +
-                        "[id*='signature' i], " +
-                        "[aria-label*='signature' i]"));
+                    "input[type='password'], " +
+                    "input[type='file'], " +
+                    "input[name*='routing' i], " +
+                    "input[name*='bankaccount' i], " +
+                    "input[name*='socialsecurity' i], " +
+                    "input[name*='ssn' i], " +
+                    "[name*='signature' i], " +
+                    "[id*='signature' i], " +
+                    "[aria-label*='signature' i]"));
 
             if (unsafeControls.length > 0) {
                 return {
@@ -3386,7 +3584,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         unsafeControls.length,
                     RequiresManualInteraction: true,
                     StopReason:
-                        "A password, file upload, payment, sensitive-information, or signature field was detected.",
+                        "A password, file upload, banking, sensitive-information, or signature field was detected.",
                     FilledFieldDescriptions: [],
                     SkippedFieldDescriptions:
                         unsafeControls.map(
@@ -3485,6 +3683,95 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 }
 
                 return "Accessibility audit test";
+            };
+
+            const getFinancialTestValue = element => {
+                const hint =
+                    getFieldHint(element);
+
+                if (
+                    hint.includes("amount due") ||
+                    hint.includes("refund amount") ||
+                    hint.includes("amount claimed") ||
+                    hint.includes("payment amount") ||
+                    hint.includes("fee amount") ||
+                    hint.includes("total amount")) {
+                    return "100.00";
+                }
+
+                if (
+                    hint.includes("ucs transaction") ||
+                    hint.includes("transaction id") ||
+                    hint.includes("transaction number")) {
+                    return "TEST-TRANSACTION-001";
+                }
+
+                if (
+                    hint.includes("cardholder") ||
+                    hint.includes("name on card")) {
+                    return "Alex Tester";
+                }
+
+                if (
+                    element.getAttribute("autocomplete") ===
+                        "cc-number" ||
+                    hint.includes("card number") ||
+                    hint.includes("credit card number") ||
+                    hint.includes("debit card number")) {
+                    return "4111111111111111";
+                }
+
+                if (
+                    element.getAttribute("autocomplete") ===
+                        "cc-csc" ||
+                    hint.includes("cvv") ||
+                    hint.includes("cvc") ||
+                    hint.includes("security code")) {
+                    return "123";
+                }
+
+                if (
+                    element.getAttribute("autocomplete") ===
+                        "cc-exp" ||
+                    hint.includes("expiration") ||
+                    hint.includes("expiry") ||
+                    hint.includes("exp date")) {
+                    return "12/30";
+                }
+
+                if (
+                    hint.includes("check number") ||
+                    hint.includes("check no") ||
+                    hint.includes("check #") ||
+                    hint.includes("cheque number")) {
+                    return "100001";
+                }
+
+                if (
+                    hint.includes("date fees paid") ||
+                    hint.includes("payment date") ||
+                    hint.includes("date paid")) {
+
+                    const today =
+                        new Date();
+
+                    const month =
+                        String(today.getMonth() + 1)
+                            .padStart(2, "0");
+
+                    const day =
+                        String(today.getDate())
+                            .padStart(2, "0");
+
+                    const year =
+                        today.getFullYear();
+
+                    return element.type === "date"
+                        ? `${year}-${month}-${day}`
+                        : `${month}/${day}/${year}`;
+                }
+
+                return null;
             };
 
             for (const element of controls) {
@@ -3610,9 +3897,40 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     continue;
                 }
 
-                if (element.value.trim()) {
+                const currentValue =
+                    element.value.trim();
+
+                const fieldHint =
+                    getFieldHint(element);
+
+                const isDefaultMoneyValue =
+                    (
+                        fieldHint.includes("amount") ||
+                        fieldHint.includes("fee") ||
+                        fieldHint.includes("refund")
+                    ) &&
+                    /^[$,\s]*0(?:\.0+)?$/.test(
+                        currentValue);
+
+                if (
+                    currentValue &&
+                    !isDefaultMoneyValue) {
                     skippedDescriptions.push(
                         `${description}: already has a value`);
+
+                    continue;
+                }
+
+                const financialTestValue =
+                    getFinancialTestValue(element);
+
+                if (financialTestValue !== null) {
+                    setNativeValue(
+                        element,
+                        financialTestValue);
+
+                    filledDescriptions.push(
+                        `${description}: test value entered`);
 
                     continue;
                 }
