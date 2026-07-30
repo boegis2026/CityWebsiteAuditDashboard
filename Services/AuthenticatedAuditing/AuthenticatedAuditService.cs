@@ -2753,11 +2753,6 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             const hasVisibleForm =
                 visibleForms.length > 0;
 
-            const hasWorkflowControls =
-                visibleFormControls.length > 0 ||
-                requiredFields.length > 0 ||
-                isClaimsRefundHub;
-
             const possibleActions =
                 Array.from(
                     document.querySelectorAll(
@@ -2765,6 +2760,200 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         "input[type='submit'], a[href], " +
                         "[role='button']"))
                     .filter(isVisibleAndEnabled);
+
+            const getWorkflowHub = () => {
+            const unfinishedPattern =
+                /\b(not completed|incomplete|not started|pending|optional|required|needs attention)\b/i;
+
+            const notCompletedPattern =
+                /\b(not completed|incomplete|not started|pending|needs attention)\b/i;
+
+            const optionalPattern =
+                /\boptional\b/i;
+
+            const requiredPattern =
+                /\brequired\b/i;
+
+            const completedPattern =
+                /\b(completed|complete|done)\b/i;
+
+            const excludedPattern =
+                /\b(n\/a|not applicable)\b/i;
+
+            const unsafePattern =
+                /\b(submit|finalize|certify|pay|payment|purchase|checkout|place order|logout|sign out)\b/i;
+
+            const findNearestStatusContainer =
+                action => {
+                    let current =
+                        action.parentElement;
+
+                    for (
+                        let depth = 0;
+                        current && depth < 7;
+                        depth++) {
+
+                        if (
+                            current === document.body ||
+                            current ===
+                                document.documentElement) {
+                            break;
+                        }
+
+                        const text =
+                            normalizeText(
+                                current.innerText);
+
+                        if (
+                            text.length > 0 &&
+                            text.length <= 1000 &&
+                            (
+                                unfinishedPattern.test(text) ||
+                                completedPattern.test(text) ||
+                                excludedPattern.test(text)
+                            )) {
+                            return current;
+                        }
+
+                        current =
+                            current.parentElement;
+                    }
+
+                    return null;
+                };
+
+            const groupedCandidates =
+                new Map();
+
+            for (const action of possibleActions) {
+                const container =
+                    findNearestStatusContainer(
+                        action);
+
+                if (!container) {
+                    continue;
+                }
+
+                const containerText =
+                    normalizeText(
+                        container.innerText);
+
+                const actionText =
+                    normalizeText(
+                        getActionText(action));
+
+                const isNotCompleted =
+                    notCompletedPattern.test(
+                        containerText);
+
+                const isOptional =
+                    optionalPattern.test(
+                        containerText);
+
+                const isRequired =
+                    requiredPattern.test(
+                        containerText);
+
+                const isCompletedOnly =
+                    completedPattern.test(
+                        containerText) &&
+                    !isNotCompleted;
+
+                const isExcluded =
+                    excludedPattern.test(
+                        containerText);
+
+                const isUnsafe =
+                    unsafePattern.test(
+                        actionText) ||
+                    /\bsubmit application\b/i.test(
+                        containerText);
+
+                let score = 0;
+
+                if (actionText.length > 0) {
+                    score += 3;
+                }
+
+                if (
+                    action instanceof
+                        HTMLAnchorElement) {
+                    score += 2;
+                }
+
+                if (
+                    action instanceof
+                        HTMLButtonElement) {
+                    score += 1;
+                }
+
+                const existing =
+                    groupedCandidates.get(
+                        container);
+
+                if (
+                    !existing ||
+                    score > existing.Score) {
+                    groupedCandidates.set(
+                        container,
+                        {
+                            Element: action,
+                            ContainerText:
+                                containerText,
+                            IsNotCompleted:
+                                isNotCompleted,
+                            IsOptional:
+                                isOptional,
+                            IsRequired:
+                                isRequired,
+                            IsCompletedOnly:
+                                isCompletedOnly,
+                            IsExcluded:
+                                isExcluded,
+                            IsUnsafe:
+                                isUnsafe,
+                            Score: score
+                        });
+                }
+            }
+
+            const rows =
+                Array.from(
+                    groupedCandidates.values());
+
+            /*
+             * Multiple status-based sections and no visible
+             * form controls strongly indicate a workflow hub.
+             */
+            const isHub =
+                visibleFormControls.length === 0 &&
+                rows.length >= 2;
+
+            const candidates =
+                rows.filter(candidate =>
+                    !candidate.IsCompletedOnly &&
+                    !candidate.IsExcluded &&
+                    !candidate.IsUnsafe &&
+                    (
+                        candidate.IsNotCompleted ||
+                        candidate.IsOptional ||
+                        candidate.IsRequired
+                    ));
+
+            return {
+                IsHub: isHub,
+                Candidates: candidates
+            };
+            };
+
+            const workflowHub =
+            getWorkflowHub();
+
+            const hasWorkflowControls =
+            visibleFormControls.length > 0 ||
+            requiredFields.length > 0 ||
+            workflowHub.IsHub ||
+            isClaimsRefundHub;
 
             const findClaimsRefundHubAction =
                 row => {
@@ -2836,47 +3025,143 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         .filter(action => action !== null)
                     : [];
 
+                        /*
+                        * Include required and optional sections.
+                        * Completed rows will no longer match.
+                        */
+                        if (
+                            !/\b(not completed|optional)\b/i.test(
+                                rowText)) {
+                            return null;
+                        }
+
+                        const actions =
+                            Array.from(
+                                row.querySelectorAll(
+                                    "a[href], " +
+                                    "button, " +
+                                    "input[type='button'], " +
+                                    "input[type='submit'], " +
+                                    "[role='button']"))
+                                .filter(
+                                    isVisibleAndEnabled);
+
+                        return actions.find(
+                            action => {
+                                const text =
+                                    getActionText(action);
+
+                                return text &&
+                                    !/\b(submit|logout)\b/i.test(
+                                        text);
+                            }) ?? null;
+                    })
+                    .filter(
+                        action =>
+                            action !== null)
+                    : [];
+
             const safeNextPattern =
                 /\b(next|continue|proceed|start|begin|advance)\b/i;
 
             const unsafeActionPattern =
                 /\b(submit|finalize|certify|pay|payment|purchase|checkout|place order|sign|signature|send application)\b/i;
 
-            const candidateNextActions =
-                isClaimsRefundHub
-                ? claimsRefundHubActions
-                :possibleActions.filter(element => {
+            const normalNextActions =
+            possibleActions.filter(element => {
+                const actionText =
+                    getActionText(element);
 
+                const isFormAssociatedAction =
+                    element.closest("form") !== null ||
+                    (
+                        element instanceof
+                            HTMLButtonElement &&
+                        element.form !== null
+                    ) ||
+                    (
+                        element instanceof
+                            HTMLInputElement &&
+                        element.form !== null
+                    );
+
+                return hasWorkflowControls &&
+                    safeNextPattern.test(
+                        actionText) &&
+                    !unsafeActionPattern.test(
+                        actionText) &&
+                    (
+                        !hasVisibleForm ||
+                        isFormAssociatedAction
+                    );
+            });
+
+            const hubStartAction =
+            workflowHub.IsHub
+                ? possibleActions.find(element =>
+                    /\b(start|begin)\b/i.test(
+                        getActionText(element)) &&
+                    !unsafeActionPattern.test(
+                        getActionText(element)))
+                : null;
+
+            let candidateNextActions = [];
+
+            if (isClaimsRefundHub) {
+            candidateNextActions =
+                claimsRefundHubActions;
+            }
+            else if (workflowHub.IsHub) {
+            const hubStartAction =
+                possibleActions.find(element => {
+                    const text =
+                        getActionText(element);
+
+                    return /\b(start|begin)\b/i.test(text) &&
+                        !unsafeActionPattern.test(text);
+                });
+
+            if (hubStartAction) {
+                candidateNextActions =
+                    [hubStartAction];
+            }
+            else {
+                candidateNextActions =
+                    workflowHub.Candidates.map(
+                        candidate =>
+                            candidate.Element);
+            }
+            }
+            else {
+            candidateNextActions =
+                possibleActions.filter(element => {
                     const actionText =
                         getActionText(element);
 
                     const isFormAssociatedAction =
                         element.closest("form") !== null ||
                         (
-                            element instanceof HTMLButtonElement &&
+                            element instanceof
+                                HTMLButtonElement &&
                             element.form !== null
                         ) ||
                         (
-                            element instanceof HTMLInputElement &&
+                            element instanceof
+                                HTMLInputElement &&
                             element.form !== null
                         );
 
-                    /*
-                    * A random page containing a Start or Continue link is not
-                    * automatically treated as a form workflow.
-                    *
-                    * When a visible form exists, the action must belong to it.
-                    * Formless JavaScript workflows remain supported when visible
-                    * input controls are present.
-                    */
                     return hasWorkflowControls &&
-                        safeNextPattern.test(actionText) &&
-                        !unsafeActionPattern.test(actionText) &&
+                        safeNextPattern.test(
+                            actionText) &&
+                        !unsafeActionPattern.test(
+                            actionText) &&
                         (
                             !hasVisibleForm ||
                             isFormAssociatedAction
                         );
                 });
+            }
 
             const hasCaptcha =
                 document.querySelector(
@@ -3054,6 +3339,39 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     /application requirements/i.test(
                         normalizeText(
                             document.body?.innerText));
+
+                const uploadAction =
+                    isRPermitPage
+                        ? Array.from(
+                            document.querySelectorAll(
+                                "button, " +
+                                "input[type='button'], " +
+                                "input[type='submit'], " +
+                                "a[href], " +
+                                "[role='button']"))
+                            .filter(isVisibleAndEnabled)
+                            .find(element =>
+                                /\bupload\b/i.test(
+                                    getActionText(element)))
+                        : null;
+
+                if (uploadAction) {
+                    uploadAction.setAttribute(
+                        markerAttribute,
+                        "true");
+
+                    return {
+                        Found: true,
+                        ActionText:
+                            getActionText(uploadAction) ||
+                            "Upload",
+                        Selector:
+                            `[${markerAttribute}="true"]`,
+                        CandidateCount: 1,
+                        RequiresManualInteraction: false,
+                        StopReason: null
+                    };
+                }             
 
                 if (isClaimsRefundHub) {
                     const hubCandidates =
@@ -3243,6 +3561,307 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             "[role='button']"))
                         .filter(isVisibleAndEnabled);
 
+                const getWorkflowHub = () => {
+                const unfinishedPattern =
+                    /\b(not completed|incomplete|not started|pending|optional|required|needs attention)\b/i;
+
+                const notCompletedPattern =
+                    /\b(not completed|incomplete|not started|pending|needs attention)\b/i;
+
+                const optionalPattern =
+                    /\boptional\b/i;
+
+                const requiredPattern =
+                    /\brequired\b/i;
+
+                const completedPattern =
+                    /\b(completed|complete|done)\b/i;
+
+                const excludedPattern =
+                    /\b(n\/a|not applicable)\b/i;
+
+                const findNearestStatusContainer =
+                    action => {
+                        let current =
+                            action.parentElement;
+
+                        for (
+                            let depth = 0;
+                            current && depth < 7;
+                            depth++) {
+
+                            if (
+                                current === document.body ||
+                                current ===
+                                    document.documentElement) {
+                                break;
+                            }
+
+                            const text =
+                                normalizeText(
+                                    current.innerText);
+
+                            if (
+                                text.length > 0 &&
+                                text.length <= 1000 &&
+                                (
+                                    unfinishedPattern.test(text) ||
+                                    completedPattern.test(text) ||
+                                    excludedPattern.test(text)
+                                )) {
+                                return current;
+                            }
+
+                            current =
+                                current.parentElement;
+                        }
+
+                        return null;
+                    };
+
+                const groupedCandidates =
+                    new Map();
+
+                for (const action of actions) {
+                    const container =
+                        findNearestStatusContainer(
+                            action);
+
+                    if (!container) {
+                        continue;
+                    }
+
+                    const containerText =
+                        normalizeText(
+                            container.innerText);
+
+                    const actionText =
+                        normalizeText(
+                            getActionText(action));
+
+                    const isNotCompleted =
+                        notCompletedPattern.test(
+                            containerText);
+
+                    const isOptional =
+                        optionalPattern.test(
+                            containerText);
+
+                    const isRequired =
+                        requiredPattern.test(
+                            containerText);
+
+                    const isCompletedOnly =
+                        completedPattern.test(
+                            containerText) &&
+                        !isNotCompleted;
+
+                    const isExcluded =
+                        excludedPattern.test(
+                            containerText);
+
+                    const isUnsafe =
+                        unsafePattern.test(
+                            actionText) ||
+                        /\bsubmit application\b/i.test(
+                            containerText);
+
+                    let score = 0;
+
+                    if (actionText.length > 0) {
+                        score += 3;
+                    }
+
+                    if (
+                        action instanceof
+                            HTMLAnchorElement) {
+                        score += 2;
+                    }
+
+                    if (
+                        action instanceof
+                            HTMLButtonElement) {
+                        score += 1;
+                    }
+
+                    const existing =
+                        groupedCandidates.get(
+                            container);
+
+                    if (
+                        !existing ||
+                        score > existing.Score) {
+                        groupedCandidates.set(
+                            container,
+                            {
+                                Element: action,
+                                ContainerText:
+                                    containerText,
+                                IsNotCompleted:
+                                    isNotCompleted,
+                                IsOptional:
+                                    isOptional,
+                                IsRequired:
+                                    isRequired,
+                                IsCompletedOnly:
+                                    isCompletedOnly,
+                                IsExcluded:
+                                    isExcluded,
+                                IsUnsafe:
+                                    isUnsafe,
+                                Score: score
+                            });
+                    }
+                }
+
+                const rows =
+                    Array.from(
+                        groupedCandidates.values());
+
+                const visibleFormControlCount =
+                    Array.from(
+                        document.querySelectorAll(
+                            "input:not([type='hidden']), " +
+                            "select, textarea"))
+                        .filter(
+                            isVisibleAndEnabled)
+                        .length;
+
+                return {
+                    IsHub:
+                        visibleFormControlCount === 0 &&
+                        rows.length >= 2,
+
+                    Candidates:
+                        rows.filter(candidate =>
+                            !candidate.IsCompletedOnly &&
+                            !candidate.IsExcluded &&
+                            !candidate.IsUnsafe &&
+                            (
+                                candidate.IsNotCompleted ||
+                                candidate.IsOptional ||
+                                candidate.IsRequired
+                            ))
+                };
+            };
+
+            const workflowHub =
+                getWorkflowHub();
+
+            if (workflowHub.IsHub) {
+                /*
+                 * A visible Start or Begin button takes priority
+                 * over the individual section links.
+                 */
+                const startAction =
+                    actions.find(action =>
+                        /\b(start|begin)\b/i.test(
+                            getActionText(action)) &&
+                        !unsafePattern.test(
+                            getActionText(action)));
+
+                const visitedKey =
+                    `city-audit-hub-visited:` +
+                    `${window.location.origin}` +
+                    `${window.location.pathname}` +
+                    `${window.location.search}`;
+
+                let visitedOptionalActions = [];
+
+                try {
+                    visitedOptionalActions =
+                        JSON.parse(
+                            sessionStorage.getItem(
+                                visitedKey) ?? "[]");
+                }
+                catch {
+                    visitedOptionalActions = [];
+                }
+
+                const getCandidateKey =
+                    candidate => {
+                        const element =
+                            candidate.Element;
+
+                        let destination = "";
+
+                        if (
+                            element instanceof
+                                HTMLAnchorElement) {
+                            destination =
+                                element.href;
+                        }
+
+                        return (
+                            destination +
+                            "|" +
+                            normalizeText(
+                                candidate.ContainerText)
+                        );
+                    };
+
+                const selectedCandidate =
+                    workflowHub.Candidates.find(
+                        candidate => {
+                            if (!candidate.IsOptional) {
+                                return true;
+                            }
+
+                            return !visitedOptionalActions
+                                .includes(
+                                    getCandidateKey(
+                                        candidate));
+                        });
+
+                if (
+                    startAction ||
+                    selectedCandidate) {
+
+                    const selectedElement =
+                        startAction ??
+                        selectedCandidate.Element;
+
+                    const selectedText =
+                        startAction
+                            ? getActionText(
+                                startAction)
+                            : selectedCandidate
+                                .ContainerText;
+
+                    if (
+                        !startAction &&
+                        selectedCandidate.IsOptional) {
+
+                        visitedOptionalActions.push(
+                            getCandidateKey(
+                                selectedCandidate));
+
+                        sessionStorage.setItem(
+                            visitedKey,
+                            JSON.stringify(
+                                visitedOptionalActions));
+                    }
+
+                    selectedElement.setAttribute(
+                        markerAttribute,
+                        "true");
+
+                    return {
+                        Found: true,
+                        ActionText:
+                            selectedText ||
+                            "Workflow section",
+                        Selector:
+                            `[${markerAttribute}="true"]`,
+                        CandidateCount:
+                            workflowHub.Candidates.length,
+                        RequiresManualInteraction:
+                            false,
+                        StopReason: null
+                    };
+                }
+                }
+                
                 const unsafeVisibleAction =
                     actions.find(element =>
                         unsafePattern.test(
