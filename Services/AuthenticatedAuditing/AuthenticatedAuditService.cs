@@ -8,6 +8,8 @@ using System.Text;
 using Deque.AxeCore.Commons;
 using Deque.AxeCore.Playwright;
 using System.Diagnostics;
+using MigraDoc.DocumentObjectModel;
+using MigraDoc.Rendering;
 
 namespace CityWebsiteAuditDashboard.Services.AuthenticatedAuditing;
 
@@ -1347,6 +1349,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             AuthenticatedAuditFieldFillResult fillResult =
                 await FillSafeFieldsAsync(activePage);
 
+            await FillSafeFileUploadsAsync(
+                activePage,
+                cancellationToken);
+
             if (fillResult.RequiresManualInteraction)
             {
                 return new AuthenticatedAuditAutomaticNavigationResult
@@ -1775,6 +1781,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
 
             AuthenticatedAuditFieldFillResult fillResult =
                 await FillSafeFieldsAsync(activePage);
+
+            await FillSafeFileUploadsAsync(
+                activePage,
+                cancellationToken);
 
             if (fillResult.RequiresManualInteraction)
             {
@@ -2765,6 +2775,11 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         "[onclick]"))
                     .filter(isVisibleAndEnabled);
 
+            const uploadActions =
+                possibleActions.filter(element =>
+                    /\bupload(?:\s+file)?\b/i.test(
+                        getActionText(element)));
+
             const getWorkflowHub = () => {
                 /*
                 * Workflow hubs often display the section action and its
@@ -3187,6 +3202,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             const hasWorkflowControls =
             visibleFormControls.length > 0 ||
             requiredFields.length > 0 ||
+            uploadActions.length > 0 ||
             workflowHub.IsHub ||
             isClaimsRefundHub;
 
@@ -3267,7 +3283,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 /\b(submit|finalize|certify|pay|payment|purchase|checkout|place order|sign|signature|send application)\b/i;
 
             const normalNextActions =
-            possibleActions.filter(element => {
+                possibleActions.filter(element => {
                 const actionText =
                     getActionText(element);
 
@@ -3295,15 +3311,6 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     );
             });
 
-            const hubStartAction =
-            workflowHub.IsHub
-                ? possibleActions.find(element =>
-                    /\b(start|begin)\b/i.test(
-                        getActionText(element)) &&
-                    !unsafeActionPattern.test(
-                        getActionText(element)))
-                : null;
-
             let candidateNextActions = [];
 
             if (isClaimsRefundHub) {
@@ -3311,82 +3318,62 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 claimsRefundHubActions;
             }
             else if (workflowHub.IsHub) {
-            const hubStartAction =
+                const hubStartAction =
                 possibleActions.find(element => {
                     const text =
                         getActionText(element);
 
-                    return /\b(start|begin)\b/i.test(text) &&
-                        !unsafeActionPattern.test(text);
+                    return /\b(start|begin)\b/i.test(
+                        text) &&
+                        !unsafeActionPattern.test(
+                            text);
                 });
 
-            if (hubStartAction) {
-                candidateNextActions =
+                if (hubStartAction) {
+                    candidateNextActions =
                     [hubStartAction];
-            }
-            else {
-                candidateNextActions =
+                }
+                else {
+                    candidateNextActions =
                     workflowHub.Candidates.map(
                         candidate =>
                             candidate.Element);
+                }
             }
+            else if (uploadActions.length > 0) {
+            candidateNextActions =
+                uploadActions;
             }
             else {
             candidateNextActions =
-                possibleActions.filter(element => {
-                    const actionText =
-                        getActionText(element);
-
-                    const isFormAssociatedAction =
-                        element.closest("form") !== null ||
-                        (
-                            element instanceof
-                                HTMLButtonElement &&
-                            element.form !== null
-                        ) ||
-                        (
-                            element instanceof
-                                HTMLInputElement &&
-                            element.form !== null
-                        );
-
-                    return hasWorkflowControls &&
-                        safeNextPattern.test(
-                            actionText) &&
-                        !unsafeActionPattern.test(
-                            actionText) &&
-                        (
-                            !hasVisibleForm ||
-                            isFormAssociatedAction
-                        );
-                });
+                normalNextActions;
             }
 
             const hasCaptcha =
                 document.querySelector(
-                    "iframe[src*='recaptcha'], " +
-                    "iframe[src*='hcaptcha'], " +
-                    "[id*='captcha' i], " +
-                    "[class*='captcha' i], " +
-                    "input[name*='captcha' i]") !== null;
+                "iframe[src*='recaptcha'], " +
+                "iframe[src*='hcaptcha'], " +
+                "[id*='captcha' i], " +
+                "[class*='captcha' i], " +
+                "input[name*='captcha' i]") !== null;
 
             const hasFileUpload =
-                Array.from(
-                    document.querySelectorAll("input[type='file']"))
-                    .some(isVisibleAndEnabled);
+                document.querySelector(
+                "input[type='file']") !== null;
 
             const hasPasswordField =
                 Array.from(
-                    document.querySelectorAll("input[type='password']"))
-                    .some(isVisibleAndEnabled);
+                document.querySelectorAll(
+                    "input[type='password']"))
+                .some(isVisibleAndEnabled);
 
             const hasPaymentField =
                 document.querySelector(
-                    "[autocomplete='cc-number'], " +
-                    "[autocomplete='cc-csc'], " +
-                    "[autocomplete='cc-exp'], " +
-                    "input[name*='cardnumber' i], " +
-                    "input[name*='creditcard' i]") !== null;
+                "[autocomplete='cc-number'], " +
+                "[autocomplete='cc-csc'], " +
+                "[autocomplete='cc-exp'], " +
+                "input[name*='cardnumber' i], " +
+                "input[name*='creditcard' i]") !== null;
 
             let stopReason = null;
 
@@ -3394,10 +3381,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 stopReason =
                     "CAPTCHA detected. Manual interaction is required.";
             }
-            else if (hasFileUpload) {
-                stopReason =
-                    "File upload detected. Manual interaction is required.";
-            }
+
             else if (hasPaymentField) {
                 stopReason =
                     "Payment fields detected. Automatic navigation is disabled.";
@@ -3728,6 +3712,86 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             "[role='link'], " +
                             "[onclick]"))
                         .filter(isVisibleAndEnabled);
+
+                const fileInputs =
+                    Array.from(
+                    document.querySelectorAll(
+                        "input[type='file']"));
+
+                const hasSelectedFile =
+                    fileInputs.some(input =>
+                    input.files &&
+                    input.files.length > 0);
+
+                const uploadCandidates =
+                    actions.filter(element => {
+                    const text =
+                        normalizeText(
+                            getActionText(element));
+
+                    return /\bupload(?:\s+file)?\b/i.test(
+                        text) &&
+                        !unsafePattern.test(text);
+                    });
+
+                const uploadFileAction =
+                    uploadCandidates.find(element =>
+                    /\bupload\s+file\b/i.test(
+                        normalizeText(
+                            getActionText(element)))) ??
+                    null;
+
+                const outerUploadAction =
+                    uploadCandidates.find(element =>
+                    /^upload$/i.test(
+                        normalizeText(
+                            getActionText(element)))) ??
+                    null;
+
+                let uploadAction = null;
+
+                /*
+                * A selected file means the modal's Upload File
+                * button must take priority.
+                */
+                if (
+                    hasSelectedFile &&
+                uploadFileAction) {
+
+                uploadAction =
+                    uploadFileAction;
+                }
+                /*
+                * No modal Upload File button is visible yet,
+                * so click the outer Upload button.
+                */
+                else if (
+                    !uploadFileAction &&
+                outerUploadAction) {
+
+                uploadAction =
+                    outerUploadAction;
+                }
+
+                if (uploadAction) {
+                    uploadAction.setAttribute(
+                    markerAttribute,
+                    "true");
+
+                    return {
+                        Found: true,
+                    ActionText:
+                        getActionText(uploadAction) ||
+                        "Upload",
+                    Selector:
+                        `[${markerAttribute}="true"]`,
+                    CandidateCount:
+                        uploadCandidates.length,
+                    RequiresManualInteraction:
+                        false,
+                    StopReason: null
+                    };
+                }
 
                 const getWorkflowHub = () => {
                     /*
@@ -4200,18 +4264,20 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         );
                     };
 
-                const selectedCandidate =
-                    workflowHub.Candidates.find(
-                        candidate => {
-                            if (!candidate.IsOptional) {
-                                return true;
-                            }
+                const availableCandidates =
+                    workflowHub.Candidates.filter(
+                    candidate =>
+                        !candidate.IsOptional ||
+                        !visitedOptionalActions.includes(
+                            getCandidateKey(
+                                candidate)));
 
-                            return !visitedOptionalActions
-                                .includes(
-                                    getCandidateKey(
-                                        candidate));
-                        });
+                const selectedCandidate =
+                    availableCandidates.find(
+                    candidate =>
+                        !candidate.IsOptional) ??
+                    availableCandidates[0] ??
+                    null;
 
                 if (
                     startAction ||
@@ -4329,6 +4395,173 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         return result ??
             throw new InvalidOperationException(
                 "The next-action analysis result could not be read.");
+    }
+
+    private static async Task FillSafeFileUploadsAsync(
+        IPage page,
+        CancellationToken cancellationToken)
+    {
+        ILocator fileInputs =
+            page.Locator("input[type='file']");
+
+        int fileInputCount =
+            await fileInputs.CountAsync();
+
+        if (fileInputCount == 0)
+        {
+            return;
+        }
+
+        string testFileDirectory =
+            Path.Combine(
+                Path.GetTempPath(),
+                "CityWebsiteAuditDashboard");
+
+        Directory.CreateDirectory(
+            testFileDirectory);
+
+        string testPdfPath =
+            Path.Combine(
+                testFileDirectory,
+                "accessibility-audit-test.pdf");
+
+        string testPngPath =
+            Path.Combine(
+                testFileDirectory,
+                "accessibility-audit-test.png");
+
+        if (!File.Exists(testPdfPath))
+        {
+            var document =
+                new Document();
+
+            Style normalStyle =
+                document.Styles[
+                    StyleNames.Normal]!;
+
+            normalStyle.Font.Name =
+                "Arial";
+
+            Section section =
+                document.AddSection();
+
+            section.AddParagraph(
+                "Accessibility audit test document.");
+
+            var renderer =
+                new PdfDocumentRenderer
+                {
+                    Document = document
+                };
+
+            renderer.RenderDocument();
+
+            using var stream =
+                new MemoryStream();
+
+            renderer.PdfDocument.Save(
+                stream,
+                closeStream: false);
+
+            await File.WriteAllBytesAsync(
+                testPdfPath,
+                stream.ToArray(),
+                cancellationToken);
+        }
+
+        if (!File.Exists(testPngPath))
+        {
+            /*
+             * Valid one-pixel PNG for image-only upload fields.
+             */
+            byte[] pngBytes =
+                Convert.FromBase64String(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB" +
+                    "CAQAAAC1HAwCAAAAC0lEQVR42mP8/x8A" +
+                    "AusB9Wl1x0sAAAAASUVORK5CYII=");
+
+            await File.WriteAllBytesAsync(
+                testPngPath,
+                pngBytes,
+                cancellationToken);
+        }
+
+        for (
+            int index = 0;
+            index < fileInputCount;
+            index++)
+        {
+            cancellationToken
+                .ThrowIfCancellationRequested();
+
+            ILocator fileInput =
+                fileInputs.Nth(index);
+
+            if (await fileInput.IsDisabledAsync())
+            {
+                continue;
+            }
+
+            int selectedFileCount =
+                await fileInput.EvaluateAsync<int>(
+                    """
+                element =>
+                    element.files?.length ?? 0
+                """);
+
+            if (selectedFileCount > 0)
+            {
+                continue;
+            }
+
+            string accept =
+                (
+                    await fileInput.GetAttributeAsync(
+                        "accept") ??
+                    string.Empty
+                )
+                    .ToLowerInvariant();
+
+            bool unrestricted =
+                string.IsNullOrWhiteSpace(accept) ||
+                accept.Contains("*/*") ||
+                accept.Contains("application/*");
+
+            bool acceptsPdf =
+                unrestricted ||
+                accept.Contains(".pdf") ||
+                accept.Contains(
+                    "application/pdf");
+
+            bool acceptsPng =
+                unrestricted ||
+                accept.Contains(".png") ||
+                accept.Contains("image/png") ||
+                accept.Contains("image/*");
+
+            string? selectedTestFile =
+                acceptsPdf
+                    ? testPdfPath
+                    : acceptsPng
+                        ? testPngPath
+                        : null;
+
+            /*
+             * Do not force an unsupported extension into a
+             * restricted upload control.
+             */
+            if (selectedTestFile is null)
+            {
+                continue;
+            }
+
+            /*
+             * Playwright assigns the file directly. Windows
+             * File Explorer does not open.
+             */
+            await fileInput.SetInputFilesAsync(
+                selectedTestFile);
+        }
     }
 
     private static async Task<string>
