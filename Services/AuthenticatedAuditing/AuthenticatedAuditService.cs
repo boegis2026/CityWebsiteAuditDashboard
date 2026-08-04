@@ -2756,9 +2756,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             const possibleActions =
                 Array.from(
                     document.querySelectorAll(
-                        "button, input[type='button'], " +
-                        "input[type='submit'], a[href], " +
-                        "[role='button']"))
+                        "button, " +
+                        "input[type='button'], " +
+                        "input[type='submit'], " +
+                        "a, " +
+                        "[role='button'], " +
+                        "[role='link'], " +
+                        "[onclick]"))
                     .filter(isVisibleAndEnabled);
 
             const getWorkflowHub = () => {
@@ -2786,7 +2790,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             const findNearestStatusContainer =
                 action => {
                     let current =
-                        action.parentElement;
+                        action;
 
                     for (
                         let depth = 0;
@@ -2926,7 +2930,6 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
              * form controls strongly indicate a workflow hub.
              */
             const isHub =
-                visibleFormControls.length === 0 &&
                 rows.length >= 2;
 
             const candidates =
@@ -3023,42 +3026,6 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         document.querySelectorAll("tr"))
                         .map(findClaimsRefundHubAction)
                         .filter(action => action !== null)
-                    : [];
-
-                        /*
-                        * Include required and optional sections.
-                        * Completed rows will no longer match.
-                        */
-                        if (
-                            !/\b(not completed|optional)\b/i.test(
-                                rowText)) {
-                            return null;
-                        }
-
-                        const actions =
-                            Array.from(
-                                row.querySelectorAll(
-                                    "a[href], " +
-                                    "button, " +
-                                    "input[type='button'], " +
-                                    "input[type='submit'], " +
-                                    "[role='button']"))
-                                .filter(
-                                    isVisibleAndEnabled);
-
-                        return actions.find(
-                            action => {
-                                const text =
-                                    getActionText(action);
-
-                                return text &&
-                                    !/\b(submit|logout)\b/i.test(
-                                        text);
-                            }) ?? null;
-                    })
-                    .filter(
-                        action =>
-                            action !== null)
                     : [];
 
             const safeNextPattern =
@@ -3340,39 +3307,6 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         normalizeText(
                             document.body?.innerText));
 
-                const uploadAction =
-                    isRPermitPage
-                        ? Array.from(
-                            document.querySelectorAll(
-                                "button, " +
-                                "input[type='button'], " +
-                                "input[type='submit'], " +
-                                "a[href], " +
-                                "[role='button']"))
-                            .filter(isVisibleAndEnabled)
-                            .find(element =>
-                                /\bupload\b/i.test(
-                                    getActionText(element)))
-                        : null;
-
-                if (uploadAction) {
-                    uploadAction.setAttribute(
-                        markerAttribute,
-                        "true");
-
-                    return {
-                        Found: true,
-                        ActionText:
-                            getActionText(uploadAction) ||
-                            "Upload",
-                        Selector:
-                            `[${markerAttribute}="true"]`,
-                        CandidateCount: 1,
-                        RequiresManualInteraction: false,
-                        StopReason: null
-                    };
-                }             
-
                 if (isClaimsRefundHub) {
                     const hubCandidates =
                         Array.from(
@@ -3557,8 +3491,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             "button, " +
                             "input[type='button'], " +
                             "input[type='submit'], " +
-                            "a[href], " +
-                            "[role='button']"))
+                            "a, " +
+                            "[role='button'], " +
+                            "[role='link'], " +
+                            "[onclick]"))
                         .filter(isVisibleAndEnabled);
 
                 const getWorkflowHub = () => {
@@ -3583,7 +3519,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 const findNearestStatusContainer =
                     action => {
                         let current =
-                            action.parentElement;
+                            action;
 
                         for (
                             let depth = 0;
@@ -3729,7 +3665,6 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
 
                 return {
                     IsHub:
-                        visibleFormControlCount === 0 &&
                         rows.length >= 2,
 
                     Candidates:
