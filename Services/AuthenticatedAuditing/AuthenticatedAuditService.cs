@@ -2766,186 +2766,418 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     .filter(isVisibleAndEnabled);
 
             const getWorkflowHub = () => {
-            const unfinishedPattern =
-                /\b(not completed|incomplete|not started|pending|optional|required|needs attention)\b/i;
+                /*
+                * Workflow hubs often display the section action and its
+                * status in separate columns. Detect rows by their visual
+                * alignment instead of requiring a shared DOM container.
+                */
+            const statusPattern =
+                /^(not completed|incomplete|not started|pending|optional|required|needs attention|completed|complete|done|n\/a|not applicable)$/i;
+
+            const progressStatusPattern =
+                /^(not completed|incomplete|not started|pending|needs attention|completed|complete|done)$/i;
 
             const notCompletedPattern =
-                /\b(not completed|incomplete|not started|pending|needs attention)\b/i;
+                /^(not completed|incomplete|not started|pending|needs attention)$/i;
 
             const optionalPattern =
-                /\boptional\b/i;
+                /^optional$/i;
 
             const requiredPattern =
-                /\brequired\b/i;
+                /^required$/i;
 
             const completedPattern =
-                /\b(completed|complete|done)\b/i;
+                /^(completed|complete|done)$/i;
 
             const excludedPattern =
-                /\b(n\/a|not applicable)\b/i;
+                /^(n\/a|not applicable)$/i;
 
-            const unsafePattern =
+            const hubUnsafePattern =
                 /\b(submit|finalize|certify|pay|payment|purchase|checkout|place order|logout|sign out)\b/i;
 
-            const findNearestStatusContainer =
-                action => {
-                    let current =
-                        action;
+            const visibleElements =
+                Array.from(
+                    document.querySelectorAll(
+                        "body *"))
+                    .filter(isVisibleAndEnabled);
 
-                    for (
-                        let depth = 0;
-                        current && depth < 7;
-                        depth++) {
-
-                        if (
-                            current === document.body ||
-                            current ===
-                                document.documentElement) {
-                            break;
-                        }
-
+            /*
+             * Prefer the deepest element that contains each status.
+             * This avoids counting the same status again through all
+             * of its parent containers.
+             */
+            const rawStatusItems =
+                visibleElements
+                    .map(element => {
                         const text =
                             normalizeText(
-                                current.innerText);
+                                element.innerText);
 
-                        if (
-                            text.length > 0 &&
-                            text.length <= 1000 &&
+                        const rectangle =
+                            element.getBoundingClientRect();
+
+                        return {
+                            Element: element,
+                            Text: text,
+                            Rectangle: rectangle,
+                            Area:
+                                rectangle.width *
+                                rectangle.height
+                        };
+                    })
+                    .filter(item =>
+                        item.Text.length > 0 &&
+                        item.Text.length <= 80 &&
+                        statusPattern.test(
+                            item.Text))
+                    .sort((left, right) =>
+                        left.Area - right.Area);
+
+            const statusItems = [];
+
+            for (const item of rawStatusItems) {
+                const centerY =
+                    (
+                        item.Rectangle.top +
+                        item.Rectangle.bottom
+                    ) / 2;
+
+                const duplicate =
+                    statusItems.some(existing => {
+                        const existingCenterY =
                             (
-                                unfinishedPattern.test(text) ||
-                                completedPattern.test(text) ||
-                                excludedPattern.test(text)
-                            )) {
-                            return current;
-                        }
+                                existing.Rectangle.top +
+                                existing.Rectangle.bottom
+                            ) / 2;
 
-                        current =
-                            current.parentElement;
-                    }
+                        return (
+                            existing.Text
+                                .toLowerCase() ===
+                            item.Text
+                                .toLowerCase()
+                        ) &&
+                            Math.abs(
+                                existingCenterY -
+                                centerY) < 4;
+                    });
 
-                    return null;
-                };
-
-            const groupedCandidates =
-                new Map();
-
-            for (const action of possibleActions) {
-                const container =
-                    findNearestStatusContainer(
-                        action);
-
-                if (!container) {
-                    continue;
-                }
-
-                const containerText =
-                    normalizeText(
-                        container.innerText);
-
-                const actionText =
-                    normalizeText(
-                        getActionText(action));
-
-                const isNotCompleted =
-                    notCompletedPattern.test(
-                        containerText);
-
-                const isOptional =
-                    optionalPattern.test(
-                        containerText);
-
-                const isRequired =
-                    requiredPattern.test(
-                        containerText);
-
-                const isCompletedOnly =
-                    completedPattern.test(
-                        containerText) &&
-                    !isNotCompleted;
-
-                const isExcluded =
-                    excludedPattern.test(
-                        containerText);
-
-                const isUnsafe =
-                    unsafePattern.test(
-                        actionText) ||
-                    /\bsubmit application\b/i.test(
-                        containerText);
-
-                let score = 0;
-
-                if (actionText.length > 0) {
-                    score += 3;
-                }
-
-                if (
-                    action instanceof
-                        HTMLAnchorElement) {
-                    score += 2;
-                }
-
-                if (
-                    action instanceof
-                        HTMLButtonElement) {
-                    score += 1;
-                }
-
-                const existing =
-                    groupedCandidates.get(
-                        container);
-
-                if (
-                    !existing ||
-                    score > existing.Score) {
-                    groupedCandidates.set(
-                        container,
-                        {
-                            Element: action,
-                            ContainerText:
-                                containerText,
-                            IsNotCompleted:
-                                isNotCompleted,
-                            IsOptional:
-                                isOptional,
-                            IsRequired:
-                                isRequired,
-                            IsCompletedOnly:
-                                isCompletedOnly,
-                            IsExcluded:
-                                isExcluded,
-                            IsUnsafe:
-                                isUnsafe,
-                            Score: score
-                        });
+                if (!duplicate) {
+                    statusItems.push(item);
                 }
             }
 
             const rows =
-                Array.from(
-                    groupedCandidates.values());
+                statusItems
+                    .map(statusItem => {
+                        const statusRectangle =
+                            statusItem.Rectangle;
+
+                        const statusCenterY =
+                            (
+                                statusRectangle.top +
+                                statusRectangle.bottom
+                            ) / 2;
+
+                        const possibleRowActions =
+                            visibleElements
+                                .map(element => {
+                                    if (
+                                        element ===
+                                        statusItem.Element) {
+                                        return null;
+                                    }
+
+                                    const rectangle =
+                                        element
+                                            .getBoundingClientRect();
+
+                                    const centerY =
+                                        (
+                                            rectangle.top +
+                                            rectangle.bottom
+                                        ) / 2;
+
+                                    const verticallyAligned =
+                                        rectangle.bottom >=
+                                            statusRectangle.top - 8 &&
+                                        rectangle.top <=
+                                            statusRectangle.bottom + 8 &&
+                                        Math.abs(
+                                            centerY -
+                                            statusCenterY) <=
+                                            Math.max(
+                                                30,
+                                                statusRectangle.height *
+                                                    1.5);
+
+                                    const appearsBeforeStatus =
+                                        rectangle.left <
+                                            statusRectangle.left - 4;
+
+                                    if (
+                                        !verticallyAligned ||
+                                        !appearsBeforeStatus) {
+                                        return null;
+                                    }
+
+                                    const actionText =
+                                        normalizeText(
+                                            getActionText(
+                                                element) ||
+                                            element.getAttribute(
+                                                "alt") ||
+                                            element.innerText);
+
+                                    if (
+                                        actionText &&
+                                        (
+                                            statusPattern.test(
+                                                actionText) ||
+                                            hubUnsafePattern.test(
+                                                actionText)
+                                        )) {
+                                        return null;
+                                    }
+
+                                    const tagName =
+                                        element.tagName
+                                            .toLowerCase();
+
+                                    const inputType =
+                                        element instanceof
+                                            HTMLInputElement
+                                            ? (
+                                                element.type || ""
+                                            ).toLowerCase()
+                                            : "";
+
+                                    const role =
+                                        (
+                                            element.getAttribute(
+                                                "role") || ""
+                                        ).toLowerCase();
+
+                                    const cursor =
+                                        window
+                                            .getComputedStyle(
+                                                element)
+                                            .cursor;
+
+                                    const isAnchor =
+                                        tagName === "a";
+
+                                    const isButton =
+                                        tagName === "button";
+
+                                    const isActionInput =
+                                        tagName === "input" &&
+                                        (
+                                            inputType === "button" ||
+                                            inputType === "submit" ||
+                                            inputType === "image"
+                                        );
+
+                                    const hasActionRole =
+                                        role === "button" ||
+                                        role === "link";
+
+                                    const hasClickAttribute =
+                                        element.hasAttribute(
+                                            "onclick");
+
+                                    const hasPointerCursor =
+                                        cursor === "pointer";
+
+                                    const isKeyboardAction =
+                                        element.tabIndex >= 0;
+
+                                    const isMeaningfulLeafText =
+                                        element.children.length === 0 &&
+                                        actionText.length >= 2 &&
+                                        actionText.length <= 160;
+
+                                    const isPossibleAction =
+                                        isAnchor ||
+                                        isButton ||
+                                        isActionInput ||
+                                        hasActionRole ||
+                                        hasClickAttribute ||
+                                        hasPointerCursor ||
+                                        isKeyboardAction ||
+                                        isMeaningfulLeafText;
+
+                                    if (!isPossibleAction) {
+                                        return null;
+                                    }
+
+                                    let score = 0;
+
+                                    if (isAnchor) {
+                                        score += 400;
+                                    }
+
+                                    if (isButton) {
+                                        score += 390;
+                                    }
+
+                                    if (isActionInput) {
+                                        score += 380;
+                                    }
+
+                                    if (hasActionRole) {
+                                        score += 350;
+                                    }
+
+                                    if (hasClickAttribute) {
+                                        score += 330;
+                                    }
+
+                                    if (hasPointerCursor) {
+                                        score += 300;
+                                    }
+
+                                    if (isKeyboardAction) {
+                                        score += 280;
+                                    }
+
+                                    if (isMeaningfulLeafText) {
+                                        score += 150;
+                                    }
+
+                                    if (actionText.length > 0) {
+                                        score += 30;
+                                    }
+
+                                    /*
+                                     * Prefer elements centered on the same
+                                     * visual row as the status.
+                                     */
+                                    score -=
+                                        Math.min(
+                                            100,
+                                            Math.abs(
+                                                centerY -
+                                                statusCenterY) * 4);
+
+                                    /*
+                                     * Prefer the section label over a distant
+                                     * decorative element when both are usable.
+                                     */
+                                    const horizontalGap =
+                                        Math.max(
+                                            0,
+                                            statusRectangle.left -
+                                            rectangle.right);
+
+                                    score -=
+                                        Math.min(
+                                            60,
+                                            horizontalGap / 15);
+
+                                    return {
+                                        Element: element,
+                                        ActionText:
+                                            actionText,
+                                        Score: score
+                                    };
+                                })
+                                .filter(candidate =>
+                                    candidate !== null)
+                                .sort((left, right) =>
+                                    right.Score -
+                                    left.Score);
+
+                        const selectedAction =
+                            possibleRowActions[0];
+
+                        if (!selectedAction) {
+                            return null;
+                        }
+
+                        const statusText =
+                            statusItem.Text;
+
+                        const actionLabel =
+                            selectedAction.ActionText ||
+                            "Workflow section";
+
+                        const isNotCompleted =
+                            notCompletedPattern.test(
+                                statusText);
+
+                        const isOptional =
+                            optionalPattern.test(
+                                statusText);
+
+                        const isRequired =
+                            requiredPattern.test(
+                                statusText);
+
+                        const isCompletedOnly =
+                            completedPattern.test(
+                                statusText) &&
+                            !isNotCompleted;
+
+                        const isExcluded =
+                            excludedPattern.test(
+                                statusText);
+
+                        return {
+                            Element:
+                                selectedAction.Element,
+
+                            ContainerText:
+                                `${actionLabel} ${statusText}`,
+
+                            IsNotCompleted:
+                                isNotCompleted,
+
+                            IsOptional:
+                                isOptional,
+
+                            IsRequired:
+                                isRequired,
+
+                            IsCompletedOnly:
+                                isCompletedOnly,
+
+                            IsExcluded:
+                                isExcluded,
+
+                            IsUnsafe: false,
+
+                            Score:
+                                selectedAction.Score
+                        };
+                    })
+                    .filter(row =>
+                        row !== null);
 
             /*
-             * Multiple status-based sections and no visible
-             * form controls strongly indicate a workflow hub.
+             * Requiring an actual progress state prevents ordinary
+             * forms with several "Required" labels from being mistaken
+             * for workflow hubs.
              */
-            const isHub =
-                rows.length >= 2;
-
-            const candidates =
-                rows.filter(candidate =>
-                    !candidate.IsCompletedOnly &&
-                    !candidate.IsExcluded &&
-                    !candidate.IsUnsafe &&
-                    (
-                        candidate.IsNotCompleted ||
-                        candidate.IsOptional ||
-                        candidate.IsRequired
-                    ));
+            const hasProgressStatus =
+                statusItems.some(item =>
+                    progressStatusPattern.test(
+                        item.Text));
 
             return {
-                IsHub: isHub,
-                Candidates: candidates
+                IsHub:
+                    rows.length >= 2 &&
+                    hasProgressStatus,
+
+                Candidates:
+                    rows.filter(candidate =>
+                        !candidate.IsCompletedOnly &&
+                        !candidate.IsExcluded &&
+                        !candidate.IsUnsafe &&
+                        (
+                            candidate.IsNotCompleted ||
+                            candidate.IsOptional ||
+                            candidate.IsRequired
+                        ))
             };
             };
 
@@ -3498,174 +3730,407 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         .filter(isVisibleAndEnabled);
 
                 const getWorkflowHub = () => {
-                const unfinishedPattern =
-                    /\b(not completed|incomplete|not started|pending|optional|required|needs attention)\b/i;
+                    /*
+                    * Workflow hubs often display the section action and its
+                    * status in separate columns. Detect rows by their visual
+                    * alignment instead of requiring a shared DOM container.
+                    */
+                const statusPattern =
+                    /^(not completed|incomplete|not started|pending|optional|required|needs attention|completed|complete|done|n\/a|not applicable)$/i;
+
+                const progressStatusPattern =
+                    /^(not completed|incomplete|not started|pending|needs attention|completed|complete|done)$/i;
 
                 const notCompletedPattern =
-                    /\b(not completed|incomplete|not started|pending|needs attention)\b/i;
+                    /^(not completed|incomplete|not started|pending|needs attention)$/i;
 
                 const optionalPattern =
-                    /\boptional\b/i;
+                    /^optional$/i;
 
                 const requiredPattern =
-                    /\brequired\b/i;
+                    /^required$/i;
 
                 const completedPattern =
-                    /\b(completed|complete|done)\b/i;
+                    /^(completed|complete|done)$/i;
 
                 const excludedPattern =
-                    /\b(n\/a|not applicable)\b/i;
+                    /^(n\/a|not applicable)$/i;
 
-                const findNearestStatusContainer =
-                    action => {
-                        let current =
-                            action;
+                const hubUnsafePattern =
+                    /\b(submit|finalize|certify|pay|payment|purchase|checkout|place order|logout|sign out)\b/i;
 
-                        for (
-                            let depth = 0;
-                            current && depth < 7;
-                            depth++) {
+                const visibleElements =
+                    Array.from(
+                        document.querySelectorAll(
+                            "body *"))
+                        .filter(isVisibleAndEnabled);
 
-                            if (
-                                current === document.body ||
-                                current ===
-                                    document.documentElement) {
-                                break;
-                            }
-
+                /*
+                 * Prefer the deepest element that contains each status.
+                 * This avoids counting the same status again through all
+                 * of its parent containers.
+                 */
+                const rawStatusItems =
+                    visibleElements
+                        .map(element => {
                             const text =
                                 normalizeText(
-                                    current.innerText);
+                                    element.innerText);
 
-                            if (
-                                text.length > 0 &&
-                                text.length <= 1000 &&
+                            const rectangle =
+                                element.getBoundingClientRect();
+
+                            return {
+                                Element: element,
+                                Text: text,
+                                Rectangle: rectangle,
+                                Area:
+                                    rectangle.width *
+                                    rectangle.height
+                            };
+                        })
+                        .filter(item =>
+                            item.Text.length > 0 &&
+                            item.Text.length <= 80 &&
+                            statusPattern.test(
+                                item.Text))
+                        .sort((left, right) =>
+                            left.Area - right.Area);
+
+                const statusItems = [];
+
+                for (const item of rawStatusItems) {
+                    const centerY =
+                        (
+                            item.Rectangle.top +
+                            item.Rectangle.bottom
+                        ) / 2;
+
+                    const duplicate =
+                        statusItems.some(existing => {
+                            const existingCenterY =
                                 (
-                                    unfinishedPattern.test(text) ||
-                                    completedPattern.test(text) ||
-                                    excludedPattern.test(text)
-                                )) {
-                                return current;
-                            }
+                                    existing.Rectangle.top +
+                                    existing.Rectangle.bottom
+                                ) / 2;
 
-                            current =
-                                current.parentElement;
-                        }
+                            return (
+                                existing.Text
+                                    .toLowerCase() ===
+                                item.Text
+                                    .toLowerCase()
+                            ) &&
+                                Math.abs(
+                                    existingCenterY -
+                                    centerY) < 4;
+                        });
 
-                        return null;
-                    };
-
-                const groupedCandidates =
-                    new Map();
-
-                for (const action of actions) {
-                    const container =
-                        findNearestStatusContainer(
-                            action);
-
-                    if (!container) {
-                        continue;
-                    }
-
-                    const containerText =
-                        normalizeText(
-                            container.innerText);
-
-                    const actionText =
-                        normalizeText(
-                            getActionText(action));
-
-                    const isNotCompleted =
-                        notCompletedPattern.test(
-                            containerText);
-
-                    const isOptional =
-                        optionalPattern.test(
-                            containerText);
-
-                    const isRequired =
-                        requiredPattern.test(
-                            containerText);
-
-                    const isCompletedOnly =
-                        completedPattern.test(
-                            containerText) &&
-                        !isNotCompleted;
-
-                    const isExcluded =
-                        excludedPattern.test(
-                            containerText);
-
-                    const isUnsafe =
-                        unsafePattern.test(
-                            actionText) ||
-                        /\bsubmit application\b/i.test(
-                            containerText);
-
-                    let score = 0;
-
-                    if (actionText.length > 0) {
-                        score += 3;
-                    }
-
-                    if (
-                        action instanceof
-                            HTMLAnchorElement) {
-                        score += 2;
-                    }
-
-                    if (
-                        action instanceof
-                            HTMLButtonElement) {
-                        score += 1;
-                    }
-
-                    const existing =
-                        groupedCandidates.get(
-                            container);
-
-                    if (
-                        !existing ||
-                        score > existing.Score) {
-                        groupedCandidates.set(
-                            container,
-                            {
-                                Element: action,
-                                ContainerText:
-                                    containerText,
-                                IsNotCompleted:
-                                    isNotCompleted,
-                                IsOptional:
-                                    isOptional,
-                                IsRequired:
-                                    isRequired,
-                                IsCompletedOnly:
-                                    isCompletedOnly,
-                                IsExcluded:
-                                    isExcluded,
-                                IsUnsafe:
-                                    isUnsafe,
-                                Score: score
-                            });
+                    if (!duplicate) {
+                        statusItems.push(item);
                     }
                 }
 
                 const rows =
-                    Array.from(
-                        groupedCandidates.values());
+                    statusItems
+                        .map(statusItem => {
+                            const statusRectangle =
+                                statusItem.Rectangle;
 
-                const visibleFormControlCount =
-                    Array.from(
-                        document.querySelectorAll(
-                            "input:not([type='hidden']), " +
-                            "select, textarea"))
-                        .filter(
-                            isVisibleAndEnabled)
-                        .length;
+                            const statusCenterY =
+                                (
+                                    statusRectangle.top +
+                                    statusRectangle.bottom
+                                ) / 2;
+
+                            const possibleRowActions =
+                                visibleElements
+                                    .map(element => {
+                                        if (
+                                            element ===
+                                            statusItem.Element) {
+                                            return null;
+                                        }
+
+                                        const rectangle =
+                                            element
+                                                .getBoundingClientRect();
+
+                                        const centerY =
+                                            (
+                                                rectangle.top +
+                                                rectangle.bottom
+                                            ) / 2;
+
+                                        const verticallyAligned =
+                                            rectangle.bottom >=
+                                                statusRectangle.top - 8 &&
+                                            rectangle.top <=
+                                                statusRectangle.bottom + 8 &&
+                                            Math.abs(
+                                                centerY -
+                                                statusCenterY) <=
+                                                Math.max(
+                                                    30,
+                                                    statusRectangle.height *
+                                                        1.5);
+
+                                        const appearsBeforeStatus =
+                                            rectangle.left <
+                                                statusRectangle.left - 4;
+
+                                        if (
+                                            !verticallyAligned ||
+                                            !appearsBeforeStatus) {
+                                            return null;
+                                        }
+
+                                        const actionText =
+                                            normalizeText(
+                                                getActionText(
+                                                    element) ||
+                                                element.getAttribute(
+                                                    "alt") ||
+                                                element.innerText);
+
+                                        if (
+                                            actionText &&
+                                            (
+                                                statusPattern.test(
+                                                    actionText) ||
+                                                hubUnsafePattern.test(
+                                                    actionText)
+                                            )) {
+                                            return null;
+                                        }
+
+                                        const tagName =
+                                            element.tagName
+                                                .toLowerCase();
+
+                                        const inputType =
+                                            element instanceof
+                                                HTMLInputElement
+                                                ? (
+                                                    element.type || ""
+                                                ).toLowerCase()
+                                                : "";
+
+                                        const role =
+                                            (
+                                                element.getAttribute(
+                                                    "role") || ""
+                                            ).toLowerCase();
+
+                                        const cursor =
+                                            window
+                                                .getComputedStyle(
+                                                    element)
+                                                .cursor;
+
+                                        const isAnchor =
+                                            tagName === "a";
+
+                                        const isButton =
+                                            tagName === "button";
+
+                                        const isActionInput =
+                                            tagName === "input" &&
+                                            (
+                                                inputType === "button" ||
+                                                inputType === "submit" ||
+                                                inputType === "image"
+                                            );
+
+                                        const hasActionRole =
+                                            role === "button" ||
+                                            role === "link";
+
+                                        const hasClickAttribute =
+                                            element.hasAttribute(
+                                                "onclick");
+
+                                        const hasPointerCursor =
+                                            cursor === "pointer";
+
+                                        const isKeyboardAction =
+                                            element.tabIndex >= 0;
+
+                                        const isMeaningfulLeafText =
+                                            element.children.length === 0 &&
+                                            actionText.length >= 2 &&
+                                            actionText.length <= 160;
+
+                                        const isPossibleAction =
+                                            isAnchor ||
+                                            isButton ||
+                                            isActionInput ||
+                                            hasActionRole ||
+                                            hasClickAttribute ||
+                                            hasPointerCursor ||
+                                            isKeyboardAction ||
+                                            isMeaningfulLeafText;
+
+                                        if (!isPossibleAction) {
+                                            return null;
+                                        }
+
+                                        let score = 0;
+
+                                        if (isAnchor) {
+                                            score += 400;
+                                        }
+
+                                        if (isButton) {
+                                            score += 390;
+                                        }
+
+                                        if (isActionInput) {
+                                            score += 380;
+                                        }
+
+                                        if (hasActionRole) {
+                                            score += 350;
+                                        }
+
+                                        if (hasClickAttribute) {
+                                            score += 330;
+                                        }
+
+                                        if (hasPointerCursor) {
+                                            score += 300;
+                                        }
+
+                                        if (isKeyboardAction) {
+                                            score += 280;
+                                        }
+
+                                        if (isMeaningfulLeafText) {
+                                            score += 150;
+                                        }
+
+                                        if (actionText.length > 0) {
+                                            score += 30;
+                                        }
+
+                                        /*
+                                         * Prefer elements centered on the same
+                                         * visual row as the status.
+                                         */
+                                        score -=
+                                            Math.min(
+                                                100,
+                                                Math.abs(
+                                                    centerY -
+                                                    statusCenterY) * 4);
+
+                                        /*
+                                         * Prefer the section label over a distant
+                                         * decorative element when both are usable.
+                                         */
+                                        const horizontalGap =
+                                            Math.max(
+                                                0,
+                                                statusRectangle.left -
+                                                rectangle.right);
+
+                                        score -=
+                                            Math.min(
+                                                60,
+                                                horizontalGap / 15);
+
+                                        return {
+                                            Element: element,
+                                            ActionText:
+                                                actionText,
+                                            Score: score
+                                        };
+                                    })
+                                    .filter(candidate =>
+                                        candidate !== null)
+                                    .sort((left, right) =>
+                                        right.Score -
+                                        left.Score);
+
+                            const selectedAction =
+                                possibleRowActions[0];
+
+                            if (!selectedAction) {
+                                return null;
+                            }
+
+                            const statusText =
+                                statusItem.Text;
+
+                            const actionLabel =
+                                selectedAction.ActionText ||
+                                "Workflow section";
+
+                            const isNotCompleted =
+                                notCompletedPattern.test(
+                                    statusText);
+
+                            const isOptional =
+                                optionalPattern.test(
+                                    statusText);
+
+                            const isRequired =
+                                requiredPattern.test(
+                                    statusText);
+
+                            const isCompletedOnly =
+                                completedPattern.test(
+                                    statusText) &&
+                                !isNotCompleted;
+
+                            const isExcluded =
+                                excludedPattern.test(
+                                    statusText);
+
+                            return {
+                                Element:
+                                    selectedAction.Element,
+
+                                ContainerText:
+                                    `${actionLabel} ${statusText}`,
+
+                                IsNotCompleted:
+                                    isNotCompleted,
+
+                                IsOptional:
+                                    isOptional,
+
+                                IsRequired:
+                                    isRequired,
+
+                                IsCompletedOnly:
+                                    isCompletedOnly,
+
+                                IsExcluded:
+                                    isExcluded,
+
+                                IsUnsafe: false,
+
+                                Score:
+                                    selectedAction.Score
+                            };
+                        })
+                        .filter(row =>
+                            row !== null);
+
+                /*
+                 * Requiring an actual progress state prevents ordinary
+                 * forms with several "Required" labels from being mistaken
+                 * for workflow hubs.
+                 */
+                const hasProgressStatus =
+                    statusItems.some(item =>
+                        progressStatusPattern.test(
+                            item.Text));
 
                 return {
                     IsHub:
-                        rows.length >= 2,
+                        rows.length >= 2 &&
+                        hasProgressStatus,
 
                     Candidates:
                         rows.filter(candidate =>
@@ -3870,9 +4335,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
     GetAutomaticNavigationStateSignatureAsync(IPage page)
     {
         /*
-         * Creates a lightweight description of the rendered state.
-         * It lets automatic navigation detect a new step even when the
-         * application's URL does not change.
+         * Creates a stable description of the rendered state.
+         *
+         * Workflow status text is included so returning to a hub after
+         * completing a section is recognized as a new state.
          */
         return await page.EvaluateAsync<string>(
             """
@@ -3882,12 +4348,31 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     .replace(/\s+/g, " ")
                     .trim();
 
+            const isVisible = element => {
+                if (!(element instanceof HTMLElement)) {
+                    return false;
+                }
+
+                const style =
+                    window.getComputedStyle(element);
+
+                const rectangle =
+                    element.getBoundingClientRect();
+
+                return style.display !== "none" &&
+                    style.visibility !== "hidden" &&
+                    rectangle.width > 0 &&
+                    rectangle.height > 0;
+            };
+
             const headings =
                 Array.from(
                     document.querySelectorAll(
                         "h1, h2, [role='heading']"))
+                    .filter(isVisible)
                     .map(element =>
-                        normalize(element.textContent))
+                        normalize(
+                            element.textContent))
                     .filter(Boolean)
                     .slice(0, 20);
 
@@ -3896,13 +4381,20 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     document.querySelectorAll(
                         "input:not([type='hidden']), " +
                         "select, textarea"))
+                    .filter(isVisible)
                     .map(element => ({
-                        id: element.id ?? "",
+                        id:
+                            element.id ?? "",
+
                         name:
-                            element.getAttribute("name") ?? "",
+                            element.getAttribute(
+                                "name") ?? "",
+
                         type:
-                            element.getAttribute("type") ??
+                            element.getAttribute(
+                                "type") ??
                             element.tagName,
+
                         label:
                             normalize(
                                 element.getAttribute(
@@ -3913,23 +4405,146 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             const actions =
                 Array.from(
                     document.querySelectorAll(
-                        "button, input[type='submit'], " +
-                        "input[type='button'], [role='button']"))
+                        "button, " +
+                        "input[type='submit'], " +
+                        "input[type='button'], " +
+                        "a[href], " +
+                        "[role='button'], " +
+                        "[role='link']"))
+                    .filter(isVisible)
                     .map(element =>
                         normalize(
                             element.innerText ||
                             element.textContent ||
-                            element.getAttribute("value") ||
-                            element.getAttribute("aria-label")))
+                            element.getAttribute(
+                                "value") ||
+                            element.getAttribute(
+                                "aria-label")))
                     .filter(Boolean)
-                    .slice(0, 50);
+                    .slice(0, 100);
+
+            /*
+             * Read workflow statuses directly from text nodes.
+             * This supports tables, cards, columns and custom layouts
+             * without depending on a specific website's HTML.
+             */
+            const statusPattern =
+                /^(not completed|incomplete|not started|pending|optional|required|needs attention|completed(?:\s+on\b.*)?|complete|done|n\/a|not applicable)$/i;
+
+            const canonicalizeStatus =
+                text => {
+                    if (
+                        /^not completed\b/i.test(
+                            text)) {
+                        return "not completed";
+                    }
+
+                    if (
+                        /^incomplete\b/i.test(
+                            text)) {
+                        return "incomplete";
+                    }
+
+                    if (
+                        /^not started\b/i.test(
+                            text)) {
+                        return "not started";
+                    }
+
+                    if (
+                        /^pending\b/i.test(
+                            text)) {
+                        return "pending";
+                    }
+
+                    if (
+                        /^optional\b/i.test(
+                            text)) {
+                        return "optional";
+                    }
+
+                    if (
+                        /^required\b/i.test(
+                            text)) {
+                        return "required";
+                    }
+
+                    if (
+                        /^needs attention\b/i.test(
+                            text)) {
+                        return "needs attention";
+                    }
+
+                    if (
+                        /^(completed|complete|done)\b/i.test(
+                            text)) {
+                        return "completed";
+                    }
+
+                    if (
+                        /^(n\/a|not applicable)\b/i.test(
+                            text)) {
+                        return "not applicable";
+                    }
+
+                    return text.toLowerCase();
+                };
+
+            const workflowStatuses = [];
+
+            if (document.body) {
+                const walker =
+                    document.createTreeWalker(
+                        document.body,
+                        NodeFilter.SHOW_TEXT);
+
+                while (walker.nextNode()) {
+                    const textNode =
+                        walker.currentNode;
+
+                    const parent =
+                        textNode.parentElement;
+
+                    if (
+                        !parent ||
+                        !isVisible(parent)) {
+                        continue;
+                    }
+
+                    const text =
+                        normalize(
+                            textNode.nodeValue);
+
+                    if (
+                        !text ||
+                        text.length > 200 ||
+                        !statusPattern.test(text)) {
+                        continue;
+                    }
+
+                    workflowStatuses.push(
+                        canonicalizeStatus(text));
+                }
+            }
 
             return JSON.stringify({
-                url: window.location.href,
-                title: document.title,
-                headings,
-                fields,
-                actions
+                url:
+                    window.location.href,
+
+                title:
+                    document.title,
+
+                headings:
+                    headings,
+
+                fields:
+                    fields,
+
+                actions:
+                    actions,
+
+                workflowStatuses:
+                    workflowStatuses
             });
         }
         """);
