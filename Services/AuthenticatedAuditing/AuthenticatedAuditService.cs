@@ -769,6 +769,57 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 1,
                 25);
 
+        /*
+        * Optional workflow sections often continue displaying
+        * "Optional" after they are visited. Their visited state is
+        * tracked in sessionStorage during one automatic run.
+        *
+        * Clear that tracking before a new run so an earlier stopped
+        * or failed run cannot cause optional sections to be skipped.
+        */
+        await session.OperationLock.WaitAsync(
+            workflowCancellationToken);
+
+        try
+        {
+            IPage initialPage =
+                SelectPageForAudit(session);
+
+            session.ActivePage =
+                initialPage;
+
+            await initialPage.EvaluateAsync(
+                """
+        () => {
+            const visitedPrefix =
+                "city-audit-hub-visited:";
+
+            for (
+                let index =
+                    sessionStorage.length - 1;
+                index >= 0;
+                index--) {
+
+                const key =
+                    sessionStorage.key(index);
+
+                if (
+                    key &&
+                    key.startsWith(
+                        visitedPrefix)) {
+
+                    sessionStorage.removeItem(
+                        key);
+                }
+            }
+        }
+        """);
+        }
+        finally
+        {
+            session.OperationLock.Release();
+        }
+
         var cycles =
             new List<AuthenticatedAuditAutomaticCycleResult>();
 
@@ -2775,10 +2826,50 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         "[onclick]"))
                     .filter(isVisibleAndEnabled);
 
+            const isRepeatedDecisionWord = (
+                element,
+                expectedWord) => {
+
+            const words =
+                normalizeText(
+                    getActionText(element))
+                    .toLowerCase()
+                    .split(/\s+/)
+                    .filter(Boolean);
+
+                /*
+                * Handles duplicated accessible text such as
+                * "Yes Yes" or "No No".
+                */
+                return words.length > 0 &&
+                words.every(word =>
+                    word === expectedWord);
+            };
+
+            const yesDecisionAction =
+                possibleActions.find(element =>
+                isRepeatedDecisionWord(
+                    element,
+                    "yes"));
+
+            const noDecisionAction =
+                possibleActions.find(element =>
+                isRepeatedDecisionWord(
+                    element,
+                    "no"));
+
+            const hasBinaryDecision =
+                yesDecisionAction !== undefined &&
+            noDecisionAction !== undefined;
+
+            const fileWorkflowActionPattern =
+                /\b(upload(?:\s+file)?|add\s+attachment|attach\s+file|add\s+file)\b/i;
+
             const uploadActions =
                 possibleActions.filter(element =>
-                    /\bupload(?:\s+file)?\b/i.test(
-                        getActionText(element)));
+                    fileWorkflowActionPattern.test(
+                        normalizeText(
+                            getActionText(element))));
 
             const getWorkflowHub = () => {
                 /*
@@ -2787,10 +2878,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 * alignment instead of requiring a shared DOM container.
                 */
             const statusPattern =
-                /^(not completed|incomplete|not started|pending|optional|required|needs attention|completed|complete|done|n\/a|not applicable)$/i;
+                /^(not completed|incomplete|not started|pending|optional|required|needs attention|completed(?:\s+on\b.*)?|complete|done|n\/a|not applicable)$/i;
 
             const progressStatusPattern =
-                /^(not completed|incomplete|not started|pending|needs attention|completed|complete|done)$/i;
+                /^(not completed|incomplete|not started|pending|needs attention|completed(?:\s+on\b.*)?|complete|done)$/i;
+
+            const completedPattern =
+                /^(completed(?:\s+on\b.*)?|complete|done)$/i;
 
             const notCompletedPattern =
                 /^(not completed|incomplete|not started|pending|needs attention)$/i;
@@ -2800,9 +2894,6 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
 
             const requiredPattern =
                 /^required$/i;
-
-            const completedPattern =
-                /^(completed|complete|done)$/i;
 
             const excludedPattern =
                 /^(n\/a|not applicable)$/i;
@@ -3202,6 +3293,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             const hasWorkflowControls =
             visibleFormControls.length > 0 ||
             requiredFields.length > 0 ||
+            hasBinaryDecision ||
             uploadActions.length > 0 ||
             workflowHub.IsHub ||
             isClaimsRefundHub;
@@ -3340,6 +3432,15 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             candidate.Element);
                 }
             }
+
+            else if (hasBinaryDecision) {
+                /*
+                * Prefer No as the conservative automatic choice.
+                */
+                candidateNextActions =
+                    [noDecisionAction];
+            }
+
             else if (uploadActions.length > 0) {
             candidateNextActions =
                 uploadActions;
@@ -3625,61 +3726,6 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     }
                 }
 
-                const finalActionPattern =
-                    /\b(submit|finalize|certify|pay|payment|purchase|checkout|place order|complete application|finish application)\b/i;
-
-                const finalAction =
-                    Array.from(
-                        document.querySelectorAll(
-                            [
-                                "button",
-                                "input[type='submit']",
-                                "input[type='button']",
-                                "[role='button']"
-                            ].join(",")
-                        )
-                    )
-                    .find(element => {
-                        if (!isFinalActionVisible(element)) {
-                            return false;
-                        }
-
-                        const actionText =
-                            (
-                                element.textContent ||
-                                element.value ||
-                                element.getAttribute("aria-label") ||
-                                ""
-                            )
-                                .replace(/\s+/g, " ")
-                                .trim();
-
-                        return finalActionPattern.test(
-                            actionText);
-                    });
-
-                if (finalAction) {
-                    const finalActionText =
-                        (
-                            finalAction.textContent ||
-                            finalAction.value ||
-                            finalAction.getAttribute("aria-label") ||
-                            "Final action"
-                        )
-                            .replace(/\s+/g, " ")
-                            .trim();
-
-                    return {
-                        Found: false,
-                        ActionText: finalActionText,
-                        Selector: null,
-                        CandidateCount: 0,
-                        RequiresManualInteraction: true,
-                        StopReason:
-                            `The workflow reached the final "${finalActionText}" page. Submission was left for manual review.`
-                    };
-                }
-
                 function getActionText(element) {
                     return [
                         element.innerText,
@@ -3713,6 +3759,85 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             "[onclick]"))
                         .filter(isVisibleAndEnabled);
 
+                const isRepeatedDecisionWord = (
+                    element,
+                expectedWord) => {
+
+                    const words =
+                        normalizeText(
+                        getActionText(element))
+                        .toLowerCase()
+                        .split(/\s+/)
+                        .filter(Boolean);
+
+                    return words.length > 0 &&
+                        words.every(word =>
+                        word === expectedWord);
+                };
+
+                const yesDecisionAction =
+                    actions.find(element =>
+                    isRepeatedDecisionWord(
+                        element,
+                        "yes"));
+
+                const noDecisionAction =
+                    actions.find(element =>
+                    isRepeatedDecisionWord(
+                        element,
+                        "no"));
+
+                if (
+                    yesDecisionAction &&
+                noDecisionAction) {
+
+                /*
+                 * Find the smallest shared container so safety checks
+                 * use the question surrounding these two buttons.
+                 */
+                    let decisionContainer =
+                        noDecisionAction;
+
+                    while (
+                        decisionContainer &&
+                    !decisionContainer.contains(
+                        yesDecisionAction)) {
+
+                    decisionContainer =
+                        decisionContainer.parentElement;
+                    }
+
+                    const decisionContext =
+                        normalizeText(
+                        decisionContainer?.innerText);
+
+                    const unsafeDecisionPattern =
+                        /\b(certify|attest|authorize|consent|agree|terms(?: and conditions)?|signature|payment|purchase|checkout|submit|finalize|pay)\b/i;
+
+                    /*
+                    * Do not automatically answer legal, financial,
+                    * consent, certification, or submission questions.
+                    */
+                    if (
+                        !unsafeDecisionPattern.test(
+                        decisionContext)) {
+
+                        noDecisionAction.setAttribute(
+                        markerAttribute,
+                        "true");
+
+                        return {
+                            Found: true,
+                        ActionText: "No",
+                        Selector:
+                            `[${markerAttribute}="true"]`,
+                            CandidateCount: 2,
+                            RequiresManualInteraction: false,
+                            StopReason: null
+                        };
+                    }
+                }
+
                 const fileInputs =
                     Array.from(
                     document.querySelectorAll(
@@ -3723,70 +3848,157 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     input.files &&
                     input.files.length > 0);
 
+               const fileWorkflowActionPattern =
+                /\b(upload(?:\s+file)?|add\s+attachment|attach\s+file|add\s+file)\b/i;
+
                 const uploadCandidates =
                     actions.filter(element => {
+                        const text =
+                            normalizeText(
+                                getActionText(element));
+
+                        return fileWorkflowActionPattern.test(
+                            text) &&
+                            !unsafePattern.test(text);
+                    });
+
+                const uploadFileAction =
+                    uploadCandidates.find(element => {
                     const text =
                         normalizeText(
                             getActionText(element));
 
-                    return /\bupload(?:\s+file)?\b/i.test(
-                        text) &&
-                        !unsafePattern.test(text);
-                    });
-
-                const uploadFileAction =
-                    uploadCandidates.find(element =>
-                    /\bupload\s+file\b/i.test(
-                        normalizeText(
-                            getActionText(element)))) ??
+                    /*
+                     * This also matches duplicated text such as
+                     * "UPLOAD FILE UPLOAD FILE".
+                     */
+                    return /\bupload\s+file\b/i.test(
+                        text);
+                    }) ??
                     null;
 
                 const outerUploadAction =
-                    uploadCandidates.find(element =>
-                    /^upload$/i.test(
-                        normalizeText(
-                            getActionText(element)))) ??
+                    uploadCandidates.find(element => {
+                        const text =
+                            normalizeText(
+                                getActionText(element));
+
+                        /*
+                        * Opens the file workflow, but does not select
+                        * the modal's final Upload File button.
+                        */
+                        return (
+                            /\b(add\s+attachment|attach\s+file|add\s+file|upload)\b/i.test(
+                                text) &&
+                            !/\bupload\s+file\b/i.test(
+                                text)
+                        );
+                    }) ??
                     null;
 
-                let uploadAction = null;
+                const uploadStateKey =
+                    "city-audit-upload-return-pending";
+
+                const uploadReturnPath =
+                    sessionStorage.getItem(
+                    uploadStateKey);
+
+                const uploadWasSubmitted =
+                    uploadReturnPath !== null;
 
                 /*
-                * A selected file means the modal's Upload File
-                * button must take priority.
+                * If the upload automatically navigated somewhere else,
+                * clear the pending return instead of clicking an unrelated
+                * Back button on a different workflow page.
+                */
+                if (
+                    uploadWasSubmitted &&
+                    uploadReturnPath !==
+                        window.location.pathname) {
+
+                    sessionStorage.removeItem(
+                        uploadStateKey);
+                }
+
+                const backAction =
+                    actions.find(element => {
+                    const text =
+                        normalizeText(
+                            getActionText(element));
+
+                    return /\b(back|return)\b/i.test(
+                        text) &&
+                        !unsafePattern.test(text);
+                    }) ??
+                    null;
+
+                let selectedUploadAction = null;
+
+                /*
+                * The test file has been assigned. Click the modal's
+                * Upload File button and remember that the upload
+                * action was attempted on this page.
                 */
                 if (
                     hasSelectedFile &&
                 uploadFileAction) {
 
-                uploadAction =
+                sessionStorage.setItem(
+                    uploadStateKey,
+                    window.location.pathname);
+
+                selectedUploadAction =
                     uploadFileAction;
                 }
                 /*
-                * No modal Upload File button is visible yet,
-                * so click the outer Upload button.
+                * Upload File was clicked and the modal is now gone.
+                * Return to the workflow hub so the next unfinished
+                * or optional section can be processed.
+                */
+                else if (
+                    uploadWasSubmitted &&
+                    uploadReturnPath ===
+                        window.location.pathname &&
+                    !uploadFileAction &&
+                    backAction) {
+
+                sessionStorage.removeItem(
+                    uploadStateKey);
+
+                selectedUploadAction =
+                    backAction;
+                }
+                /*
+                * The upload modal has not opened yet.
                 */
                 else if (
                     !uploadFileAction &&
                 outerUploadAction) {
 
-                uploadAction =
+                selectedUploadAction =
                     outerUploadAction;
                 }
 
-                if (uploadAction) {
-                    uploadAction.setAttribute(
+                if (selectedUploadAction) {
+                    selectedUploadAction.setAttribute(
                     markerAttribute,
                     "true");
 
                     return {
                         Found: true,
                     ActionText:
-                        getActionText(uploadAction) ||
-                        "Upload",
+                        getActionText(
+                            selectedUploadAction) ||
+                        "Upload workflow action",
                     Selector:
                         `[${markerAttribute}="true"]`,
                     CandidateCount:
-                        uploadCandidates.length,
+                        uploadCandidates.length +
+                        (
+                            backAction
+                                ? 1
+                                : 0
+                        ),
                     RequiresManualInteraction:
                         false,
                     StopReason: null
@@ -3800,10 +4012,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     * alignment instead of requiring a shared DOM container.
                     */
                 const statusPattern =
-                    /^(not completed|incomplete|not started|pending|optional|required|needs attention|completed|complete|done|n\/a|not applicable)$/i;
+                    /^(not completed|incomplete|not started|pending|optional|required|needs attention|completed(?:\s+on\b.*)?|complete|done|n\/a|not applicable)$/i;
 
                 const progressStatusPattern =
-                    /^(not completed|incomplete|not started|pending|needs attention|completed|complete|done)$/i;
+                    /^(not completed|incomplete|not started|pending|needs attention|completed(?:\s+on\b.*)?|complete|done)$/i;
+
+                const completedPattern =
+                    /^(completed(?:\s+on\b.*)?|complete|done)$/i;
 
                 const notCompletedPattern =
                     /^(not completed|incomplete|not started|pending|needs attention)$/i;
@@ -3813,9 +4028,6 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
 
                 const requiredPattern =
                     /^required$/i;
-
-                const completedPattern =
-                    /^(completed|complete|done)$/i;
 
                 const excludedPattern =
                     /^(n\/a|not applicable)$/i;
@@ -4206,13 +4418,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                 candidate.IsOptional ||
                                 candidate.IsRequired
                             ))
+                    };
                 };
-            };
 
-            const workflowHub =
-                getWorkflowHub();
+                const workflowHub =
+                    getWorkflowHub();
 
-            if (workflowHub.IsHub) {
+                if (workflowHub.IsHub) {
                 /*
                  * A visible Start or Begin button takes priority
                  * over the individual section links.
@@ -4324,8 +4536,63 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         RequiresManualInteraction:
                             false,
                         StopReason: null
-                    };
+                        };
+                    }
                 }
+
+                const finalActionPattern =
+                    /\b(submit|finalize|certify|pay|payment|purchase|checkout|place order|complete application|finish application)\b/i;
+            
+                const finalAction =
+                    Array.from(
+                        document.querySelectorAll(
+                            [
+                                "button",
+                                "input[type='submit']",
+                                "input[type='button']",
+                                "[role='button']"
+                            ].join(",")
+                        )
+                    )
+                    .find(element => {
+                        if (!isFinalActionVisible(element)) {
+                            return false;
+                        }
+            
+                        const actionText =
+                            (
+                                element.textContent ||
+                                element.value ||
+                                element.getAttribute("aria-label") ||
+                                ""
+                            )
+                                .replace(/\s+/g, " ")
+                                .trim();
+            
+                        return finalActionPattern.test(
+                            actionText);
+                    });
+            
+                if (finalAction) {
+                    const finalActionText =
+                        (
+                            finalAction.textContent ||
+                            finalAction.value ||
+                            finalAction.getAttribute("aria-label") ||
+                            "Final action"
+                        )
+                            .replace(/\s+/g, " ")
+                            .trim();
+            
+                    return {
+                        Found: false,
+                        ActionText: finalActionText,
+                        Selector: null,
+                        CandidateCount: 0,
+                        RequiresManualInteraction: true,
+                        StopReason:
+                            `The workflow reached the final "${finalActionText}" page. Submission was left for manual review.`
+                    };
                 }
                 
                 const unsafeVisibleAction =
@@ -4970,7 +5237,6 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 visibleElements(
                     document.querySelectorAll(
                     "input[type='password'], " +
-                    "input[type='file'], " +
                     "input[name*='routing' i], " +
                     "input[name*='bankaccount' i], " +
                     "input[name*='socialsecurity' i], " +
@@ -4986,7 +5252,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         unsafeControls.length,
                     RequiresManualInteraction: true,
                     StopReason:
-                        "A password, file upload, banking, sensitive-information, or signature field was detected.",
+                        "A password, banking, sensitive-information, or signature field was detected.",
                     FilledFieldDescriptions: [],
                     SkippedFieldDescriptions:
                         unsafeControls.map(
@@ -5266,7 +5532,8 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     "button",
                     "submit",
                     "reset",
-                    "image"
+                    "image",
+                    "file"
                 ].includes(type)) {
                     continue;
                 }
