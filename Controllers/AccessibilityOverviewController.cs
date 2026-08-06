@@ -178,10 +178,40 @@ public sealed class AccessibilityOverviewController : Controller
             BuildIssueBreakdown(filteredFindings);
 
         List<AuthenticatedRunSnapshot>
-            latestAuthenticatedRunsForRanking =
-                SelectAuthenticatedRuns(
-                    authenticatedRuns,
-                    latestOnly: true);
+            comparisonAuthenticatedRuns =
+                SelectLatestAndPreviousAuthenticatedRuns(
+                authenticatedRuns);
+
+        List<int> comparisonRunIds =
+            comparisonAuthenticatedRuns
+                .Select(run => run.Id)
+                .ToList();
+
+        List<AuthenticatedStepSnapshot>
+            comparisonAuthenticatedSteps =
+                await LoadAuthenticatedStepsAsync(
+                    comparisonRunIds,
+                    cancellationToken);
+
+        List<int> successfulComparisonStepIds =
+            comparisonAuthenticatedSteps
+                .Where(step => step.ScanSucceeded)
+                .Select(step => step.Id)
+                .ToList();
+
+        List<AuthenticatedFindingSnapshot>
+            comparisonAuthenticatedFindings =
+                await LoadAuthenticatedFindingsAsync(
+                    successfulComparisonStepIds,
+                    cancellationToken);
+
+        List<AuthenticatedFindingSnapshot>
+            filteredComparisonFindings =
+                ApplyFindingFilters(
+                    comparisonAuthenticatedFindings,
+                    normalizedSeverity,
+                    normalizedWcagLevel,
+                    normalizedFindingType);
 
         List<PublicScanSnapshot>
             latestPublicScansForRanking =
@@ -192,14 +222,28 @@ public sealed class AccessibilityOverviewController : Controller
         List<AccessibilityApplicationRankingViewModel>
             applicationRankings =
                 BuildApplicationRankings(
-                    latestAuthenticatedRunsForRanking,
-                    authenticatedSteps,
-                    filteredFindings);
+                    comparisonAuthenticatedRuns,
+                    comparisonAuthenticatedSteps,
+                    filteredComparisonFindings);
 
         List<AccessibilityPublicPageRankingViewModel>
             publicPageRankings =
                 BuildPublicPageRankings(
                     latestPublicScansForRanking);
+
+        List<AccessibilityTopFindingViewModel>
+            topFindings =
+                BuildTopFindings(
+                    selectedAuthenticatedRuns,
+                    successfulAuthenticatedSteps,
+                    filteredFindings);
+
+        List<AccessibilityTrendPointViewModel>
+            trendPoints =
+                BuildTrendPoints(
+                    successfulAuthenticatedSteps,
+                    filteredFindings,
+                    selectedPublicScans);
 
         AccessibilityOverviewViewModel model =
             new()
@@ -248,7 +292,13 @@ public sealed class AccessibilityOverviewController : Controller
                     applicationRankings,
 
                 PublicPages =
-                    publicPageRankings
+                    publicPageRankings,
+
+                TopFindings =
+                    topFindings,
+
+                Trends =
+                    trendPoints
             };
 
         return View(model);
@@ -377,11 +427,23 @@ public sealed class AccessibilityOverviewController : Controller
                     FindingType =
                         finding.FindingType,
 
+                    RuleId =
+                        finding.RuleId,
+
                     Impact =
                         finding.Impact,
 
                     WcagLevel =
                         finding.WcagLevel,
+
+                    Help =
+                        finding.Help,
+
+                    Description =
+                        finding.Description,
+
+                    HelpUrl =
+                        finding.HelpUrl,
 
                     AffectedElementCount =
                         finding.AffectedElementCount
@@ -485,6 +547,25 @@ public sealed class AccessibilityOverviewController : Controller
                     .First())
             .OrderByDescending(run => run.StartedAt)
             .ThenBy(run => run.ApplicationName)
+            .ToList();
+    }
+
+    private static List<AuthenticatedRunSnapshot>
+    SelectLatestAndPreviousAuthenticatedRuns(
+        IReadOnlyCollection<AuthenticatedRunSnapshot> runs)
+    {
+        return runs
+            .GroupBy(
+                run => run.ApplicationName.Trim(),
+                StringComparer.OrdinalIgnoreCase)
+            .SelectMany(group =>
+                group
+                    .OrderByDescending(run => run.StartedAt)
+                    .ThenByDescending(run => run.Id)
+                    .Take(2))
+            .OrderBy(run => run.ApplicationName)
+            .ThenByDescending(run => run.StartedAt)
+            .ThenByDescending(run => run.Id)
             .ToList();
     }
 
@@ -593,85 +674,142 @@ public sealed class AccessibilityOverviewController : Controller
         List<AccessibilityApplicationRankingViewModel> rankings =
             new();
 
-        foreach (AuthenticatedRunSnapshot run in runs)
+        IEnumerable<IGrouping<string, AuthenticatedRunSnapshot>>
+            applicationGroups =
+                runs.GroupBy(
+                    run => run.ApplicationName.Trim(),
+                    StringComparer.OrdinalIgnoreCase);
+
+        foreach (IGrouping<string, AuthenticatedRunSnapshot>
+            applicationGroup in applicationGroups)
         {
-            List<AuthenticatedStepSnapshot> runSteps =
+            List<AuthenticatedRunSnapshot> orderedRuns =
+                applicationGroup
+                    .OrderByDescending(run => run.StartedAt)
+                    .ThenByDescending(run => run.Id)
+                    .ToList();
+
+            AuthenticatedRunSnapshot latestRun =
+                orderedRuns[0];
+
+            AuthenticatedRunSnapshot? previousRun =
+                orderedRuns
+                    .Skip(1)
+                    .FirstOrDefault();
+
+            List<AuthenticatedStepSnapshot> latestRunSteps =
                 steps
                     .Where(step =>
                         step.AuthenticatedAuditRunId ==
-                        run.Id)
+                        latestRun.Id)
                     .ToList();
 
-            HashSet<int> runStepIds =
-                runSteps
+            HashSet<int> latestStepIds =
+                latestRunSteps
                     .Select(step => step.Id)
                     .ToHashSet();
 
-            List<AuthenticatedFindingSnapshot> runFindings =
+            List<AuthenticatedFindingSnapshot> latestRunFindings =
                 findings
                     .Where(finding =>
-                        runStepIds.Contains(
+                        latestStepIds.Contains(
                             finding.AuthenticatedAuditStepId))
                     .ToList();
 
-            List<AuthenticatedFindingSnapshot> violationFindings =
-                runFindings
-                    .Where(IsViolation)
-                    .ToList();
+            List<AuthenticatedFindingSnapshot>
+                latestViolationFindings =
+                    latestRunFindings
+                        .Where(IsViolation)
+                        .ToList();
+
+            int? previousFindingCount = null;
+            int? previousStateCount = null;
+
+            if (previousRun is not null)
+            {
+                List<AuthenticatedStepSnapshot> previousRunSteps =
+                    steps
+                        .Where(step =>
+                            step.AuthenticatedAuditRunId ==
+                            previousRun.Id)
+                        .ToList();
+
+                HashSet<int> previousStepIds =
+                    previousRunSteps
+                        .Select(step => step.Id)
+                        .ToHashSet();
+
+                previousFindingCount =
+                    findings.Count(finding =>
+                        previousStepIds.Contains(
+                            finding.AuthenticatedAuditStepId));
+
+                previousStateCount =
+                    previousRunSteps.Count;
+            }
 
             rankings.Add(
                 new AccessibilityApplicationRankingViewModel
                 {
                     ApplicationName =
-                        run.ApplicationName,
+                        latestRun.ApplicationName,
 
                     LatestRunId =
-                        run.Id,
+                        latestRun.Id,
 
                     StartingUrl =
-                        run.StartingUrl,
+                        latestRun.StartingUrl,
 
                     Status =
-                        run.Status,
+                        latestRun.Status,
 
                     LatestAuditDate =
-                        run.StartedAt,
+                        latestRun.StartedAt,
 
                     StateCount =
-                        runSteps.Count,
+                        latestRunSteps.Count,
 
                     SuccessfulStateCount =
-                        runSteps.Count(step =>
+                        latestRunSteps.Count(step =>
                             step.ScanSucceeded),
 
                     CriticalFindingCount =
-                        violationFindings.Count(finding =>
+                        latestViolationFindings.Count(finding =>
                             IsImpact(
                                 finding.Impact,
                                 "Critical")),
 
                     SeriousFindingCount =
-                        violationFindings.Count(finding =>
+                        latestViolationFindings.Count(finding =>
                             IsImpact(
                                 finding.Impact,
                                 "Serious")),
 
                     FixFirstFindingCount =
-                        runFindings.Count(IsFixFirst),
+                        latestRunFindings.Count(IsFixFirst),
 
                     NeedsReviewFindingCount =
-                        runFindings.Count(finding =>
+                        latestRunFindings.Count(finding =>
                             string.Equals(
                                 finding.FindingType,
                                 "NeedsReview",
                                 StringComparison.OrdinalIgnoreCase)),
 
                     AffectedElementCount =
-                        runFindings.Sum(finding =>
+                        latestRunFindings.Sum(finding =>
                             finding.AffectedElementCount),
 
                     TotalFindingCount =
-                        runFindings.Count
+                        latestRunFindings.Count,
+
+                    PreviousRunId =
+                        previousRun?.Id,
+
+                    PreviousFindingCount =
+                        previousFindingCount,
+
+                    PreviousStateCount =
+                        previousStateCount
                 });
         }
 
@@ -730,6 +868,267 @@ public sealed class AccessibilityOverviewController : Controller
                 page.Url)
             .Take(10)
             .ToList();
+    }
+
+    private static List<AccessibilityTopFindingViewModel>
+    BuildTopFindings(
+        IReadOnlyCollection<AuthenticatedRunSnapshot> runs,
+        IReadOnlyCollection<AuthenticatedStepSnapshot> steps,
+        IReadOnlyCollection<AuthenticatedFindingSnapshot> findings)
+    {
+        Dictionary<int, AuthenticatedRunSnapshot> runsById =
+            runs.ToDictionary(run => run.Id);
+
+        Dictionary<int, AuthenticatedStepSnapshot> stepsById =
+            steps.ToDictionary(step => step.Id);
+
+        IEnumerable<IGrouping<string, AuthenticatedFindingSnapshot>>
+            findingGroups =
+                findings
+                    .Where(finding =>
+                        !string.IsNullOrWhiteSpace(
+                            finding.RuleId))
+                    .GroupBy(finding =>
+                        string.Concat(
+                            finding.RuleId.Trim().ToLowerInvariant(),
+                            "|",
+                            finding.FindingType.Trim().ToLowerInvariant()));
+
+        List<(
+            AccessibilityTopFindingViewModel Finding,
+            int Priority)> rankedFindings =
+                new();
+
+        foreach (IGrouping<string, AuthenticatedFindingSnapshot>
+            findingGroup in findingGroups)
+        {
+            List<(
+                AuthenticatedFindingSnapshot Finding,
+                AuthenticatedRunSnapshot Run)> occurrences =
+                    new();
+
+            foreach (AuthenticatedFindingSnapshot finding
+                in findingGroup)
+            {
+                if (!stepsById.TryGetValue(
+                        finding.AuthenticatedAuditStepId,
+                        out AuthenticatedStepSnapshot? step))
+                {
+                    continue;
+                }
+
+                if (!runsById.TryGetValue(
+                        step.AuthenticatedAuditRunId,
+                        out AuthenticatedRunSnapshot? run))
+                {
+                    continue;
+                }
+
+                occurrences.Add((finding, run));
+            }
+
+            if (occurrences.Count == 0)
+            {
+                continue;
+            }
+
+            (
+                AuthenticatedFindingSnapshot Finding,
+                AuthenticatedRunSnapshot Run) displayOccurrence =
+                    occurrences
+                        .OrderBy(occurrence =>
+                            GetFindingPriorityRank(
+                                occurrence.Finding))
+                        .ThenByDescending(occurrence =>
+                            occurrence.Run.StartedAt)
+                        .ThenByDescending(occurrence =>
+                            occurrence.Run.Id)
+                        .First();
+
+            (
+                AuthenticatedFindingSnapshot Finding,
+                AuthenticatedRunSnapshot Run) latestOccurrence =
+                    occurrences
+                        .OrderByDescending(occurrence =>
+                            occurrence.Run.StartedAt)
+                        .ThenByDescending(occurrence =>
+                            occurrence.Run.Id)
+                        .First();
+
+            AccessibilityTopFindingViewModel topFinding =
+                new()
+                {
+                    RuleId =
+                        displayOccurrence.Finding.RuleId,
+
+                    FindingType =
+                        displayOccurrence.Finding.FindingType,
+
+                    Impact =
+                        displayOccurrence.Finding.Impact,
+
+                    WcagLevel =
+                        displayOccurrence.Finding.WcagLevel,
+
+                    Help =
+                        displayOccurrence.Finding.Help,
+
+                    Description =
+                        displayOccurrence.Finding.Description,
+
+                    HelpUrl =
+                        displayOccurrence.Finding.HelpUrl,
+
+                    ApplicationCount =
+                        occurrences
+                            .Select(occurrence =>
+                                occurrence.Run.ApplicationName.Trim())
+                            .Distinct(
+                                StringComparer.OrdinalIgnoreCase)
+                            .Count(),
+
+                    StateCount =
+                        occurrences
+                            .Select(occurrence =>
+                                occurrence.Finding
+                                    .AuthenticatedAuditStepId)
+                            .Distinct()
+                            .Count(),
+
+                    AffectedElementCount =
+                        occurrences.Sum(occurrence =>
+                            occurrence.Finding
+                                .AffectedElementCount),
+
+                    LatestRunId =
+                        latestOccurrence.Run.Id,
+
+                    LatestApplicationName =
+                        latestOccurrence.Run.ApplicationName
+                };
+
+            rankedFindings.Add(
+                (
+                    topFinding,
+                    GetFindingPriorityRank(
+                        displayOccurrence.Finding)
+                ));
+        }
+
+        return rankedFindings
+            .OrderBy(item =>
+                item.Priority)
+            .ThenByDescending(item =>
+                item.Finding.ApplicationCount)
+            .ThenByDescending(item =>
+                item.Finding.StateCount)
+            .ThenByDescending(item =>
+                item.Finding.AffectedElementCount)
+            .ThenBy(item =>
+                item.Finding.RuleId)
+            .Take(15)
+            .Select(item =>
+                item.Finding)
+            .ToList();
+    }
+
+    private static int GetFindingPriorityRank(
+        AuthenticatedFindingSnapshot finding)
+    {
+        int severityRank =
+            finding.Impact?.Trim().ToLowerInvariant() switch
+            {
+                "critical" => 0,
+                "serious" => 3,
+                "moderate" => 6,
+                "minor" => 9,
+                _ => 12
+            };
+
+        int wcagRank =
+            finding.WcagLevel?.Trim().ToUpperInvariant() switch
+            {
+                "A" => 1,
+                "AA" => 2,
+                _ => 3
+            };
+
+        return severityRank + wcagRank;
+    }
+
+    private static List<AccessibilityTrendPointViewModel>
+    BuildTrendPoints(
+        IReadOnlyCollection<AuthenticatedStepSnapshot> steps,
+        IReadOnlyCollection<AuthenticatedFindingSnapshot> findings,
+        IReadOnlyCollection<PublicScanSnapshot> publicScans)
+    {
+        Dictionary<int, DateTime> stepDatesById =
+            steps.ToDictionary(
+                step => step.Id,
+                step => step.ScannedAt.Date);
+
+        HashSet<DateTime> reportingDates =
+            steps
+                .Select(step => step.ScannedAt.Date)
+                .Concat(
+                    publicScans.Select(scan =>
+                        scan.EffectiveScanDate.Date))
+                .Distinct()
+                .ToHashSet();
+
+        List<AccessibilityTrendPointViewModel> trends =
+            new();
+
+        foreach (DateTime reportingDate
+            in reportingDates.OrderBy(date => date))
+        {
+            List<AuthenticatedFindingSnapshot> findingsForDate =
+                findings
+                    .Where(finding =>
+                        stepDatesById.TryGetValue(
+                            finding.AuthenticatedAuditStepId,
+                            out DateTime findingDate) &&
+                        findingDate == reportingDate)
+                    .ToList();
+
+            List<PublicScanSnapshot> publicScansForDate =
+                publicScans
+                    .Where(scan =>
+                        scan.EffectiveScanDate.Date ==
+                        reportingDate)
+                    .ToList();
+
+            trends.Add(
+                new AccessibilityTrendPointViewModel
+                {
+                    Date =
+                        reportingDate,
+
+                    AuthenticatedFindings =
+                        findingsForDate.Count(IsViolation),
+
+                    AuthenticatedStatesScanned =
+                        steps.Count(step =>
+                            step.ScannedAt.Date ==
+                            reportingDate),
+
+                    FixFirstFindings =
+                        findingsForDate.Count(IsFixFirst),
+
+                    PublicPagesScanned =
+                        publicScansForDate.Count,
+
+                    WaveErrorsAndContrastErrors =
+                        publicScansForDate
+                            .Where(scan =>
+                                scan.WaveScanSucceeded)
+                            .Sum(scan =>
+                                scan.WaveErrors +
+                                scan.WaveContrastErrors)
+                });
+        }
+
+        return trends;
     }
 
     private static AccessibilityOverviewSummaryViewModel
@@ -1263,9 +1662,18 @@ public sealed class AccessibilityOverviewController : Controller
         public string FindingType { get; init; }
             = string.Empty;
 
+        public string RuleId { get; init; }
+        = string.Empty;
+
         public string? Impact { get; init; }
 
         public string? WcagLevel { get; init; }
+
+        public string? Help { get; init; }
+
+        public string? Description { get; init; }
+
+        public string? HelpUrl { get; init; }
 
         public int AffectedElementCount { get; init; }
     }

@@ -861,6 +861,387 @@ else
         </div>
     </section>
 
+    <section aria-labelledby="top-findings-heading"
+             class="mb-4">
+        <div class="mb-3">
+            <h2 id="top-findings-heading"
+                class="h3 mb-1">
+                Top Authenticated Findings
+            </h2>
+
+            <p class="text-muted mb-0">
+                Repeated axe-core rules ranked by severity, WCAG level,
+                application coverage, and affected elements.
+            </p>
+        </div>
+
+        <article class="card shadow-sm">
+            <div class="card-body">
+                @if (Model.TopFindings.Count == 0)
+                {
+                    <p class="text-muted mb-0">
+                        No authenticated findings match the selected filters.
+                    </p>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-striped
+                            table-hover align-middle mb-0">
+                            <caption class="visually-hidden">
+                                Top authenticated accessibility findings
+                            </caption>
+
+                            <thead>
+                                <tr>
+                                    <th scope="col">
+                                        Finding
+                                    </th>
+
+                                    <th scope="col">
+                                        Type
+                                    </th>
+
+                                    <th scope="col">
+                                        Severity
+                                    </th>
+
+                                    <th scope="col">
+                                        WCAG
+                                    </th>
+
+                                    <th scope="col"
+                                        class="text-end">
+                                        Applications
+                                    </th>
+
+                                    <th scope="col"
+                                        class="text-end">
+                                        States
+                                    </th>
+
+                                    <th scope="col"
+                                        class="text-end">
+                                        Elements
+                                    </th>
+
+                                    <th scope="col">
+                                        Example
+                                    </th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                @foreach (var finding
+                                    in Model.TopFindings)
+                                {
+                                    <tr>
+                                        <th scope="row">
+                                            <div class="fw-semibold">
+                                                @(string.IsNullOrWhiteSpace(
+                                                    finding.Help)
+                                                    ? finding.RuleId
+                                                    : finding.Help)
+                                            </div>
+
+                                            <code>
+                                                @finding.RuleId
+                                            </code>
+
+                                            @if (!string.IsNullOrWhiteSpace(
+                                                finding.Description))
+                                            {
+                                                <div class="small text-muted
+                                                    mt-1">
+                                                    @finding.Description
+                                                </div>
+                                            }
+
+                                            @if (!string.IsNullOrWhiteSpace(
+                                                finding.HelpUrl))
+                                            {
+                                                <div class="mt-1">
+                                                    <a href="@finding.HelpUrl"
+                                                       target="_blank"
+                                                       rel="noopener noreferrer"
+                                                       class="small">
+                                                        Rule guidance
+                                                        <span class="visually-hidden">
+                                                            opens in a new tab
+                                                        </span>
+                                                    </a>
+                                                </div>
+                                            }
+                                        </th>
+
+                                        <td>
+                                            @if (string.Equals(
+                                                finding.FindingType,
+                                                "NeedsReview",
+                                                StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                <span class="badge
+                                                    text-bg-warning">
+                                                    Manual Review
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge
+                                                    text-bg-danger">
+                                                    Violation
+                                                </span>
+                                            }
+                                        </td>
+
+                                        <td>
+                                            @(string.IsNullOrWhiteSpace(
+                                                finding.Impact)
+                                                ? "Unknown"
+                                                : finding.Impact)
+                                        </td>
+
+                                        <td>
+                                            @(string.IsNullOrWhiteSpace(
+                                                finding.WcagLevel)
+                                                ? "Unmapped"
+                                                : finding.WcagLevel)
+                                        </td>
+
+                                        <td class="text-end fw-bold">
+                                            @finding.ApplicationCount
+                                        </td>
+
+                                        <td class="text-end">
+                                            @finding.StateCount
+                                        </td>
+
+                                        <td class="text-end">
+                                            @finding.AffectedElementCount
+                                        </td>
+
+                                        <td>
+                                            @if (finding.LatestRunId.HasValue)
+                                            {
+                                                <a asp-controller="AuthenticatedAudits"
+                                                   asp-action="Details"
+                                                   asp-route-id="@finding.LatestRunId"
+                                                   class="btn btn-sm
+                                                    btn-outline-primary">
+                                                    View Audit
+                                                    <span class="visually-hidden">
+                                                        for
+                                                        @finding.LatestApplicationName
+                                                    </span>
+                                                </a>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </article>
+    </section>
+
+    <section aria-labelledby="accessibility-trends-heading"
+             class="mb-4">
+        <div class="mb-3">
+            <h2 id="accessibility-trends-heading"
+                class="h3 mb-1">
+                Accessibility Activity Trends
+            </h2>
+
+            <p class="text-muted mb-0">
+                Daily automated test activity and detected finding totals for
+                the selected reporting scope.
+            </p>
+        </div>
+
+        <article class="card shadow-sm">
+            <div class="card-body">
+                @if (Model.Trends.Count == 0)
+                {
+                    <p class="text-muted mb-0">
+                        No trend data matches the selected filters.
+                    </p>
+                }
+                else
+                {
+                    <div id="accessibility-trend-data"
+                         class="d-none"
+                         data-labels="@System.Text.Json.JsonSerializer.Serialize(
+                                                  Model.Trends
+                                                      .Select(trend =>
+                                                          trend.Date.ToString("MMM d, yyyy"))
+                                                      .ToArray())"
+                         data-authenticated-states="@System.Text.Json.JsonSerializer.Serialize(
+                                                  Model.Trends
+                                                      .Select(trend =>
+                                                          trend.AuthenticatedStatesScanned)
+                                                      .ToArray())"
+                         data-authenticated-findings="@System.Text.Json.JsonSerializer.Serialize(
+                                                  Model.Trends
+                                                      .Select(trend =>
+                                                          trend.AuthenticatedFindings)
+                                                      .ToArray())"
+                         data-fix-first="@System.Text.Json.JsonSerializer.Serialize(
+                                                  Model.Trends
+                                                      .Select(trend =>
+                                                          trend.FixFirstFindings)
+                                                      .ToArray())"
+                         data-public-pages="@System.Text.Json.JsonSerializer.Serialize(
+                                                  Model.Trends
+                                                      .Select(trend =>
+                                                          trend.PublicPagesScanned)
+                                                      .ToArray())"
+                         data-wave-errors="@System.Text.Json.JsonSerializer.Serialize(
+                                                  Model.Trends
+                                                      .Select(trend =>
+                                                          trend.WaveErrorsAndContrastErrors)
+                                                      .ToArray())">
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-12 col-xl-6">
+                            <div class="border rounded p-3 h-100">
+                                <h3 class="h5">
+                                    Authenticated Audit Trends
+                                </h3>
+
+                                <p class="small text-muted">
+                                    Saved workflow-state activity and axe-core
+                                    findings by audit date.
+                                </p>
+
+                                <div class="accessibility-chart-container">
+                                    <canvas id="authenticatedAccessibilityTrendChart"
+                                            role="img"
+                                            aria-label="Line chart showing authenticated states scanned, violations, and Fix First findings by date. Complete values are available in the table below.">
+                                        Complete authenticated trend values are
+                                        available in the table below.
+                                    </canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-xl-6">
+                            <div class="border rounded p-3 h-100">
+                                <h3 class="h5">
+                                    Public WAVE Trends
+                                </h3>
+
+                                <p class="small text-muted">
+                                    Saved public page activity and WAVE error
+                                    totals by scan date.
+                                </p>
+
+                                <div class="accessibility-chart-container">
+                                    <canvas id="publicAccessibilityTrendChart"
+                                            role="img"
+                                            aria-label="Line chart showing public pages scanned and combined WAVE errors and contrast errors by date. Complete values are available in the table below.">
+                                        Complete public WAVE trend values are
+                                        available in the table below.
+                                    </canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p id="accessibility-chart-status"
+                       class="small text-muted"
+                       role="status"
+                       aria-live="polite">
+                    </p>
+
+                    <div class="table-responsive">
+                        <table class="table table-striped
+                            table-hover align-middle mb-0">
+                            <caption>
+                                Daily accessibility audit activity. This table
+                                provides the complete data represented by the
+                                visual trend charts.
+                            </caption>
+
+                            <thead>
+                                <tr>
+                                    <th scope="col">
+                                        Date
+                                    </th>
+
+                                    <th scope="col"
+                                        class="text-end">
+                                        Authenticated States
+                                    </th>
+
+                                    <th scope="col"
+                                        class="text-end">
+                                        Authenticated Violations
+                                    </th>
+
+                                    <th scope="col"
+                                        class="text-end">
+                                        Fix First
+                                    </th>
+
+                                    <th scope="col"
+                                        class="text-end">
+                                        Public Pages
+                                    </th>
+
+                                    <th scope="col"
+                                        class="text-end">
+                                        WAVE Errors and Contrast
+                                    </th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                @foreach (var trend in Model.Trends)
+                                {
+                                    <tr>
+                                        <th scope="row">
+                                            @trend.Date.ToString("MMM d, yyyy")
+                                        </th>
+
+                                        <td class="text-end">
+                                            @trend.AuthenticatedStatesScanned
+                                        </td>
+
+                                        <td class="text-end fw-bold">
+                                            @trend.AuthenticatedFindings
+                                        </td>
+
+                                        <td class="text-end fw-bold">
+                                            @trend.FixFirstFindings
+                                        </td>
+
+                                        <td class="text-end">
+                                            @trend.PublicPagesScanned
+                                        </td>
+
+                                        <td class="text-end fw-bold">
+                                            @trend.WaveErrorsAndContrastErrors
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+
+            <div class="card-footer bg-transparent">
+                <p class="small text-muted mb-0">
+                    Each date represents saved audit activity, not a continuous
+                    accessibility monitoring period.
+                </p>
+            </div>
+        </article>
+    </section>
+
     <section aria-labelledby="application-rankings-heading"
          class="mb-4">
     <div class="mb-3">
@@ -871,7 +1252,9 @@ else
 
         <p class="text-muted mb-0">
             Latest matching authenticated audit for each application,
-            ranked by higher-priority findings.
+            ranked by higher-priority findings. Detected Findings Change
+            compares the latest audit with the immediately previous matching
+            audit and is not a compliance score.
         </p>
     </div>
 
@@ -918,6 +1301,10 @@ else
                                 <th scope="col"
                                     class="text-end">
                                     Fix First
+                                </th>
+
+                                <th scope="col">
+                                    Detected Findings Change
                                 </th>
 
                                 <th scope="col"
@@ -972,6 +1359,56 @@ else
 
                                     <td class="text-end fw-bold">
                                         @application.FixFirstFindingCount
+                                    </td>
+
+                                    <td>
+                                        @if (!application.PreviousFindingCount.HasValue)
+                                        {
+                                            <span class="text-muted">
+                                                No prior audit
+                                            </span>
+                                        }
+                                        else if (application.CoverageChanged)
+                                        {
+                                        <span class="badge text-bg-warning">
+                                            Coverage changed
+                                        </span>
+
+                                        <div class="small text-muted mt-1">
+                                            @application.PreviousStateCount previous states;
+                                            @application.StateCount current states
+                                        </div>
+
+                                            @if (application.FindingCountChange.HasValue)
+                                            {
+                                                <div class="small mt-1">
+                                                    Raw finding change:
+                                                    @(application.FindingCountChange.Value > 0
+                                                        ? "+"
+                                                        : "")@application.FindingCountChange
+                                                </div>
+                                            }
+                                        }
+                                        else if (application.FindingCountChange > 0)
+                                        {
+                                            <span class="fw-semibold text-danger">
+                                                Increased by
+                                                @application.FindingCountChange
+                                            </span>
+                                        }
+                                        else if (application.FindingCountChange < 0)
+                                        {
+                                        <span class="fw-semibold text-success">
+                                            Improved by
+                                            @Math.Abs(application.FindingCountChange.Value)
+                                        </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">
+                                                No change
+                                            </span>
+                                        }
                                     </td>
 
                                     <td class="text-end">
@@ -1077,17 +1514,17 @@ else
                         </thead>
 
                         <tbody>
-                            @foreach (var page
+                            @foreach (var publicPage
                                 in Model.PublicPages)
                             {
                                 <tr>
                                     <th scope="row"
                                         class="text-break">
-                                        @page.Url
+                                            @publicPage.Url
                                     </th>
 
                                     <td>
-                                        @if (page.WaveScanSucceeded)
+                                        @if (publicPage.WaveScanSucceeded)
                                         {
                                             <span class="badge
                                                          text-bg-success">
@@ -1104,45 +1541,45 @@ else
                                     </td>
 
                                     <td class="text-end fw-bold">
-                                        @page.WaveErrors
+                                            @publicPage.WaveErrors
                                     </td>
 
                                     <td class="text-end fw-bold">
-                                        @page.WaveContrastErrors
+                                            @publicPage.WaveContrastErrors
                                     </td>
 
                                     <td class="text-end">
-                                        @page.WaveAlerts
+                                            @publicPage.WaveAlerts
                                     </td>
 
                                     <td>
-                                        @page.DateScanned
+                                            @publicPage.DateScanned
                                             .ToString("MMM d, yyyy")
                                     </td>
 
                                     <td>
                                         <a asp-controller="WebsiteScans"
                                            asp-action="Details"
-                                           asp-route-id="@page.WebsiteScanId"
+                                               asp-route-id="@publicPage.WebsiteScanId"
                                            class="btn btn-sm
                                                   btn-outline-primary">
                                             View Scan
                                             <span class="visually-hidden">
-                                                for @page.Url
+                                                    for @publicPage.Url
                                             </span>
                                         </a>
                                     </td>
                                 </tr>
 
-                                @if (!page.WaveScanSucceeded &&
+                                @if (!publicPage.WaveScanSucceeded &&
                                      !string.IsNullOrWhiteSpace(
-                                         page.WaveErrorMessage))
+                                         publicPage.WaveErrorMessage))
                                 {
                                     <tr>
                                         <td colspan="7"
                                             class="small text-danger">
                                             <strong>WAVE error:</strong>
-                                            @page.WaveErrorMessage
+                                            @publicPage.WaveErrorMessage
                                         </td>
                                     </tr>
                                 }
@@ -1155,4 +1592,17 @@ else
     </article>
 </section>
 
+}
+
+@section Scripts
+{
+    @if (Model.Trends.Count > 0)
+    {
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js">
+        </script>
+
+        <script src="~/js/accessibility-overview.js"
+                asp-append-version="true">
+        </script>
+    }
 }
