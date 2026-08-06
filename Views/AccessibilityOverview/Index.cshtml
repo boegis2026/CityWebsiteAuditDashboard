@@ -1,0 +1,1158 @@
+﻿@model CityWebsiteAuditDashboard.ViewModels.AccessibilityOverviewViewModel
+
+@{
+    ViewData["Title"] = "Accessibility Overview";
+}
+
+<div class="mb-4">
+    <h1 class="display-6 fw-bold">
+        Accessibility Overview
+    </h1>
+
+    <p class="lead mb-2">
+        Management-facing summary of saved public WAVE scans and
+        authenticated axe-core accessibility audits.
+    </p>
+
+    <div class="alert alert-info mb-0" role="note">
+        <strong>About these results:</strong>
+        Automated testing identifies accessibility issues that can be
+        detected by the configured testing tools. These results do not
+        guarantee complete ADA or WCAG compliance and do not replace
+        manual accessibility evaluation.
+    </div>
+</div>
+
+<section aria-labelledby="overview-filters-heading"
+         class="card shadow-sm mb-4">
+    <div class="card-body">
+        <h2 id="overview-filters-heading"
+            class="h4 mb-3">
+            Dashboard Filters
+        </h2>
+
+        <div asp-validation-summary="ModelOnly"
+             class="alert alert-danger"
+             role="alert">
+        </div>
+
+        <form method="get"
+              asp-controller="AccessibilityOverview"
+              asp-action="Index">
+            <div class="row g-3">
+                <div class="col-12 col-md-6 col-xl-3">
+                    <label for="applicationName"
+                           class="form-label">
+                        Application
+                    </label>
+
+                    <select id="applicationName"
+                            name="applicationName"
+                            class="form-select">
+                        <option value="">
+                            All applications
+                        </option>
+
+                        @foreach (string application
+                            in Model.ApplicationOptions)
+                        {
+                            if (string.Equals(
+                                Model.Filters.ApplicationName,
+                                application,
+                                StringComparison.OrdinalIgnoreCase))
+                            {
+                                <option value="@application" selected>
+                                    @application
+                                </option>
+                            }
+                            else
+                            {
+                                <option value="@application">
+                                    @application
+                                </option>
+                            }
+                        }
+                    </select>
+
+                    <div class="form-text">
+                        Application names are available for authenticated
+                        audits only.
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <label for="auditSource"
+                           class="form-label">
+                        Audit source
+                    </label>
+
+                    <select id="auditSource"
+                            name="auditSource"
+                            class="form-select">
+                        <option value="All"
+                                selected="@(Model.Filters.AuditSource == "All")">
+                            Public and authenticated
+                        </option>
+
+                        <option value="Public"
+                                selected="@(Model.Filters.AuditSource == "Public")">
+                            Public WAVE
+                        </option>
+
+                        <option value="Authenticated"
+                                selected="@(Model.Filters.AuditSource == "Authenticated")">
+                            Authenticated axe-core
+                        </option>
+                    </select>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <label for="startDate"
+                           class="form-label">
+                        Start date
+                    </label>
+
+                    <input id="startDate"
+                           name="startDate"
+                           type="date"
+                           class="form-control"
+                           value="@Model.Filters.StartDate?.ToString("yyyy-MM-dd")" />
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <label for="endDate"
+                           class="form-label">
+                        End date
+                    </label>
+
+                    <input id="endDate"
+                           name="endDate"
+                           type="date"
+                           class="form-control"
+                           value="@Model.Filters.EndDate?.ToString("yyyy-MM-dd")" />
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <label for="severity"
+                           class="form-label">
+                        Severity
+                    </label>
+
+                    <select id="severity"
+                            name="severity"
+                            class="form-select">
+                        <option value="">
+                            All severities
+                        </option>
+
+                        @foreach (string severityOption in new[]
+                        {
+                            "Critical",
+                            "Serious",
+                            "Moderate",
+                            "Minor",
+                            "Unknown"
+                        })
+                        {
+                            if (Model.Filters.Severity == severityOption)
+                            {
+                                <option value="@severityOption" selected>
+                                    @severityOption
+                                </option>
+                            }
+                            else
+                            {
+                                <option value="@severityOption">
+                                    @severityOption
+                                </option>
+                            }
+                        }
+                    </select>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <label for="wcagLevel"
+                           class="form-label">
+                        WCAG level
+                    </label>
+
+                    <select id="wcagLevel"
+                            name="wcagLevel"
+                            class="form-select">
+                        <option value="">
+                            All WCAG mappings
+                        </option>
+
+                        <option value="A"
+                                selected="@(Model.Filters.WcagLevel == "A")">
+                            Level A
+                        </option>
+
+                        <option value="AA"
+                                selected="@(Model.Filters.WcagLevel == "AA")">
+                            Level AA
+                        </option>
+
+                        <option value="Unmapped"
+                                selected="@(Model.Filters.WcagLevel == "Unmapped")">
+                            Best practice or unmapped
+                        </option>
+                    </select>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <label for="findingType"
+                           class="form-label">
+                        Finding type
+                    </label>
+
+                    <select id="findingType"
+                            name="findingType"
+                            class="form-select">
+                        <option value="">
+                            All finding types
+                        </option>
+
+                        <option value="Violation"
+                                selected="@(Model.Filters.FindingType == "Violation")">
+                            Violation
+                        </option>
+
+                        <option value="NeedsReview"
+                                selected="@(Model.Filters.FindingType == "NeedsReview")">
+                            Needs manual review
+                        </option>
+                    </select>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <label for="latestOnly"
+                           class="form-label">
+                        Audit history
+                    </label>
+
+                    <select id="latestOnly"
+                            name="latestOnly"
+                            class="form-select">
+                        <option value="true"
+                                selected="@Model.Filters.LatestOnly">
+                            Latest audit only
+                        </option>
+
+                        <option value="false"
+                                selected="@(!Model.Filters.LatestOnly)">
+                            All audit history
+                        </option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="d-flex flex-wrap gap-2 mt-4">
+                <button type="submit"
+                        class="btn btn-primary">
+                    Apply Filters
+                </button>
+
+                <a asp-controller="AccessibilityOverview"
+                   asp-action="Index"
+                   class="btn btn-outline-secondary">
+                    Clear Filters
+                </a>
+            </div>
+        </form>
+    </div>
+</section>
+
+@if (!Model.HasAnyData)
+{
+    <div class="card shadow-sm">
+        <div class="card-body text-center py-5">
+            <h2 class="h4">
+                No accessibility results found
+            </h2>
+
+            <p class="text-muted mb-0">
+                No saved public WAVE scans or successful authenticated
+                workflow-state scans match the selected filters.
+            </p>
+        </div>
+    </div>
+}
+else
+{
+    <section aria-labelledby="summary-cards-heading"
+             class="mb-4">
+        <div class="d-flex flex-wrap align-items-end
+            justify-content-between gap-2 mb-3">
+            <div>
+                <h2 id="summary-cards-heading"
+                    class="h3 mb-1">
+                    Accessibility Results Summary
+                </h2>
+
+                <p class="text-muted mb-0">
+                    Results reflect the currently selected filters and saved
+                    automated accessibility tests.
+                </p>
+            </div>
+
+            <span class="badge text-bg-light border fs-6">
+                @(Model.Filters.LatestOnly
+                    ? "Latest audits only"
+                    : "All audit history")
+            </span>
+        </div>
+
+        <section aria-labelledby="accessibility-health-heading"
+                 class="mb-4">
+            <div class="mb-3">
+                <h2 id="accessibility-health-heading"
+                    class="h3 mb-1">
+                    Automated Accessibility Health
+                </h2>
+
+                <p class="text-muted mb-0">
+                    Separate summaries are shown for authenticated axe-core results
+                    and public WAVE results.
+                </p>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-12 col-xl-6">
+                    <article class="card shadow-sm h-100">
+                        <div class="card-body">
+                            <h3 class="h4">
+                                Authenticated Automated Checks
+                            </h3>
+
+                            @if (Model.Health.HasAuthenticatedRuleData)
+                            {
+                                <p class="display-5 fw-bold mb-1">
+                                    @Model.Health.AutomatedCheckPassRate.ToString("0.0")%
+                                </p>
+
+                                <p class="text-muted">
+                                    Automated check pass rate
+                                </p>
+
+                                <dl class="mb-0">
+                                    <div class="d-flex justify-content-between
+                                        gap-3 border-bottom py-2">
+                                        <dt class="fw-normal">
+                                            Passed rule results
+                                        </dt>
+
+                                        <dd class="fw-bold mb-0">
+                                            @Model.Health.PassedRuleResults
+                                        </dd>
+                                    </div>
+
+                                    <div class="d-flex justify-content-between
+                                        gap-3 border-bottom py-2">
+                                        <dt class="fw-normal">
+                                            Violation rule results
+                                        </dt>
+
+                                        <dd class="fw-bold mb-0">
+                                            @Model.Health.ViolationRuleResults
+                                        </dd>
+                                    </div>
+
+                                    <div class="d-flex justify-content-between
+                                        gap-3 border-bottom py-2">
+                                        <dt class="fw-normal">
+                                            Needs manual review
+                                        </dt>
+
+                                        <dd class="fw-bold mb-0">
+                                            @Model.Health.NeedsReviewRuleResults
+                                        </dd>
+                                    </div>
+
+                                    <div class="d-flex justify-content-between
+                                        gap-3 pt-2">
+                                        <dt>
+                                            Total automated rule results
+                                        </dt>
+
+                                        <dd class="fw-bold mb-0">
+                                            @Model.Health.TotalRuleResults
+                                        </dd>
+                                    </div>
+                                </dl>
+                            }
+                            else
+                            {
+                                <p class="text-muted mb-0">
+                                    No authenticated automated rule results match the
+                                    selected filters.
+                                </p>
+                            }
+                        </div>
+
+                        <div class="card-footer bg-transparent">
+                            <p class="small text-muted mb-0">
+                                This percentage is an automated test result, not an ADA
+                                or WCAG compliance score.
+                            </p>
+                        </div>
+                    </article>
+                </div>
+
+                <div class="col-12 col-xl-6">
+                    <article class="card shadow-sm h-100">
+                        <div class="card-body">
+                            <h3 class="h4">
+                                Public WAVE Results
+                            </h3>
+
+                            @if (Model.Health.HasWaveData)
+                            {
+                                <p class="display-5 fw-bold mb-1">
+                                    @Model.Health.SuccessfulWaveScans
+                                </p>
+
+                                <p class="text-muted">
+                                    Successful public WAVE scans
+                                </p>
+
+                                <dl class="mb-0">
+                                    <div class="d-flex justify-content-between
+                                        gap-3 border-bottom py-2">
+                                        <dt class="fw-normal">
+                                            Errors
+                                        </dt>
+
+                                        <dd class="fw-bold mb-0">
+                                            @Model.Health.WaveErrors
+                                        </dd>
+                                    </div>
+
+                                    <div class="d-flex justify-content-between
+                                        gap-3 border-bottom py-2">
+                                        <dt class="fw-normal">
+                                            Contrast errors
+                                        </dt>
+
+                                        <dd class="fw-bold mb-0">
+                                            @Model.Health.WaveContrastErrors
+                                        </dd>
+                                    </div>
+
+                                    <div class="d-flex justify-content-between
+                                        gap-3 border-bottom py-2">
+                                        <dt class="fw-normal">
+                                            Alerts
+                                        </dt>
+
+                                        <dd class="fw-bold mb-0">
+                                            @Model.Health.WaveAlerts
+                                        </dd>
+                                    </div>
+
+                                    <div class="d-flex justify-content-between
+                                        gap-3 border-bottom py-2">
+                                        <dt class="fw-normal">
+                                            ARIA items
+                                        </dt>
+
+                                        <dd class="fw-bold mb-0">
+                                            @Model.Health.WaveAria
+                                        </dd>
+                                    </div>
+
+                                    <div class="d-flex justify-content-between
+                                        gap-3 border-bottom py-2">
+                                        <dt class="fw-normal">
+                                            Features
+                                        </dt>
+
+                                        <dd class="fw-bold mb-0">
+                                            @Model.Health.WaveFeatures
+                                        </dd>
+                                    </div>
+
+                                    <div class="d-flex justify-content-between
+                                        gap-3 pt-2">
+                                        <dt>
+                                            Pages without errors or contrast errors
+                                        </dt>
+
+                                        <dd class="fw-bold mb-0">
+                                            @Model.Health
+                                            .PublicPagesWithoutWaveErrorsOrContrastErrors
+                                        </dd>
+                                    </div>
+                                </dl>
+                            }
+                            else
+                            {
+                                <p class="text-muted mb-0">
+                                    No successful public WAVE results match the
+                                    selected filters.
+                                </p>
+                            }
+                        </div>
+
+                        <div class="card-footer bg-transparent">
+                            <p class="small text-muted mb-0">
+                                WAVE category totals and axe-core rule totals are kept
+                                separate because the tools report different result
+                                types.
+                            </p>
+                        </div>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section aria-labelledby="issue-breakdown-heading"
+                 class="mb-4">
+            <div class="mb-3">
+                <h2 id="issue-breakdown-heading"
+                    class="h3 mb-1">
+                    Authenticated Issue Breakdown
+                </h2>
+
+                <p class="text-muted mb-0">
+                    Severity and WCAG mappings from saved axe-core findings.
+                </p>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-12 col-lg-6">
+                    <article class="card shadow-sm h-100">
+                        <div class="card-body">
+                            <h3 class="h4">
+                                Violation Severity
+                            </h3>
+
+                            <div class="table-responsive">
+                                <table class="table align-middle mb-0">
+                                    <caption class="visually-hidden">
+                                        Authenticated violation counts grouped by
+                                        severity
+                                    </caption>
+
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">
+                                                Severity
+                                            </th>
+
+                                            <th scope="col"
+                                                class="text-end">
+                                                Findings
+                                            </th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+                                        <tr>
+                                            <th scope="row">
+                                                Critical
+                                            </th>
+
+                                            <td class="text-end fw-bold">
+                                                @Model.IssueBreakdown.Critical
+                                            </td>
+                                        </tr>
+
+                                        <tr>
+                                            <th scope="row">
+                                                Serious
+                                            </th>
+
+                                            <td class="text-end fw-bold">
+                                                @Model.IssueBreakdown.Serious
+                                            </td>
+                                        </tr>
+
+                                        <tr>
+                                            <th scope="row">
+                                                Moderate
+                                            </th>
+
+                                            <td class="text-end fw-bold">
+                                                @Model.IssueBreakdown.Moderate
+                                            </td>
+                                        </tr>
+
+                                        <tr>
+                                            <th scope="row">
+                                                Minor
+                                            </th>
+
+                                            <td class="text-end fw-bold">
+                                                @Model.IssueBreakdown.Minor
+                                            </td>
+                                        </tr>
+
+                                        <tr>
+                                            <th scope="row">
+                                                Unknown
+                                            </th>
+
+                                            <td class="text-end fw-bold">
+                                                @Model.IssueBreakdown.UnknownSeverity
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </article>
+                </div>
+
+                <div class="col-12 col-lg-6">
+                    <article class="card shadow-sm h-100">
+                        <div class="card-body">
+                            <h3 class="h4">
+                                WCAG Mapping and Review
+                            </h3>
+
+                            <div class="table-responsive">
+                                <table class="table align-middle mb-0">
+                                    <caption class="visually-hidden">
+                                        Authenticated findings grouped by WCAG level
+                                        and review status
+                                    </caption>
+
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">
+                                                Result group
+                                            </th>
+
+                                            <th scope="col"
+                                                class="text-end">
+                                                Findings
+                                            </th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+                                        <tr>
+                                            <th scope="row">
+                                                WCAG Level A
+                                            </th>
+
+                                            <td class="text-end fw-bold">
+                                                @Model.IssueBreakdown.WcagLevelA
+                                            </td>
+                                        </tr>
+
+                                        <tr>
+                                            <th scope="row">
+                                                WCAG Level AA
+                                            </th>
+
+                                            <td class="text-end fw-bold">
+                                                @Model.IssueBreakdown.WcagLevelAA
+                                            </td>
+                                        </tr>
+
+                                        <tr>
+                                            <th scope="row">
+                                                Best practice or unmapped
+                                            </th>
+
+                                            <td class="text-end fw-bold">
+                                                @Model.IssueBreakdown
+                                                .BestPracticeOrUnmapped
+                                            </td>
+                                        </tr>
+
+                                        <tr>
+                                            <th scope="row">
+                                                Needs manual review
+                                            </th>
+
+                                            <td class="text-end fw-bold">
+                                                @Model.IssueBreakdown.NeedsManualReview
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <div class="row row-cols-1 row-cols-sm-2
+            row-cols-xl-4 g-3">
+            <div class="col">
+                <article class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <h3 class="dashboard-card-label">
+                            Applications Audited
+                        </h3>
+
+                        <p class="dashboard-card-value">
+                            @Model.Summary.ApplicationsAudited
+                        </p>
+
+                        <p class="small text-muted mb-0">
+                            Distinct authenticated application names
+                        </p>
+                    </div>
+                </article>
+            </div>
+
+            <div class="col">
+                <article class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <h3 class="dashboard-card-label">
+                            Public Pages Scanned
+                        </h3>
+
+                        <p class="dashboard-card-value">
+                            @Model.Summary.PublicPagesScanned
+                        </p>
+
+                        <p class="small text-muted mb-0">
+                            @Model.Summary.SuccessfulWaveScans successful
+                            WAVE scans
+                        </p>
+                    </div>
+                </article>
+            </div>
+
+            <div class="col">
+                <article class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <h3 class="dashboard-card-label">
+                            Authenticated States Scanned
+                        </h3>
+
+                        <p class="dashboard-card-value">
+                            @Model.Summary.AuthenticatedStatesScanned
+                        </p>
+
+                        <p class="small text-muted mb-0">
+                            Successfully scanned rendered workflow states
+                        </p>
+                    </div>
+                </article>
+            </div>
+
+            <div class="col">
+                <article class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <h3 class="dashboard-card-label">
+                            Automated Findings
+                        </h3>
+
+                        <p class="dashboard-card-value">
+                            @Model.Summary.TotalAutomatedFindings
+                        </p>
+
+                        <p class="small text-muted mb-0">
+                            Authenticated axe-core violation results
+                        </p>
+                    </div>
+                </article>
+            </div>
+
+            <div class="col">
+                <article class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <h3 class="dashboard-card-label">
+                            Affected Elements
+                        </h3>
+
+                        <p class="dashboard-card-value">
+                            @Model.Summary.TotalAffectedElements
+                        </p>
+
+                        <p class="small text-muted mb-0">
+                            Elements affected by detected violations
+                        </p>
+                    </div>
+                </article>
+            </div>
+
+            <div class="col">
+                <article class="card shadow-sm h-100"
+                         aria-describedby="fix-first-description">
+                    <div class="card-body">
+                        <h3 class="dashboard-card-label">
+                            Fix First Results
+                        </h3>
+
+                        <p class="dashboard-card-value">
+                            @Model.Summary.FixFirstFindings
+                        </p>
+
+                        <p id="fix-first-description"
+                           class="small text-muted mb-0">
+                            Critical or serious WCAG Level A or AA results
+                        </p>
+                    </div>
+                </article>
+            </div>
+
+            <div class="col">
+                <article class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <h3 class="dashboard-card-label">
+                            Pages or States With Findings
+                        </h3>
+
+                        <dl class="mb-0">
+                            <div class="d-flex justify-content-between
+                                gap-3 border-bottom pb-2 mb-2">
+                                <dt class="fw-normal text-muted">
+                                    Public
+                                </dt>
+
+                                <dd class="fw-bold mb-0">
+                                    @Model.Summary.PublicPagesWithFindings
+                                </dd>
+                            </div>
+
+                            <div class="d-flex justify-content-between gap-3">
+                                <dt class="fw-normal text-muted">
+                                    Authenticated
+                                </dt>
+
+                                <dd class="fw-bold mb-0">
+                                    @Model.Summary.AuthenticatedStatesWithFindings
+                                </dd>
+                            </div>
+                        </dl>
+                    </div>
+                </article>
+            </div>
+
+            <div class="col">
+                <article class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <h3 class="dashboard-card-label">
+                            Latest Audit Activity
+                        </h3>
+
+                        @if (Model.Summary.LatestAuditDate.HasValue)
+                        {
+                            <p class="h4 fw-bold mb-2">
+                                @Model.Summary.LatestAuditDate.Value
+                                .ToString("MMM d, yyyy")
+                            </p>
+
+                            <p class="small text-muted mb-0">
+                                @Model.Summary.LatestAuditSource
+                            </p>
+                        }
+                        else
+                        {
+                            <p class="dashboard-card-value">
+                                —
+                            </p>
+
+                            <p class="small text-muted mb-0">
+                                No matching audit date
+                            </p>
+                        }
+                    </div>
+                </article>
+            </div>
+        </div>
+    </section>
+
+    <section aria-labelledby="application-rankings-heading"
+         class="mb-4">
+    <div class="mb-3">
+        <h2 id="application-rankings-heading"
+            class="h3 mb-1">
+            Application Rankings
+        </h2>
+
+        <p class="text-muted mb-0">
+            Latest matching authenticated audit for each application,
+            ranked by higher-priority findings.
+        </p>
+    </div>
+
+    <article class="card shadow-sm">
+        <div class="card-body">
+            @if (Model.Applications.Count == 0)
+            {
+                <p class="text-muted mb-0">
+                    No authenticated applications match the selected
+                    filters.
+                </p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-striped
+                                  table-hover align-middle mb-0">
+                        <caption class="visually-hidden">
+                            Authenticated applications ranked by
+                            accessibility findings
+                        </caption>
+
+                        <thead>
+                            <tr>
+                                <th scope="col">
+                                    Application
+                                </th>
+
+                                <th scope="col"
+                                    class="text-end">
+                                    States
+                                </th>
+
+                                <th scope="col"
+                                    class="text-end">
+                                    Critical
+                                </th>
+
+                                <th scope="col"
+                                    class="text-end">
+                                    Serious
+                                </th>
+
+                                <th scope="col"
+                                    class="text-end">
+                                    Fix First
+                                </th>
+
+                                <th scope="col"
+                                    class="text-end">
+                                    Manual Review
+                                </th>
+
+                                <th scope="col"
+                                    class="text-end">
+                                    Affected Elements
+                                </th>
+
+                                <th scope="col">
+                                    Audit Date
+                                </th>
+
+                                <th scope="col">
+                                    Details
+                                </th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var application
+                                in Model.Applications)
+                            {
+                                <tr>
+                                    <th scope="row">
+                                        <div>
+                                            @application.ApplicationName
+                                        </div>
+
+                                        <div class="small text-muted
+                                                    text-break">
+                                            @application.StartingUrl
+                                        </div>
+                                    </th>
+
+                                    <td class="text-end">
+                                        @application.SuccessfulStateCount
+                                        /
+                                        @application.StateCount
+                                    </td>
+
+                                    <td class="text-end fw-bold">
+                                        @application.CriticalFindingCount
+                                    </td>
+
+                                    <td class="text-end fw-bold">
+                                        @application.SeriousFindingCount
+                                    </td>
+
+                                    <td class="text-end fw-bold">
+                                        @application.FixFirstFindingCount
+                                    </td>
+
+                                    <td class="text-end">
+                                        @application.NeedsReviewFindingCount
+                                    </td>
+
+                                    <td class="text-end">
+                                        @application.AffectedElementCount
+                                    </td>
+
+                                    <td>
+                                        @application.LatestAuditDate
+                                            .ToString("MMM d, yyyy")
+                                    </td>
+
+                                    <td>
+                                        <a asp-controller="AuthenticatedAudits"
+                                           asp-action="Details"
+                                           asp-route-id="@application.LatestRunId"
+                                           class="btn btn-sm
+                                                  btn-outline-primary">
+                                            View Audit
+                                            <span class="visually-hidden">
+                                                for
+                                                @application.ApplicationName
+                                            </span>
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </article>
+</section>
+
+<section aria-labelledby="public-page-rankings-heading"
+         class="mb-4">
+    <div class="mb-3">
+        <h2 id="public-page-rankings-heading"
+            class="h3 mb-1">
+            Public Page Rankings
+        </h2>
+
+        <p class="text-muted mb-0">
+            Latest matching WAVE result for each exact saved public URL.
+        </p>
+    </div>
+
+    <article class="card shadow-sm">
+        <div class="card-body">
+            @if (Model.PublicPages.Count == 0)
+            {
+                <p class="text-muted mb-0">
+                    No public WAVE pages match the selected filters.
+                </p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-striped
+                                  table-hover align-middle mb-0">
+                        <caption class="visually-hidden">
+                            Public pages ranked by WAVE errors and
+                            contrast errors
+                        </caption>
+
+                        <thead>
+                            <tr>
+                                <th scope="col">
+                                    Public URL
+                                </th>
+
+                                <th scope="col">
+                                    Status
+                                </th>
+
+                                <th scope="col"
+                                    class="text-end">
+                                    Errors
+                                </th>
+
+                                <th scope="col"
+                                    class="text-end">
+                                    Contrast
+                                </th>
+
+                                <th scope="col"
+                                    class="text-end">
+                                    Alerts
+                                </th>
+
+                                <th scope="col">
+                                    Scan Date
+                                </th>
+
+                                <th scope="col">
+                                    Details
+                                </th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var page
+                                in Model.PublicPages)
+                            {
+                                <tr>
+                                    <th scope="row"
+                                        class="text-break">
+                                        @page.Url
+                                    </th>
+
+                                    <td>
+                                        @if (page.WaveScanSucceeded)
+                                        {
+                                            <span class="badge
+                                                         text-bg-success">
+                                                Successful
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge
+                                                         text-bg-danger">
+                                                Failed
+                                            </span>
+                                        }
+                                    </td>
+
+                                    <td class="text-end fw-bold">
+                                        @page.WaveErrors
+                                    </td>
+
+                                    <td class="text-end fw-bold">
+                                        @page.WaveContrastErrors
+                                    </td>
+
+                                    <td class="text-end">
+                                        @page.WaveAlerts
+                                    </td>
+
+                                    <td>
+                                        @page.DateScanned
+                                            .ToString("MMM d, yyyy")
+                                    </td>
+
+                                    <td>
+                                        <a asp-controller="WebsiteScans"
+                                           asp-action="Details"
+                                           asp-route-id="@page.WebsiteScanId"
+                                           class="btn btn-sm
+                                                  btn-outline-primary">
+                                            View Scan
+                                            <span class="visually-hidden">
+                                                for @page.Url
+                                            </span>
+                                        </a>
+                                    </td>
+                                </tr>
+
+                                @if (!page.WaveScanSucceeded &&
+                                     !string.IsNullOrWhiteSpace(
+                                         page.WaveErrorMessage))
+                                {
+                                    <tr>
+                                        <td colspan="7"
+                                            class="small text-danger">
+                                            <strong>WAVE error:</strong>
+                                            @page.WaveErrorMessage
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </article>
+</section>
+
+}
