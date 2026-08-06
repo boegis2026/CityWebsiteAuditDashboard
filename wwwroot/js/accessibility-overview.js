@@ -14,7 +14,7 @@
     if (typeof Chart === "undefined") {
         if (statusElement) {
             statusElement.textContent =
-                "The visual charts could not be loaded. " +
+                "The visual chart could not be loaded. " +
                 "The complete trend data is available in the table below.";
         }
 
@@ -39,15 +39,7 @@
 
             fixFirstFindings:
                 JSON.parse(
-                    trendDataElement.dataset.fixFirst || "[]"),
-
-            publicPagesScanned:
-                JSON.parse(
-                    trendDataElement.dataset.publicPages || "[]"),
-
-            waveErrorsAndContrastErrors:
-                JSON.parse(
-                    trendDataElement.dataset.waveErrors || "[]")
+                    trendDataElement.dataset.fixFirst || "[]")
         };
     }
     catch (error) {
@@ -57,99 +49,191 @@
 
         if (statusElement) {
             statusElement.textContent =
-                "The visual charts could not be created. " +
+                "The visual chart could not be created. " +
                 "The complete trend data is available in the table below.";
         }
 
         return;
     }
 
-    const commonOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: {
-            mode: "index",
-            intersect: false
-        },
-        plugins: {
-            legend: {
-                position: "bottom"
-            }
-        },
-        scales: {
-            y: {
-                beginAtZero: true,
-                ticks: {
-                    precision: 0
-                }
-            }
-        }
-    };
-
     const authenticatedCanvas =
         document.getElementById(
             "authenticatedAccessibilityTrendChart");
 
-    if (authenticatedCanvas) {
-        new Chart(authenticatedCanvas, {
+    if (!authenticatedCanvas) {
+        return;
+    }
+
+    new Chart(
+        authenticatedCanvas,
+        {
             type: "line",
+
             data: {
-                labels: trendData.labels,
+                labels:
+                    trendData.labels,
+
                 datasets: [
                     {
-                        label: "States scanned",
+                        label:
+                            "States scanned",
+
                         data:
                             trendData.authenticatedStatesScanned,
-                        borderWidth: 2,
-                        tension: 0.15
+
+                        borderColor:
+                            "#0d6efd",
+
+                        backgroundColor:
+                            "rgba(13, 110, 253, 0.15)",
+
+                        pointBackgroundColor:
+                            "#0d6efd",
+
+                        borderWidth:
+                            2,
+
+                        pointRadius:
+                            3,
+
+                        pointHoverRadius:
+                            5,
+
+                        tension:
+                            0.15,
+
+                        fill:
+                            false
                     },
                     {
-                        label: "Violations",
+                        label:
+                            "Violations",
+
                         data:
                             trendData.authenticatedFindings,
-                        borderWidth: 2,
-                        tension: 0.15
+
+                        borderColor:
+                            "#b02a37",
+
+                        backgroundColor:
+                            "rgba(176, 42, 55, 0.15)",
+
+                        pointBackgroundColor:
+                            "#b02a37",
+
+                        borderWidth:
+                            2,
+
+                        pointRadius:
+                            3,
+
+                        pointHoverRadius:
+                            5,
+
+                        tension:
+                            0.15,
+
+                        fill:
+                            false
                     },
                     {
-                        label: "Fix First",
+                        label:
+                            "Fix First",
+
                         data:
                             trendData.fixFirstFindings,
-                        borderWidth: 2,
-                        tension: 0.15
+
+                        borderColor:
+                            "#997404",
+
+                        backgroundColor:
+                            "rgba(153, 116, 4, 0.15)",
+
+                        pointBackgroundColor:
+                            "#997404",
+
+                        borderWidth:
+                            2,
+
+                        pointRadius:
+                            3,
+
+                        pointHoverRadius:
+                            5,
+
+                        tension:
+                            0.15,
+
+                        fill:
+                            false
                     }
                 ]
             },
-            options: commonOptions
-        });
-    }
 
-    const publicCanvas =
-        document.getElementById(
-            "publicAccessibilityTrendChart");
+            options: {
+                responsive:
+                    true,
 
-    if (publicCanvas) {
-        new Chart(publicCanvas, {
-            type: "line",
-            data: {
-                labels: trendData.labels,
-                datasets: [
-                    {
-                        label: "Public pages scanned",
-                        data:
-                            trendData.publicPagesScanned,
-                        borderWidth: 2,
-                        tension: 0.15
+                maintainAspectRatio:
+                    false,
+
+                interaction: {
+                    mode:
+                        "index",
+
+                    intersect:
+                        false
+                },
+
+                plugins: {
+                    legend: {
+                        position:
+                            "bottom",
+
+                        labels: {
+                            usePointStyle:
+                                true,
+
+                            padding:
+                                18
+                        }
                     },
-                    {
-                        label: "WAVE errors and contrast",
-                        data:
-                            trendData.waveErrorsAndContrastErrors,
-                        borderWidth: 2,
-                        tension: 0.15
+
+                    tooltip: {
+                        mode:
+                            "index",
+
+                        intersect:
+                            false
                     }
-                ]
-            },
-            options: commonOptions
+                },
+
+                scales: {
+                    x: {
+                        grid: {
+                            display:
+                                false
+                        }
+                    },
+
+                    y: {
+                        beginAtZero:
+                            true,
+
+                        ticks: {
+                            precision:
+                                0
+                        },
+
+                        title: {
+                            display:
+                                true,
+
+                            text:
+                                "Saved results"
+                        }
+                    }
+                }
+            }
         });
-    }
 })();

@@ -29,18 +29,12 @@ public sealed class AccessibilityOverviewViewModel
     { get; init; }
         = Array.Empty<AccessibilityApplicationRankingViewModel>();
 
-    public IReadOnlyList<AccessibilityPublicPageRankingViewModel>
-        PublicPages
-    { get; init; }
-        = Array.Empty<AccessibilityPublicPageRankingViewModel>();
-
     public IReadOnlyList<AccessibilityTopFindingViewModel>
         TopFindings
     { get; init; }
         = Array.Empty<AccessibilityTopFindingViewModel>();
 
     public bool HasAnyData =>
-        Summary.PublicPagesScanned > 0 ||
         Summary.AuthenticatedStatesScanned > 0;
 }
 
@@ -50,8 +44,6 @@ public sealed class AccessibilityOverviewViewModel
 public sealed class AccessibilityOverviewFilterViewModel
 {
     public string? ApplicationName { get; set; }
-
-    public string AuditSource { get; set; } = "All";
 
     public DateTime? StartDate { get; set; }
 
@@ -73,10 +65,6 @@ public sealed class AccessibilityOverviewSummaryViewModel
 {
     public int ApplicationsAudited { get; init; }
 
-    public int PublicPagesScanned { get; init; }
-
-    public int SuccessfulWaveScans { get; init; }
-
     public int AuthenticatedStatesScanned { get; init; }
 
     public int TotalAutomatedFindings { get; init; }
@@ -89,13 +77,10 @@ public sealed class AccessibilityOverviewSummaryViewModel
 
     public int AuthenticatedStatesWithFindings { get; init; }
 
-    public DateTime? LatestAuditDate { get; init; }
-
-    public string? LatestAuditSource { get; init; }
 }
 
 /// <summary>
-/// Automated check-pass calculation and related WCAG and WAVE summaries.
+/// Automated check-pass calculation and related WCAG summaries.
 /// </summary>
 public sealed class AccessibilityHealthViewModel
 {
@@ -115,25 +100,8 @@ public sealed class AccessibilityHealthViewModel
 
     public int BestPracticeOrUnmappedFindingCount { get; init; }
 
-    public int SuccessfulWaveScans { get; init; }
-
-    public int WaveErrors { get; init; }
-
-    public int WaveContrastErrors { get; init; }
-
-    public int WaveAlerts { get; init; }
-
-    public int WaveFeatures { get; init; }
-
-    public int WaveAria { get; init; }
-
-    public int PublicPagesWithoutWaveErrorsOrContrastErrors { get; init; }
-
     public bool HasAuthenticatedRuleData =>
         TotalRuleResults > 0;
-
-    public bool HasWaveData =>
-        SuccessfulWaveScans > 0;
 }
 
 /// <summary>
@@ -172,10 +140,6 @@ public sealed class AccessibilityTrendPointViewModel
     public int AuthenticatedStatesScanned { get; init; }
 
     public int FixFirstFindings { get; init; }
-
-    public int PublicPagesScanned { get; init; }
-
-    public int WaveErrorsAndContrastErrors { get; init; }
 }
 
 /// <summary>
@@ -223,31 +187,6 @@ public sealed class AccessibilityApplicationRankingViewModel
         PreviousFindingCount.HasValue
             ? TotalFindingCount - PreviousFindingCount.Value
             : null;
-}
-
-/// <summary>
-/// Latest successful or attempted WAVE result for one public URL.
-/// </summary>
-public sealed class AccessibilityPublicPageRankingViewModel
-{
-    public int WebsiteScanId { get; init; }
-
-    public string Url { get; init; } = string.Empty;
-
-    public DateTime DateScanned { get; init; }
-
-    public bool WaveScanSucceeded { get; init; }
-
-    public int WaveErrors { get; init; }
-
-    public int WaveContrastErrors { get; init; }
-
-    public int WaveAlerts { get; init; }
-
-    public string? WaveErrorMessage { get; init; }
-
-    public int WaveErrorAndContrastCount =>
-        WaveErrors + WaveContrastErrors;
 }
 
 /// <summary>

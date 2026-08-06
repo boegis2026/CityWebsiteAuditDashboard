@@ -117,8 +117,7 @@ section[aria-labelledby="accessibility-health-heading"] .card,
 section[aria-labelledby="issue-breakdown-heading"] .card,
 section[aria-labelledby="accessibility-trends-heading"] .card,
 section[aria-labelledby="application-rankings-heading"] .card,
-section[aria-labelledby="top-findings-heading"] .card,
-section[aria-labelledby="public-page-rankings-heading"] .card {
+section[aria-labelledby="top-findings-heading"] .card,{
     border-color: rgba(33, 37, 41, 0.12);
 }
 
@@ -163,14 +162,12 @@ section[aria-labelledby="accessibility-trends-heading"] canvas {
 }
 
 section[aria-labelledby="application-rankings-heading"] table,
-section[aria-labelledby="top-findings-heading"] table,
-section[aria-labelledby="public-page-rankings-heading"] table {
+section[aria-labelledby="top-findings-heading"] table,{
     font-size: 0.925rem;
 }
 
 section[aria-labelledby="application-rankings-heading"] thead th,
 section[aria-labelledby="top-findings-heading"] thead th,
-section[aria-labelledby="public-page-rankings-heading"] thead th,
 section[aria-labelledby="accessibility-trends-heading"] thead th,
 section[aria-labelledby="issue-breakdown-heading"] thead th {
     background-color: var(--bs-tertiary-bg);
@@ -178,8 +175,7 @@ section[aria-labelledby="issue-breakdown-heading"] thead th {
 }
 
 section[aria-labelledby="application-rankings-heading"] tbody th,
-section[aria-labelledby="top-findings-heading"] tbody th,
-section[aria-labelledby="public-page-rankings-heading"] tbody th {
+section[aria-labelledby="top-findings-heading"] tbody th,{
     min-width: 14rem;
 }
 
@@ -189,8 +185,7 @@ section[aria-labelledby="top-findings-heading"] code {
 }
 
 section[aria-labelledby="application-rankings-heading"] .badge,
-section[aria-labelledby="top-findings-heading"] .badge,
-section[aria-labelledby="public-page-rankings-heading"] .badge {
+section[aria-labelledby="top-findings-heading"] .badge,{
     white-space: nowrap;
 }
 
@@ -211,8 +206,7 @@ section[aria-labelledby="public-page-rankings-heading"] .badge {
     }
 
     section[aria-labelledby="application-rankings-heading"] table,
-    section[aria-labelledby="top-findings-heading"] table,
-    section[aria-labelledby="public-page-rankings-heading"] table {
+    section[aria-labelledby="top-findings-heading"] table,{
         font-size: 0.875rem;
     }
 }
@@ -231,10 +225,8 @@ section[aria-labelledby="public-page-rankings-heading"] .badge {
     section[aria-labelledby="overview-filters-heading"],
     #accessibility-chart-status,
     #authenticatedAccessibilityTrendChart,
-    #publicAccessibilityTrendChart,
     section[aria-labelledby="application-rankings-heading"] .btn,
-    section[aria-labelledby="top-findings-heading"] .btn,
-    section[aria-labelledby="public-page-rankings-heading"] .btn {
+    section[aria-labelledby="top-findings-heading"] .btn,{
         display: none !important;
     }
 
@@ -243,8 +235,7 @@ section[aria-labelledby="public-page-rankings-heading"] .badge {
     section[aria-labelledby="issue-breakdown-heading"] .card,
     section[aria-labelledby="accessibility-trends-heading"] .card,
     section[aria-labelledby="application-rankings-heading"] .card,
-    section[aria-labelledby="top-findings-heading"] .card,
-    section[aria-labelledby="public-page-rankings-heading"] .card {
+    section[aria-labelledby="top-findings-heading"] .card,{
         box-shadow: none !important;
         break-inside: avoid;
     }

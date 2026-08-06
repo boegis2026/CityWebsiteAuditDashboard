@@ -10,8 +10,8 @@
     </h1>
 
     <p class="lead mb-2">
-        Management-facing summary of saved public WAVE scans and
-        authenticated axe-core accessibility audits.
+        Management-facing summary of authenticated workflow accessibility
+        audits powered by axe-core.
     </p>
 
     <div class="alert alert-info mb-0" role="note">
@@ -75,35 +75,8 @@
                     </select>
 
                     <div class="form-text">
-                        Application names are available for authenticated
-                        audits only.
+                        Filter results to one saved authenticated application.
                     </div>
-                </div>
-
-                <div class="col-12 col-md-6 col-xl-3">
-                    <label for="auditSource"
-                           class="form-label">
-                        Audit source
-                    </label>
-
-                    <select id="auditSource"
-                            name="auditSource"
-                            class="form-select">
-                        <option value="All"
-                                selected="@(Model.Filters.AuditSource == "All")">
-                            Public and authenticated
-                        </option>
-
-                        <option value="Public"
-                                selected="@(Model.Filters.AuditSource == "Public")">
-                            Public WAVE
-                        </option>
-
-                        <option value="Authenticated"
-                                selected="@(Model.Filters.AuditSource == "Authenticated")">
-                            Authenticated axe-core
-                        </option>
-                    </select>
                 </div>
 
                 <div class="col-12 col-md-6 col-xl-3">
@@ -272,8 +245,8 @@
             </h2>
 
             <p class="text-muted mb-0">
-                No saved public WAVE scans or successful authenticated
-                workflow-state scans match the selected filters.
+                No successful authenticated workflow-state scans match the
+                selected filters.
             </p>
         </div>
     </div>
@@ -312,13 +285,13 @@ else
                 </h2>
 
                 <p class="text-muted mb-0">
-                    Separate summaries are shown for authenticated axe-core results
-                    and public WAVE results.
+                    Automated rule results from successfully scanned authenticated
+                    workflow states.
                 </p>
             </div>
 
             <div class="row g-3">
-                <div class="col-12 col-xl-6">
+                <div class="col-12">
                     <article class="card shadow-sm h-100">
                         <div class="card-body">
                             <h3 class="h4">
@@ -398,112 +371,6 @@ else
                         </div>
                     </article>
                 </div>
-
-                <div class="col-12 col-xl-6">
-                    <article class="card shadow-sm h-100">
-                        <div class="card-body">
-                            <h3 class="h4">
-                                Public WAVE Results
-                            </h3>
-
-                            @if (Model.Health.HasWaveData)
-                            {
-                                <p class="display-5 fw-bold mb-1">
-                                    @Model.Health.SuccessfulWaveScans
-                                </p>
-
-                                <p class="text-muted">
-                                    Successful public WAVE scans
-                                </p>
-
-                                <dl class="mb-0">
-                                    <div class="d-flex justify-content-between
-                                        gap-3 border-bottom py-2">
-                                        <dt class="fw-normal">
-                                            Errors
-                                        </dt>
-
-                                        <dd class="fw-bold mb-0">
-                                            @Model.Health.WaveErrors
-                                        </dd>
-                                    </div>
-
-                                    <div class="d-flex justify-content-between
-                                        gap-3 border-bottom py-2">
-                                        <dt class="fw-normal">
-                                            Contrast errors
-                                        </dt>
-
-                                        <dd class="fw-bold mb-0">
-                                            @Model.Health.WaveContrastErrors
-                                        </dd>
-                                    </div>
-
-                                    <div class="d-flex justify-content-between
-                                        gap-3 border-bottom py-2">
-                                        <dt class="fw-normal">
-                                            Alerts
-                                        </dt>
-
-                                        <dd class="fw-bold mb-0">
-                                            @Model.Health.WaveAlerts
-                                        </dd>
-                                    </div>
-
-                                    <div class="d-flex justify-content-between
-                                        gap-3 border-bottom py-2">
-                                        <dt class="fw-normal">
-                                            ARIA items
-                                        </dt>
-
-                                        <dd class="fw-bold mb-0">
-                                            @Model.Health.WaveAria
-                                        </dd>
-                                    </div>
-
-                                    <div class="d-flex justify-content-between
-                                        gap-3 border-bottom py-2">
-                                        <dt class="fw-normal">
-                                            Features
-                                        </dt>
-
-                                        <dd class="fw-bold mb-0">
-                                            @Model.Health.WaveFeatures
-                                        </dd>
-                                    </div>
-
-                                    <div class="d-flex justify-content-between
-                                        gap-3 pt-2">
-                                        <dt>
-                                            Pages without errors or contrast errors
-                                        </dt>
-
-                                        <dd class="fw-bold mb-0">
-                                            @Model.Health
-                                            .PublicPagesWithoutWaveErrorsOrContrastErrors
-                                        </dd>
-                                    </div>
-                                </dl>
-                            }
-                            else
-                            {
-                                <p class="text-muted mb-0">
-                                    No successful public WAVE results match the
-                                    selected filters.
-                                </p>
-                            }
-                        </div>
-
-                        <div class="card-footer bg-transparent">
-                            <p class="small text-muted mb-0">
-                                WAVE category totals and axe-core rule totals are kept
-                                separate because the tools report different result
-                                types.
-                            </p>
-                        </div>
-                    </article>
-                </div>
-            </div>
         </section>
 
         <section aria-labelledby="issue-breakdown-heading"
@@ -658,8 +525,7 @@ else
                                             </th>
 
                                             <td class="text-end fw-bold">
-                                                @Model.IssueBreakdown
-                                                .BestPracticeOrUnmapped
+                                                @Model.IssueBreakdown.BestPracticeOrUnmapped
                                             </td>
                                         </tr>
 
@@ -705,16 +571,15 @@ else
                 <article class="card shadow-sm h-100">
                     <div class="card-body">
                         <h3 class="dashboard-card-label">
-                            Public Pages Scanned
+                            Needs Manual Review
                         </h3>
 
                         <p class="dashboard-card-value">
-                            @Model.Summary.PublicPagesScanned
+                            @Model.Health.NeedsReviewRuleResults
                         </p>
 
                         <p class="small text-muted mb-0">
-                            @Model.Summary.SuccessfulWaveScans successful
-                            WAVE scans
+                            Incomplete axe-core results requiring human verification
                         </p>
                     </div>
                 </article>
@@ -798,31 +663,17 @@ else
                 <article class="card shadow-sm h-100">
                     <div class="card-body">
                         <h3 class="dashboard-card-label">
-                            Pages or States With Findings
+                            States With Findings
                         </h3>
 
-                        <dl class="mb-0">
-                            <div class="d-flex justify-content-between
-                                gap-3 border-bottom pb-2 mb-2">
-                                <dt class="fw-normal text-muted">
-                                    Public
-                                </dt>
+                        <p class="dashboard-card-value">
+                            @Model.Summary.AuthenticatedStatesWithFindings
+                        </p>
 
-                                <dd class="fw-bold mb-0">
-                                    @Model.Summary.PublicPagesWithFindings
-                                </dd>
-                            </div>
-
-                            <div class="d-flex justify-content-between gap-3">
-                                <dt class="fw-normal text-muted">
-                                    Authenticated
-                                </dt>
-
-                                <dd class="fw-bold mb-0">
-                                    @Model.Summary.AuthenticatedStatesWithFindings
-                                </dd>
-                            </div>
-                        </dl>
+                        <p class="small text-muted mb-0">
+                            Authenticated workflow states containing detected or
+                            review-required findings
+                        </p>
                     </div>
                 </article>
             </div>
@@ -831,18 +682,13 @@ else
                 <article class="card shadow-sm h-100">
                     <div class="card-body">
                         <h3 class="dashboard-card-label">
-                            Latest Audit Activity
+                            Automated Pass Rate
                         </h3>
 
-                        @if (Model.Summary.LatestAuditDate.HasValue)
+                        @if (Model.Health.HasAuthenticatedRuleData)
                         {
-                            <p class="h4 fw-bold mb-2">
-                                @Model.Summary.LatestAuditDate.Value
-                                .ToString("MMM d, yyyy")
-                            </p>
-
-                            <p class="small text-muted mb-0">
-                                @Model.Summary.LatestAuditSource
+                            <p class="dashboard-card-value">
+                                @Model.Health.AutomatedCheckPassRate.ToString("0.0")%
                             </p>
                         }
                         else
@@ -850,15 +696,15 @@ else
                             <p class="dashboard-card-value">
                                 —
                             </p>
-
-                            <p class="small text-muted mb-0">
-                                No matching audit date
-                            </p>
                         }
+
+                        <p class="small text-muted mb-0">
+                            Passed results divided by all evaluated axe-core rule
+                            results
+                        </p>
                     </div>
                 </article>
             </div>
-        </div>
     </section>
 
     <section aria-labelledby="top-findings-heading"
@@ -1070,42 +916,44 @@ else
                 }
                 else
                 {
+                    string trendLabelsJson =
+                        System.Text.Json.JsonSerializer.Serialize(
+                        Model.Trends
+                        .Select(trend =>
+                        trend.Date.ToString("MMM d, yyyy"))
+                        .ToArray());
+
+                    string authenticatedStatesJson =
+                        System.Text.Json.JsonSerializer.Serialize(
+                        Model.Trends
+                        .Select(trend =>
+                        trend.AuthenticatedStatesScanned)
+                        .ToArray());
+
+                    string authenticatedFindingsJson =
+                        System.Text.Json.JsonSerializer.Serialize(
+                        Model.Trends
+                        .Select(trend =>
+                        trend.AuthenticatedFindings)
+                        .ToArray());
+
+                    string fixFirstFindingsJson =
+                        System.Text.Json.JsonSerializer.Serialize(
+                        Model.Trends
+                        .Select(trend =>
+                        trend.FixFirstFindings)
+                        .ToArray());
+
                     <div id="accessibility-trend-data"
-                         class="d-none"
-                         data-labels="@System.Text.Json.JsonSerializer.Serialize(
-                                                  Model.Trends
-                                                      .Select(trend =>
-                                                          trend.Date.ToString("MMM d, yyyy"))
-                                                      .ToArray())"
-                         data-authenticated-states="@System.Text.Json.JsonSerializer.Serialize(
-                                                  Model.Trends
-                                                      .Select(trend =>
-                                                          trend.AuthenticatedStatesScanned)
-                                                      .ToArray())"
-                         data-authenticated-findings="@System.Text.Json.JsonSerializer.Serialize(
-                                                  Model.Trends
-                                                      .Select(trend =>
-                                                          trend.AuthenticatedFindings)
-                                                      .ToArray())"
-                         data-fix-first="@System.Text.Json.JsonSerializer.Serialize(
-                                                  Model.Trends
-                                                      .Select(trend =>
-                                                          trend.FixFirstFindings)
-                                                      .ToArray())"
-                         data-public-pages="@System.Text.Json.JsonSerializer.Serialize(
-                                                  Model.Trends
-                                                      .Select(trend =>
-                                                          trend.PublicPagesScanned)
-                                                      .ToArray())"
-                         data-wave-errors="@System.Text.Json.JsonSerializer.Serialize(
-                                                  Model.Trends
-                                                      .Select(trend =>
-                                                          trend.WaveErrorsAndContrastErrors)
-                                                      .ToArray())">
+                        class="d-none"
+                        data-labels="@trendLabelsJson"
+                        data-authenticated-states="@authenticatedStatesJson"
+                        data-authenticated-findings="@authenticatedFindingsJson"
+                        data-fix-first="@fixFirstFindingsJson">
                     </div>
 
                     <div class="row g-3 mb-4">
-                        <div class="col-12 col-xl-6">
+                        <div class="col-12">
                             <div class="border rounded p-3 h-100">
                                 <h3 class="h5">
                                     Authenticated Audit Trends
@@ -1126,28 +974,6 @@ else
                                 </div>
                             </div>
                         </div>
-
-                        <div class="col-12 col-xl-6">
-                            <div class="border rounded p-3 h-100">
-                                <h3 class="h5">
-                                    Public WAVE Trends
-                                </h3>
-
-                                <p class="small text-muted">
-                                    Saved public page activity and WAVE error
-                                    totals by scan date.
-                                </p>
-
-                                <div class="accessibility-chart-container">
-                                    <canvas id="publicAccessibilityTrendChart"
-                                            role="img"
-                                            aria-label="Line chart showing public pages scanned and combined WAVE errors and contrast errors by date. Complete values are available in the table below.">
-                                        Complete public WAVE trend values are
-                                        available in the table below.
-                                    </canvas>
-                                </div>
-                            </div>
-                        </div>
                     </div>
 
                     <p id="accessibility-chart-status"
@@ -1162,7 +988,7 @@ else
                             <caption>
                                 Daily accessibility audit activity. This table
                                 provides the complete data represented by the
-                                visual trend charts.
+                                visual trend chart.
                             </caption>
 
                             <thead>
@@ -1185,16 +1011,6 @@ else
                                         class="text-end">
                                         Fix First
                                     </th>
-
-                                    <th scope="col"
-                                        class="text-end">
-                                        Public Pages
-                                    </th>
-
-                                    <th scope="col"
-                                        class="text-end">
-                                        WAVE Errors and Contrast
-                                    </th>
                                 </tr>
                             </thead>
 
@@ -1216,14 +1032,6 @@ else
 
                                         <td class="text-end fw-bold">
                                             @trend.FixFirstFindings
-                                        </td>
-
-                                        <td class="text-end">
-                                            @trend.PublicPagesScanned
-                                        </td>
-
-                                        <td class="text-end fw-bold">
-                                            @trend.WaveErrorsAndContrastErrors
                                         </td>
                                     </tr>
                                 }
@@ -1420,8 +1228,7 @@ else
                                     </td>
 
                                     <td>
-                                        @application.LatestAuditDate
-                                            .ToString("MMM d, yyyy")
+                                       @application.LatestAuditDate.ToString("MMM d, yyyy")
                                     </td>
 
                                     <td>
@@ -1438,151 +1245,6 @@ else
                                         </a>
                                     </td>
                                 </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            }
-        </div>
-    </article>
-</section>
-
-<section aria-labelledby="public-page-rankings-heading"
-         class="mb-4">
-    <div class="mb-3">
-        <h2 id="public-page-rankings-heading"
-            class="h3 mb-1">
-            Public Page Rankings
-        </h2>
-
-        <p class="text-muted mb-0">
-            Latest matching WAVE result for each exact saved public URL.
-        </p>
-    </div>
-
-    <article class="card shadow-sm">
-        <div class="card-body">
-            @if (Model.PublicPages.Count == 0)
-            {
-                <p class="text-muted mb-0">
-                    No public WAVE pages match the selected filters.
-                </p>
-            }
-            else
-            {
-                <div class="table-responsive">
-                    <table class="table table-striped
-                                  table-hover align-middle mb-0">
-                        <caption class="visually-hidden">
-                            Public pages ranked by WAVE errors and
-                            contrast errors
-                        </caption>
-
-                        <thead>
-                            <tr>
-                                <th scope="col">
-                                    Public URL
-                                </th>
-
-                                <th scope="col">
-                                    Status
-                                </th>
-
-                                <th scope="col"
-                                    class="text-end">
-                                    Errors
-                                </th>
-
-                                <th scope="col"
-                                    class="text-end">
-                                    Contrast
-                                </th>
-
-                                <th scope="col"
-                                    class="text-end">
-                                    Alerts
-                                </th>
-
-                                <th scope="col">
-                                    Scan Date
-                                </th>
-
-                                <th scope="col">
-                                    Details
-                                </th>
-                            </tr>
-                        </thead>
-
-                        <tbody>
-                            @foreach (var publicPage
-                                in Model.PublicPages)
-                            {
-                                <tr>
-                                    <th scope="row"
-                                        class="text-break">
-                                            @publicPage.Url
-                                    </th>
-
-                                    <td>
-                                        @if (publicPage.WaveScanSucceeded)
-                                        {
-                                            <span class="badge
-                                                         text-bg-success">
-                                                Successful
-                                            </span>
-                                        }
-                                        else
-                                        {
-                                            <span class="badge
-                                                         text-bg-danger">
-                                                Failed
-                                            </span>
-                                        }
-                                    </td>
-
-                                    <td class="text-end fw-bold">
-                                            @publicPage.WaveErrors
-                                    </td>
-
-                                    <td class="text-end fw-bold">
-                                            @publicPage.WaveContrastErrors
-                                    </td>
-
-                                    <td class="text-end">
-                                            @publicPage.WaveAlerts
-                                    </td>
-
-                                    <td>
-                                            @publicPage.DateScanned
-                                            .ToString("MMM d, yyyy")
-                                    </td>
-
-                                    <td>
-                                        <a asp-controller="WebsiteScans"
-                                           asp-action="Details"
-                                               asp-route-id="@publicPage.WebsiteScanId"
-                                           class="btn btn-sm
-                                                  btn-outline-primary">
-                                            View Scan
-                                            <span class="visually-hidden">
-                                                    for @publicPage.Url
-                                            </span>
-                                        </a>
-                                    </td>
-                                </tr>
-
-                                @if (!publicPage.WaveScanSucceeded &&
-                                     !string.IsNullOrWhiteSpace(
-                                         publicPage.WaveErrorMessage))
-                                {
-                                    <tr>
-                                        <td colspan="7"
-                                            class="small text-danger">
-                                            <strong>WAVE error:</strong>
-                                            @publicPage.WaveErrorMessage
-                                        </td>
-                                    </tr>
-                                }
                             }
                         </tbody>
                     </table>

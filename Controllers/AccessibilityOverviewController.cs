@@ -3,13 +3,12 @@ using CityWebsiteAuditDashboard.Models;
 using CityWebsiteAuditDashboard.ViewModels;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Text;
 
 namespace CityWebsiteAuditDashboard.Controllers;
 
 /// <summary>
 /// Builds the read-only, management-facing accessibility reporting dashboard
-/// from saved public WAVE scans and authenticated axe-core audit results.
+/// from saved authenticated axe-core audit results.
 /// </summary>
 [ResponseCache(
     NoStore = true,
@@ -27,7 +26,6 @@ public sealed class AccessibilityOverviewController : Controller
     [HttpGet]
     public async Task<IActionResult> Index(
         string? applicationName,
-        string auditSource = "All",
         DateTime? startDate = null,
         DateTime? endDate = null,
         string? severity = null,
@@ -36,21 +34,9 @@ public sealed class AccessibilityOverviewController : Controller
         bool latestOnly = true,
         CancellationToken cancellationToken = default)
     {
-        string normalizedAuditSource =
-            NormalizeAuditSource(auditSource);
 
         string? normalizedApplicationName =
             NormalizeOptionalValue(applicationName);
-
-        /*
-         * Public WebsiteScan records do not currently have a structured
-         * application name. An application filter therefore applies only to
-         * authenticated audits.
-         */
-        if (normalizedAuditSource == "Public")
-        {
-            normalizedApplicationName = null;
-        }
 
         string? normalizedSeverity =
             NormalizeSeverity(severity);
@@ -89,21 +75,8 @@ public sealed class AccessibilityOverviewController : Controller
                     applicationNameOption)
                 .ToListAsync(cancellationToken);
 
-        bool includeAuthenticated =
-            normalizedAuditSource != "Public";
-
-        /*
-         * When one authenticated application is selected, public scan data is
-         * excluded because the current schema cannot truthfully associate a
-         * public WebsiteScan URL with that authenticated ApplicationName.
-         */
-        bool includePublic =
-            normalizedAuditSource != "Authenticated" &&
-            normalizedApplicationName is null;
-
         List<AuthenticatedRunSnapshot> authenticatedRuns =
             await LoadAuthenticatedRunsAsync(
-                includeAuthenticated,
                 normalizedApplicationName,
                 normalizedStartDate,
                 endDateExclusive,
@@ -146,33 +119,16 @@ public sealed class AccessibilityOverviewController : Controller
                 normalizedWcagLevel,
                 normalizedFindingType);
 
-        List<PublicScanSnapshot> publicScans =
-            await LoadPublicScansAsync(
-                includePublic,
-                normalizedStartDate,
-                endDateExclusive,
-                cancellationToken);
-
-        List<PublicScanSnapshot> selectedPublicScans =
-            SelectPublicScans(
-                publicScans,
-                latestOnly);
-
         AccessibilityOverviewSummaryViewModel summary =
             BuildSummary(
                 selectedAuthenticatedRuns,
                 successfulAuthenticatedSteps,
-                filteredFindings,
-                selectedPublicScans,
-                normalizedSeverity,
-                normalizedWcagLevel,
-                normalizedFindingType);
+                filteredFindings);
 
         AccessibilityHealthViewModel health =
             BuildHealth(
                 successfulAuthenticatedSteps,
-                filteredFindings,
-                selectedPublicScans);
+                filteredFindings);
 
         AccessibilityIssueBreakdownViewModel issueBreakdown =
             BuildIssueBreakdown(filteredFindings);
@@ -213,23 +169,12 @@ public sealed class AccessibilityOverviewController : Controller
                     normalizedWcagLevel,
                     normalizedFindingType);
 
-        List<PublicScanSnapshot>
-            latestPublicScansForRanking =
-                SelectPublicScans(
-                    publicScans,
-                    latestOnly: true);
-
         List<AccessibilityApplicationRankingViewModel>
             applicationRankings =
                 BuildApplicationRankings(
                     comparisonAuthenticatedRuns,
                     comparisonAuthenticatedSteps,
                     filteredComparisonFindings);
-
-        List<AccessibilityPublicPageRankingViewModel>
-            publicPageRankings =
-                BuildPublicPageRankings(
-                    latestPublicScansForRanking);
 
         List<AccessibilityTopFindingViewModel>
             topFindings =
@@ -242,8 +187,7 @@ public sealed class AccessibilityOverviewController : Controller
             trendPoints =
                 BuildTrendPoints(
                     successfulAuthenticatedSteps,
-                    filteredFindings,
-                    selectedPublicScans);
+                    filteredFindings);
 
         AccessibilityOverviewViewModel model =
             new()
@@ -253,9 +197,6 @@ public sealed class AccessibilityOverviewController : Controller
                     {
                         ApplicationName =
                             normalizedApplicationName,
-
-                        AuditSource =
-                            normalizedAuditSource,
 
                         StartDate =
                             normalizedStartDate,
@@ -291,9 +232,6 @@ public sealed class AccessibilityOverviewController : Controller
                 Applications =
                     applicationRankings,
 
-                PublicPages =
-                    publicPageRankings,
-
                 TopFindings =
                     topFindings,
 
@@ -306,17 +244,11 @@ public sealed class AccessibilityOverviewController : Controller
 
     private async Task<List<AuthenticatedRunSnapshot>>
         LoadAuthenticatedRunsAsync(
-            bool includeAuthenticated,
             string? applicationName,
             DateTime? startDate,
             DateTime? endDateExclusive,
             CancellationToken cancellationToken)
     {
-        if (!includeAuthenticated)
-        {
-            return new List<AuthenticatedRunSnapshot>();
-        }
-
         IQueryable<AuthenticatedAuditRun> query =
             _dbContext.AuthenticatedAuditRuns
                 .AsNoTracking();
@@ -451,78 +383,6 @@ public sealed class AccessibilityOverviewController : Controller
             .ToListAsync(cancellationToken);
     }
 
-    private async Task<List<PublicScanSnapshot>>
-        LoadPublicScansAsync(
-            bool includePublic,
-            DateTime? startDate,
-            DateTime? endDateExclusive,
-            CancellationToken cancellationToken)
-    {
-        if (!includePublic)
-        {
-            return new List<PublicScanSnapshot>();
-        }
-
-        /*
-         * WaveScanSucceeded receives either true or false whenever a WAVE scan
-         * was attempted. Normal website-only scans remain null and are excluded
-         * from the accessibility overview.
-         */
-        IQueryable<WebsiteScan> query =
-            _dbContext.WebsiteScans
-                .AsNoTracking()
-                .Where(scan =>
-                    scan.WaveScanSucceeded.HasValue);
-
-        if (startDate.HasValue)
-        {
-            query = query.Where(scan =>
-                (scan.WaveScannedAt ??
-                 scan.DateScanned) >=
-                startDate.Value);
-        }
-
-        if (endDateExclusive.HasValue)
-        {
-            query = query.Where(scan =>
-                (scan.WaveScannedAt ??
-                 scan.DateScanned) <
-                endDateExclusive.Value);
-        }
-
-        return await query
-            .Select(scan =>
-                new PublicScanSnapshot
-                {
-                    Id = scan.Id,
-                    Url = scan.Url,
-                    DateScanned = scan.DateScanned,
-                    WaveScannedAt = scan.WaveScannedAt,
-
-                    WaveScanSucceeded =
-                        scan.WaveScanSucceeded == true,
-
-                    WaveErrors =
-                        scan.WaveErrors ?? 0,
-
-                    WaveContrastErrors =
-                        scan.WaveContrastErrors ?? 0,
-
-                    WaveAlerts =
-                        scan.WaveAlerts ?? 0,
-
-                    WaveFeatures =
-                        scan.WaveFeatures ?? 0,
-
-                    WaveAria =
-                        scan.WaveAria ?? 0,
-
-                    WaveErrorMessage =
-                        scan.WaveErrorMessage
-                })
-            .ToListAsync(cancellationToken);
-    }
-
     private static List<AuthenticatedRunSnapshot>
         SelectAuthenticatedRuns(
             IReadOnlyCollection<AuthenticatedRunSnapshot> runs,
@@ -566,42 +426,6 @@ public sealed class AccessibilityOverviewController : Controller
             .OrderBy(run => run.ApplicationName)
             .ThenByDescending(run => run.StartedAt)
             .ThenByDescending(run => run.Id)
-            .ToList();
-    }
-
-    private static List<PublicScanSnapshot>
-        SelectPublicScans(
-            IReadOnlyCollection<PublicScanSnapshot> scans,
-            bool latestOnly)
-    {
-        if (!latestOnly)
-        {
-            return scans
-                .OrderByDescending(scan =>
-                    scan.EffectiveScanDate)
-                .ThenByDescending(scan => scan.Id)
-                .ToList();
-        }
-
-        /*
-         * Public URLs are grouped by their exact trimmed saved value. The
-         * database does not currently contain a canonical application or URL
-         * identity, so the dashboard does not make unsupported assumptions
-         * about whether differently written URLs represent the same page.
-         */
-        return scans
-            .GroupBy(
-                scan => scan.Url.Trim(),
-                StringComparer.Ordinal)
-            .Select(group =>
-                group
-                    .OrderByDescending(scan =>
-                        scan.EffectiveScanDate)
-                    .ThenByDescending(scan => scan.Id)
-                    .First())
-            .OrderByDescending(scan =>
-                scan.EffectiveScanDate)
-            .ThenBy(scan => scan.Url)
             .ToList();
     }
 
@@ -828,48 +652,6 @@ public sealed class AccessibilityOverviewController : Controller
             .ToList();
     }
 
-    private static List<AccessibilityPublicPageRankingViewModel>
-        BuildPublicPageRankings(
-            IReadOnlyCollection<PublicScanSnapshot> scans)
-    {
-        return scans
-            .Select(scan =>
-                new AccessibilityPublicPageRankingViewModel
-                {
-                    WebsiteScanId =
-                        scan.Id,
-
-                    Url =
-                        scan.Url,
-
-                    DateScanned =
-                        scan.EffectiveScanDate,
-
-                    WaveScanSucceeded =
-                        scan.WaveScanSucceeded,
-
-                    WaveErrors =
-                        scan.WaveErrors,
-
-                    WaveContrastErrors =
-                        scan.WaveContrastErrors,
-
-                    WaveAlerts =
-                        scan.WaveAlerts,
-
-                    WaveErrorMessage =
-                        scan.WaveErrorMessage
-                })
-            .OrderByDescending(page =>
-                page.WaveErrorAndContrastCount)
-            .ThenByDescending(page =>
-                page.WaveAlerts)
-            .ThenBy(page =>
-                page.Url)
-            .Take(10)
-            .ToList();
-    }
-
     private static List<AccessibilityTopFindingViewModel>
     BuildTopFindings(
         IReadOnlyCollection<AuthenticatedRunSnapshot> runs,
@@ -1059,28 +841,25 @@ public sealed class AccessibilityOverviewController : Controller
     private static List<AccessibilityTrendPointViewModel>
     BuildTrendPoints(
         IReadOnlyCollection<AuthenticatedStepSnapshot> steps,
-        IReadOnlyCollection<AuthenticatedFindingSnapshot> findings,
-        IReadOnlyCollection<PublicScanSnapshot> publicScans)
+        IReadOnlyCollection<AuthenticatedFindingSnapshot> findings)
     {
         Dictionary<int, DateTime> stepDatesById =
             steps.ToDictionary(
                 step => step.Id,
                 step => step.ScannedAt.Date);
 
-        HashSet<DateTime> reportingDates =
+        List<DateTime> reportingDates =
             steps
-                .Select(step => step.ScannedAt.Date)
-                .Concat(
-                    publicScans.Select(scan =>
-                        scan.EffectiveScanDate.Date))
+                .Select(step =>
+                    step.ScannedAt.Date)
                 .Distinct()
-                .ToHashSet();
+                .OrderBy(date => date)
+                .ToList();
 
         List<AccessibilityTrendPointViewModel> trends =
             new();
 
-        foreach (DateTime reportingDate
-            in reportingDates.OrderBy(date => date))
+        foreach (DateTime reportingDate in reportingDates)
         {
             List<AuthenticatedFindingSnapshot> findingsForDate =
                 findings
@@ -1091,40 +870,22 @@ public sealed class AccessibilityOverviewController : Controller
                         findingDate == reportingDate)
                     .ToList();
 
-            List<PublicScanSnapshot> publicScansForDate =
-                publicScans
-                    .Where(scan =>
-                        scan.EffectiveScanDate.Date ==
-                        reportingDate)
-                    .ToList();
-
             trends.Add(
                 new AccessibilityTrendPointViewModel
                 {
                     Date =
                         reportingDate,
 
-                    AuthenticatedFindings =
-                        findingsForDate.Count(IsViolation),
-
                     AuthenticatedStatesScanned =
                         steps.Count(step =>
                             step.ScannedAt.Date ==
                             reportingDate),
 
+                    AuthenticatedFindings =
+                        findingsForDate.Count(IsViolation),
+
                     FixFirstFindings =
-                        findingsForDate.Count(IsFixFirst),
-
-                    PublicPagesScanned =
-                        publicScansForDate.Count,
-
-                    WaveErrorsAndContrastErrors =
-                        publicScansForDate
-                            .Where(scan =>
-                                scan.WaveScanSucceeded)
-                            .Sum(scan =>
-                                scan.WaveErrors +
-                                scan.WaveContrastErrors)
+                        findingsForDate.Count(IsFixFirst)
                 });
         }
 
@@ -1132,135 +893,15 @@ public sealed class AccessibilityOverviewController : Controller
     }
 
     private static AccessibilityOverviewSummaryViewModel
-        BuildSummary(
-            IReadOnlyCollection<AuthenticatedRunSnapshot> runs,
-            IReadOnlyCollection<AuthenticatedStepSnapshot> steps,
-            IReadOnlyCollection<AuthenticatedFindingSnapshot> findings,
-            IReadOnlyCollection<PublicScanSnapshot> publicScans,
-            string? severity,
-            string? wcagLevel,
-            string? findingType)
+    BuildSummary(
+        IReadOnlyCollection<AuthenticatedRunSnapshot> runs,
+        IReadOnlyCollection<AuthenticatedStepSnapshot> steps,
+        IReadOnlyCollection<AuthenticatedFindingSnapshot> findings)
     {
-        bool hasFindingFilters =
-            severity is not null ||
-            wcagLevel is not null ||
-            findingType is not null;
-
         List<AuthenticatedFindingSnapshot> violationFindings =
             findings
                 .Where(IsViolation)
                 .ToList();
-
-        int totalAutomatedFindings =
-            hasFindingFilters
-                ? violationFindings.Count
-                : steps.Sum(step =>
-                    step.ViolationRuleCount);
-
-        int totalAffectedElements =
-            hasFindingFilters
-                ? violationFindings.Sum(finding =>
-                    finding.AffectedElementCount)
-                : steps.Sum(step =>
-                    step.AffectedElementCount);
-
-        int authenticatedStatesWithFindings;
-
-        if (hasFindingFilters)
-        {
-            authenticatedStatesWithFindings =
-                findings
-                    .Select(finding =>
-                        finding.AuthenticatedAuditStepId)
-                    .Distinct()
-                    .Count();
-        }
-        else
-        {
-            authenticatedStatesWithFindings =
-                steps.Count(step =>
-                    step.ViolationRuleCount > 0 ||
-                    step.NeedsReviewRuleCount > 0);
-        }
-
-        int fixFirstFindings =
-            findings.Count(IsFixFirst);
-
-        int publicPagesWithFindings =
-            publicScans.Count(scan =>
-                scan.WaveScanSucceeded &&
-                (scan.WaveErrors > 0 ||
-                 scan.WaveContrastErrors > 0 ||
-                 scan.WaveAlerts > 0));
-
-        DateTime? latestAuthenticatedDate = null;
-
-        if (steps.Count > 0)
-        {
-            latestAuthenticatedDate =
-                steps.Max(step => step.ScannedAt);
-        }
-        else if (runs.Count > 0)
-        {
-            latestAuthenticatedDate =
-                runs.Max(run => run.StartedAt);
-        }
-
-        DateTime? latestPublicDate =
-            publicScans.Count > 0
-                ? publicScans.Max(scan =>
-                    scan.EffectiveScanDate)
-                : null;
-
-        DateTime? latestAuditDate = null;
-        string? latestAuditSource = null;
-
-        if (latestAuthenticatedDate.HasValue &&
-            latestPublicDate.HasValue)
-        {
-            if (latestAuthenticatedDate.Value >
-                latestPublicDate.Value)
-            {
-                latestAuditDate =
-                    latestAuthenticatedDate;
-
-                latestAuditSource =
-                    "Authenticated axe-core";
-            }
-            else if (latestPublicDate.Value >
-                     latestAuthenticatedDate.Value)
-            {
-                latestAuditDate =
-                    latestPublicDate;
-
-                latestAuditSource =
-                    "Public WAVE";
-            }
-            else
-            {
-                latestAuditDate =
-                    latestAuthenticatedDate;
-
-                latestAuditSource =
-                    "Public and authenticated";
-            }
-        }
-        else if (latestAuthenticatedDate.HasValue)
-        {
-            latestAuditDate =
-                latestAuthenticatedDate;
-
-            latestAuditSource =
-                "Authenticated axe-core";
-        }
-        else if (latestPublicDate.HasValue)
-        {
-            latestAuditDate =
-                latestPublicDate;
-
-            latestAuditSource =
-                "Public WAVE";
-        }
 
         return new AccessibilityOverviewSummaryViewModel
         {
@@ -1272,55 +913,46 @@ public sealed class AccessibilityOverviewController : Controller
                         StringComparer.OrdinalIgnoreCase)
                     .Count(),
 
-            PublicPagesScanned =
-                publicScans.Count,
-
-            SuccessfulWaveScans =
-                publicScans.Count(scan =>
-                    scan.WaveScanSucceeded),
-
             AuthenticatedStatesScanned =
                 steps.Count,
 
             TotalAutomatedFindings =
-                totalAutomatedFindings,
+                violationFindings.Count,
 
             TotalAffectedElements =
-                totalAffectedElements,
+                findings.Sum(finding =>
+                    finding.AffectedElementCount),
 
             FixFirstFindings =
-                fixFirstFindings,
-
-            PublicPagesWithFindings =
-                publicPagesWithFindings,
+                findings.Count(IsFixFirst),
 
             AuthenticatedStatesWithFindings =
-                authenticatedStatesWithFindings,
-
-            LatestAuditDate =
-                latestAuditDate,
-
-            LatestAuditSource =
-                latestAuditSource
+                findings
+                    .Select(finding =>
+                        finding.AuthenticatedAuditStepId)
+                    .Distinct()
+                    .Count(),
         };
     }
 
-    private static AccessibilityHealthViewModel BuildHealth(
+    private static AccessibilityHealthViewModel
+    BuildHealth(
         IReadOnlyCollection<AuthenticatedStepSnapshot> steps,
-        IReadOnlyCollection<AuthenticatedFindingSnapshot> findings,
-        IReadOnlyCollection<PublicScanSnapshot> publicScans)
+        IReadOnlyCollection<AuthenticatedFindingSnapshot> findings)
     {
         int passedRuleResults =
             steps.Sum(step =>
                 step.PassedRuleCount);
 
         int violationRuleResults =
-            steps.Sum(step =>
-                step.ViolationRuleCount);
+            findings.Count(IsViolation);
 
         int needsReviewRuleResults =
-            steps.Sum(step =>
-                step.NeedsReviewRuleCount);
+            findings.Count(finding =>
+                string.Equals(
+                    finding.FindingType,
+                    "NeedsReview",
+                    StringComparison.OrdinalIgnoreCase));
 
         int totalRuleResults =
             passedRuleResults +
@@ -1330,16 +962,8 @@ public sealed class AccessibilityOverviewController : Controller
         double automatedCheckPassRate =
             totalRuleResults == 0
                 ? 0
-                : Math.Round(
-                    passedRuleResults * 100d /
-                    totalRuleResults,
-                    1);
-
-        List<PublicScanSnapshot> successfulWaveScans =
-            publicScans
-                .Where(scan =>
-                    scan.WaveScanSucceeded)
-                .ToList();
+                : passedRuleResults * 100.0 /
+                  totalRuleResults;
 
         return new AccessibilityHealthViewModel
         {
@@ -1377,35 +1001,7 @@ public sealed class AccessibilityOverviewController : Controller
                         "A") &&
                     !IsWcagLevel(
                         finding.WcagLevel,
-                        "AA")),
-
-            SuccessfulWaveScans =
-                successfulWaveScans.Count,
-
-            WaveErrors =
-                successfulWaveScans.Sum(scan =>
-                    scan.WaveErrors),
-
-            WaveContrastErrors =
-                successfulWaveScans.Sum(scan =>
-                    scan.WaveContrastErrors),
-
-            WaveAlerts =
-                successfulWaveScans.Sum(scan =>
-                    scan.WaveAlerts),
-
-            WaveFeatures =
-                successfulWaveScans.Sum(scan =>
-                    scan.WaveFeatures),
-
-            WaveAria =
-                successfulWaveScans.Sum(scan =>
-                    scan.WaveAria),
-
-            PublicPagesWithoutWaveErrorsOrContrastErrors =
-                successfulWaveScans.Count(scan =>
-                    scan.WaveErrors == 0 &&
-                    scan.WaveContrastErrors == 0)
+                        "AA"))
         };
     }
 
@@ -1540,28 +1136,6 @@ public sealed class AccessibilityOverviewController : Controller
             StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string NormalizeAuditSource(
-        string? auditSource)
-    {
-        if (string.Equals(
-            auditSource,
-            "Public",
-            StringComparison.OrdinalIgnoreCase))
-        {
-            return "Public";
-        }
-
-        if (string.Equals(
-            auditSource,
-            "Authenticated",
-            StringComparison.OrdinalIgnoreCase))
-        {
-            return "Authenticated";
-        }
-
-        return "All";
-    }
-
     private static string? NormalizeSeverity(
         string? severity)
     {
@@ -1676,34 +1250,5 @@ public sealed class AccessibilityOverviewController : Controller
         public string? HelpUrl { get; init; }
 
         public int AffectedElementCount { get; init; }
-    }
-
-    private sealed class PublicScanSnapshot
-    {
-        public int Id { get; init; }
-
-        public string Url { get; init; }
-            = string.Empty;
-
-        public DateTime DateScanned { get; init; }
-
-        public DateTime? WaveScannedAt { get; init; }
-
-        public bool WaveScanSucceeded { get; init; }
-
-        public int WaveErrors { get; init; }
-
-        public int WaveContrastErrors { get; init; }
-
-        public int WaveAlerts { get; init; }
-
-        public int WaveFeatures { get; init; }
-
-        public int WaveAria { get; init; }
-
-        public string? WaveErrorMessage { get; init; }
-
-        public DateTime EffectiveScanDate =>
-            WaveScannedAt ?? DateScanned;
     }
 }
