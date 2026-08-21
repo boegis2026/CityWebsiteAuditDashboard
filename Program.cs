@@ -2,6 +2,7 @@ using CityWebsiteAuditDashboard.Services;
 using CityWebsiteAuditDashboard.Data;
 using Microsoft.EntityFrameworkCore;
 using CityWebsiteAuditDashboard.Services.AuthenticatedAuditing;
+using CityWebsiteAuditDashboard.Services.Remediation;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,6 +25,8 @@ builder.Services.AddHttpClient<IWebsiteScannerService, WebsiteScannerService>(cl
     client.DefaultRequestHeaders.UserAgent.ParseAdd(
         "CityWebsiteAuditDashboard/1.0");
 });
+
+builder.Services.AddScoped<AccessibilityRemediationService>();
 
 // A singleton is required because the same authenticated Playwright browser
 // must remain alive across separate Start, Scan, and Stop HTTP requests.

@@ -1,0 +1,258 @@
+﻿@model CityWebsiteAuditDashboard.ViewModels.AccessibilityRemediationIndexViewModel
+
+@{
+    ViewData["Title"] = "Accessibility Remediation Tracker";
+}
+
+<div class="container py-4">
+
+    <div class="d-flex flex-wrap
+                justify-content-between
+                align-items-start
+                gap-3
+                mb-4">
+
+        <div>
+            <h1 class="h2 mb-1">
+                Accessibility Remediation Tracker
+            </h1>
+
+            <p class="text-muted mb-0">
+                Track detected accessibility issues from assignment
+                through remediation, retesting, and verification.
+            </p>
+        </div>
+
+        <a asp-controller="AccessibilityOverview"
+           asp-action="Index"
+           class="btn btn-outline-secondary">
+            Accessibility Overview
+        </a>
+    </div>
+
+    <div class="alert alert-info">
+        <strong>Workflow:</strong>
+        Open → In Progress → Fixed – Awaiting Verification → Verified
+    </div>
+
+    @if (Model.Items.Count == 0)
+    {
+        <div class="card shadow-sm">
+            <div class="card-body text-center py-5">
+
+                <h2 class="h5">
+                    No remediation items yet
+                </h2>
+
+                <p class="text-muted mb-0">
+                    Accessibility findings will appear here after
+                    remediation tracking is started for them.
+                </p>
+
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="card shadow-sm">
+
+            <div class="card-header">
+                <div class="d-flex flex-wrap
+                            justify-content-between
+                            align-items-center
+                            gap-2">
+
+                    <h2 class="h5 mb-0">
+                        Remediation Items
+                    </h2>
+
+                    <span class="badge text-bg-secondary">
+                        @Model.Items.Count total
+                    </span>
+
+                </div>
+            </div>
+
+            <div class="table-responsive">
+
+                <table class="table table-hover align-middle mb-0">
+
+                    <thead class="table-light">
+                        <tr>
+                            <th>Status</th>
+                            <th>Application</th>
+                            <th>Finding</th>
+                            <th>Severity</th>
+                            <th>WCAG</th>
+                            <th>Page / State</th>
+                            <th>Assigned To</th>
+                            <th>Detected</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        @foreach (var item in Model.Items)
+                        {
+                            string statusBadgeClass =
+                                item.Status switch
+                                {
+                                    "Open" =>
+                                        "text-bg-danger",
+
+                                    "InProgress" =>
+                                        "text-bg-primary",
+
+                                    "Fixed" =>
+                                        "text-bg-warning",
+
+                                    "Verified" =>
+                                        "text-bg-success",
+
+                                    "WontFix" =>
+                                        "text-bg-secondary",
+
+                                    _ =>
+                                        "text-bg-secondary"
+                                };
+
+                            string statusLabel =
+                                item.Status switch
+                                {
+                                    "InProgress" =>
+                                        "In Progress",
+
+                                    "Fixed" =>
+                                        "Fixed – Awaiting Verification",
+
+                                    "WontFix" =>
+                                        "Won't Fix",
+
+                                    _ =>
+                                        item.Status
+                                };
+
+                            string impactBadgeClass =
+                                item.Impact?.ToLowerInvariant() switch
+                                {
+                                    "critical" =>
+                                        "text-bg-danger",
+
+                                    "serious" =>
+                                        "text-bg-danger",
+
+                                    "moderate" =>
+                                        "text-bg-warning",
+
+                                    "minor" =>
+                                        "text-bg-info",
+
+                                    _ =>
+                                        "text-bg-secondary"
+                                };
+
+                            <tr>
+
+                                <td>
+                                    <span class="badge @statusBadgeClass">
+                                        @statusLabel
+                                    </span>
+                                </td>
+
+                                <td>
+                                    <div class="fw-semibold">
+                                        @item.ApplicationName
+                                    </div>
+                                </td>
+
+                                <td>
+                                    <div class="fw-semibold">
+                                        @item.RuleId
+                                    </div>
+
+                                    <div class="small text-muted">
+                                        @item.FindingType
+                                    </div>
+
+                                    <div class="small text-muted">
+                                        @item.AffectedElementCount
+                                        affected
+                                    </div>
+                                </td>
+
+                                <td>
+                                    <span class="badge @impactBadgeClass">
+                                        @(item.Impact ?? "Unknown")
+                                    </span>
+                                </td>
+
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(
+                                        item.WcagLevel))
+                                    {
+                                        <span class="badge text-bg-primary">
+                                            @item.WcagLevel
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small">
+                                            Other
+                                        </span>
+                                    }
+                                </td>
+
+                                <td style="min-width: 220px;">
+
+                                    <div>
+                                        @item.StepName
+                                    </div>
+
+                                    <div class="small text-muted text-truncate"
+                                         style="max-width: 300px;"
+                                         title="@item.Url">
+                                        @item.Url
+                                    </div>
+
+                                </td>
+
+                                <td>
+                                    @if (string.IsNullOrWhiteSpace(
+                                        item.AssignedTo))
+                                    {
+                                        <span class="text-muted">
+                                            Unassigned
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        @item.AssignedTo
+                                    }
+                                </td>
+
+                                <td class="text-nowrap">
+                                    @item.DetectedAt.ToString(
+                                        "yyyy-MM-dd")
+                                </td>
+
+                                <td class="text-end">
+                                    <a asp-controller="AccessibilityRemediations"
+                                       asp-action="Details"
+                                       asp-route-id="@item.Id"
+                                       class="btn btn-sm btn-outline-primary">
+                                        Manage
+                                    </a>
+                                </td>
+
+                            </tr>
+                        }
+
+                    </tbody>
+
+                </table>
+
+            </div>
+        </div>
+    }
+</div>

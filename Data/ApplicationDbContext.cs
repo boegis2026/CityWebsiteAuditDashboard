@@ -28,6 +28,12 @@ namespace CityWebsiteAuditDashboard.Data
         public DbSet<AuthenticatedAuditFindingNode> AuthenticatedAuditFindingNodes
             { get; set; }
 
+        public DbSet<AccessibilityRemediationItem> AccessibilityRemediationItems { get; set; }
+
+        public DbSet<AccessibilityRemediationHistory> AccessibilityRemediationHistories { get; set; }
+
+        public DbSet<AccessibilityRemediationFindingOccurrence> AccessibilityRemediationFindingOccurrences { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -111,6 +117,58 @@ namespace CityWebsiteAuditDashboard.Data
                     finding.RuleId
                 })
                     .IsUnique();
+            });
+
+            modelBuilder.Entity<AccessibilityRemediationItem>(entity =>
+            {
+                entity.Property(item => item.Status)
+                    .HasConversion<string>()
+                    .HasMaxLength(30);
+
+                entity.HasIndex(item => item.Status);
+
+                entity.HasIndex(item => item.AssignedTo);
+            });
+
+            modelBuilder.Entity<AccessibilityRemediationHistory>(entity =>
+            {
+                entity.Property(history => history.PreviousStatus)
+                    .HasConversion<string>()
+                    .HasMaxLength(30);
+
+                entity.Property(history => history.NewStatus)
+                    .HasConversion<string>()
+                    .HasMaxLength(30);
+
+                entity.HasOne(history => history.RemediationItem)
+                    .WithMany(item => item.History)
+                    .HasForeignKey(history => history.AccessibilityRemediationItemId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasIndex(history => history.AccessibilityRemediationItemId);
+
+                entity.HasIndex(history => history.ChangedAt);
+            });
+
+            modelBuilder.Entity<AccessibilityRemediationFindingOccurrence>(entity =>
+            {
+                entity.Property(occurrence => occurrence.MatchConfidence)
+                    .HasPrecision(5, 4);
+
+                entity.HasOne(occurrence => occurrence.RemediationItem)
+                    .WithMany(item => item.FindingOccurrences)
+                    .HasForeignKey(occurrence => occurrence.AccessibilityRemediationItemId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(occurrence => occurrence.AuthenticatedAuditFinding)
+                    .WithMany()
+                    .HasForeignKey(occurrence => occurrence.AuthenticatedAuditFindingId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasIndex(occurrence => occurrence.AuthenticatedAuditFindingId)
+                    .IsUnique();
+
+                entity.HasIndex(occurrence => occurrence.AccessibilityRemediationItemId);
             });
         }
     }

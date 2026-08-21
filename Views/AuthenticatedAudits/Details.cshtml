@@ -768,6 +768,26 @@
                                                             View Rule Guidance
                                                         </a>
                                                     }
+                                                    <form asp-controller="AccessibilityRemediations"
+                                                          asp-action="Start"
+                                                          method="post"
+                                                          class="d-inline ms-2">
+
+                                                        @Html.AntiForgeryToken()
+
+                                                        <input type="hidden"
+                                                               name="findingId"
+                                                               value="@finding.Id" />
+
+                                                        <input type="hidden"
+                                                               name="auditRunId"
+                                                               value="@Model.Id" />
+
+                                                        <button type="submit"
+                                                                class="btn btn-sm btn-success">
+                                                            Start Remediation
+                                                        </button>
+                                                    </form>
                                                 </div>
                                             }
                                         </div>
