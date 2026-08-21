@@ -25,14 +25,15 @@ namespace CityWebsiteAuditDashboard.Data
         // authenticated rendered-state scan.
         public DbSet<AuthenticatedAuditFinding> AuthenticatedAuditFindings { get; set; }
 
-        public DbSet<AuthenticatedAuditFindingNode> AuthenticatedAuditFindingNodes
-            { get; set; }
+        public DbSet<AuthenticatedAuditFindingNode> AuthenticatedAuditFindingNodes { get; set; }
 
         public DbSet<AccessibilityRemediationItem> AccessibilityRemediationItems { get; set; }
 
         public DbSet<AccessibilityRemediationHistory> AccessibilityRemediationHistories { get; set; }
 
         public DbSet<AccessibilityRemediationFindingOccurrence> AccessibilityRemediationFindingOccurrences { get; set; }
+
+        public DbSet<AccessibilityRemediationRetest>  AccessibilityRemediationRetests { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -169,6 +170,53 @@ namespace CityWebsiteAuditDashboard.Data
                     .IsUnique();
 
                 entity.HasIndex(occurrence => occurrence.AccessibilityRemediationItemId);
+            });
+
+            modelBuilder.Entity<AccessibilityRemediationRetest>(entity =>
+            {
+                entity.Property(retest => retest.Result)
+                    .HasConversion<string>()
+                    .HasMaxLength(30);
+
+                entity.Property(retest => retest.MatchConfidence)
+                    .HasPrecision(5, 4);
+
+                entity.HasOne(retest => retest.RemediationItem)
+                    .WithMany(item => item.Retests)
+                    .HasForeignKey(retest =>
+                        retest.AccessibilityRemediationItemId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                /*
+                 * Retests are historical evidence.
+                 * Do not allow an authenticated audit step to be deleted while
+                 * a remediation retest references it.
+                 */
+                entity.HasOne(retest => retest.AuthenticatedAuditStep)
+                    .WithMany()
+                    .HasForeignKey(retest =>
+                        retest.AuthenticatedAuditStepId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                /*
+                 * Likewise, preserve the matched finding used as evidence for
+                 * the retest result.
+                 */
+                entity.HasOne(retest =>
+                        retest.MatchedAuthenticatedAuditFinding)
+                    .WithMany()
+                    .HasForeignKey(retest =>
+                        retest.MatchedAuthenticatedAuditFindingId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasIndex(retest =>
+                    retest.AccessibilityRemediationItemId);
+
+                entity.HasIndex(retest =>
+                    retest.RetestedAt);
+
+                entity.HasIndex(retest =>
+                    retest.Result);
             });
         }
     }

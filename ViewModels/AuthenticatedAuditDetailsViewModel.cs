@@ -8,10 +8,6 @@ public sealed class AuthenticatedAuditDetailsViewModel
 {
     public int Id { get; init; }
 
-    public int? RemediationItemId { get; init; }
-
-    public string? RemediationStatus { get; init; }
-
     public string ApplicationName { get; init; } = string.Empty;
 
     public string StartingUrl { get; init; } = string.Empty;

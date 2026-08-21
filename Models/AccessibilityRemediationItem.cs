@@ -24,4 +24,7 @@ public sealed class AccessibilityRemediationItem
 
     public ICollection<AccessibilityRemediationFindingOccurrence> FindingOccurrences { get; set; }
         = new List<AccessibilityRemediationFindingOccurrence>();
+
+    public ICollection<AccessibilityRemediationRetest> Retests { get; set; }
+    = new List<AccessibilityRemediationRetest>();
 }

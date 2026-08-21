@@ -136,7 +136,8 @@ public sealed class AccessibilityRemediationService
                 ? null
                 : notes.Trim();
 
-        if (newStatus == AccessibilityRemediationStatus.WontFix &&
+        if (item.Status != AccessibilityRemediationStatus.WontFix &&
+            newStatus == AccessibilityRemediationStatus.WontFix &&
             string.IsNullOrWhiteSpace(cleanedNotes))
         {
             throw new InvalidOperationException(

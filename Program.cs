@@ -28,6 +28,10 @@ builder.Services.AddHttpClient<IWebsiteScannerService, WebsiteScannerService>(cl
 
 builder.Services.AddScoped<AccessibilityRemediationService>();
 
+builder.Services.AddScoped<AccessibilityRemediationMatcher>();
+
+builder.Services.AddScoped<AccessibilityRemediationRetestService>();
+
 // A singleton is required because the same authenticated Playwright browser
 // must remain alive across separate Start, Scan, and Stop HTTP requests.
 builder.Services.AddSingleton<
