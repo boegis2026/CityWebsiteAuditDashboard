@@ -21,7 +21,11 @@ public sealed class AccessibilityRemediationsController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index()
+    public async Task<IActionResult> Index(
+    string? statusFilter,
+    string? applicationFilter,
+    string? severityFilter,
+    string? assigneeFilter)
     {
         var remediationItems =
             await _dbContext.AccessibilityRemediationItems
@@ -36,7 +40,30 @@ public sealed class AccessibilityRemediationsController : Controller
                 .OrderByDescending(item => item.UpdatedAt)
                 .ToListAsync();
 
-        AccessibilityRemediationIndexViewModel viewModel = new();
+        AccessibilityRemediationIndexViewModel viewModel = new()
+        {
+            StatusFilter = statusFilter,
+            ApplicationFilter = applicationFilter,
+            SeverityFilter = severityFilter,
+            AssigneeFilter = assigneeFilter,
+
+            TotalCount = remediationItems.Count,
+
+            OpenCount = remediationItems.Count(item =>
+                item.Status == AccessibilityRemediationStatus.Open),
+
+            InProgressCount = remediationItems.Count(item =>
+                item.Status == AccessibilityRemediationStatus.InProgress),
+
+            FixedCount = remediationItems.Count(item =>
+                item.Status == AccessibilityRemediationStatus.Fixed),
+
+            VerifiedCount = remediationItems.Count(item =>
+                item.Status == AccessibilityRemediationStatus.Verified),
+
+            WontFixCount = remediationItems.Count(item =>
+                item.Status == AccessibilityRemediationStatus.WontFix)
+        };
 
         foreach (var item in remediationItems)
         {
@@ -75,6 +102,77 @@ public sealed class AccessibilityRemediationsController : Controller
 
                     DetectedAt = step.ScannedAt
                 });
+        }
+
+        viewModel.ApplicationOptions =
+            viewModel.Items
+                .Select(item => item.ApplicationName)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(name => name)
+                .ToList();
+
+        viewModel.AssigneeOptions =
+            viewModel.Items
+                .Where(item =>
+                    !string.IsNullOrWhiteSpace(item.AssignedTo))
+                .Select(item => item.AssignedTo!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(name => name)
+                .ToList();
+
+        if (!string.IsNullOrWhiteSpace(statusFilter))
+        {
+            viewModel.Items = viewModel.Items
+                .Where(item =>
+                    string.Equals(
+                        item.Status,
+                        statusFilter,
+                        StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        if (!string.IsNullOrWhiteSpace(applicationFilter))
+        {
+            viewModel.Items = viewModel.Items
+                .Where(item =>
+                    string.Equals(
+                        item.ApplicationName,
+                        applicationFilter,
+                        StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        if (!string.IsNullOrWhiteSpace(severityFilter))
+        {
+            viewModel.Items = viewModel.Items
+                .Where(item =>
+                    string.Equals(
+                        item.Impact,
+                        severityFilter,
+                        StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        if (!string.IsNullOrWhiteSpace(assigneeFilter))
+        {
+            if (assigneeFilter == "Unassigned")
+            {
+                viewModel.Items = viewModel.Items
+                    .Where(item =>
+                        string.IsNullOrWhiteSpace(item.AssignedTo))
+                    .ToList();
+            }
+            else
+            {
+                viewModel.Items = viewModel.Items
+                    .Where(item =>
+                        string.Equals(
+                            item.AssignedTo,
+                            assigneeFilter,
+                            StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+            }
         }
 
         return View(viewModel);

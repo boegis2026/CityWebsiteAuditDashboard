@@ -8,6 +8,10 @@ public sealed class AuthenticatedAuditDetailsViewModel
 {
     public int Id { get; init; }
 
+    public int? RemediationItemId { get; init; }
+
+    public string? RemediationStatus { get; init; }
+
     public string ApplicationName { get; init; } = string.Empty;
 
     public string StartingUrl { get; init; } = string.Empty;
@@ -117,6 +121,10 @@ public sealed class AuthenticatedAuditFindingDetailsViewModel
     public int Id { get; init; }
 
     public string FindingType { get; init; } = string.Empty;
+
+    public int? RemediationItemId { get; init; }
+
+    public string? RemediationStatus { get; init; }
 
     public string RuleId { get; init; } = string.Empty;
 

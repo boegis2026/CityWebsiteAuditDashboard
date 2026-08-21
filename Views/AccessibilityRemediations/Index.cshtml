@@ -35,6 +35,255 @@
         Open → In Progress → Fixed – Awaiting Verification → Verified
     </div>
 
+    <div class="row g-3 mb-4">
+
+        <div class="col-sm-6 col-xl">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">
+                        Open
+                    </div>
+                    <div class="fs-3 fw-semibold text-danger">
+                        @Model.OpenCount
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">
+                        In Progress
+                    </div>
+                    <div class="fs-3 fw-semibold">
+                        @Model.InProgressCount
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">
+                        Awaiting Verification
+                    </div>
+                    <div class="fs-3 fw-semibold">
+                        @Model.FixedCount
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">
+                        Verified
+                    </div>
+                    <div class="fs-3 fw-semibold text-success">
+                        @Model.VerifiedCount
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">
+                        Won't Fix
+                    </div>
+                    <div class="fs-3 fw-semibold">
+                        @Model.WontFixCount
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="card shadow-sm mb-4">
+
+        <div class="card-header">
+            <h2 class="h5 mb-0">
+                Filters
+            </h2>
+        </div>
+
+        <div class="card-body">
+
+            <form method="get"
+                  asp-controller="AccessibilityRemediations"
+                  asp-action="Index">
+
+                <div class="row g-3">
+
+                    <div class="col-md-3">
+                        <label class="form-label">
+                            Status
+                        </label>
+
+                        <select name="statusFilter"
+                                class="form-select">
+
+                            <option value="">
+                                All statuses
+                            </option>
+
+                            <option value="Open"
+                                    selected="@(Model.StatusFilter == "Open")">
+                                Open
+                            </option>
+
+                            <option value="InProgress"
+                                    selected="@(Model.StatusFilter == "InProgress")">
+                                In Progress
+                            </option>
+
+                            <option value="Fixed"
+                                    selected="@(Model.StatusFilter == "Fixed")">
+                                Fixed – Awaiting Verification
+                            </option>
+
+                            <option value="Verified"
+                                    selected="@(Model.StatusFilter == "Verified")">
+                                Verified
+                            </option>
+
+                            <option value="WontFix"
+                                    selected="@(Model.StatusFilter == "WontFix")">
+                                Won't Fix
+                            </option>
+
+                        </select>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label">
+                            Application
+                        </label>
+
+                        <select name="applicationFilter"
+                                class="form-select">
+
+                            <option value="">
+                                All applications
+                            </option>
+
+                            @foreach (var application
+                                in Model.ApplicationOptions)
+                            {
+                                <option value="@application"
+                                        selected="@(
+                                        Model.ApplicationFilter
+                                        == application)">
+                                    @application
+                                </option>
+                            }
+
+                        </select>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label">
+                            Severity
+                        </label>
+
+                        <select name="severityFilter"
+                                class="form-select">
+
+                            <option value="">
+                                All severities
+                            </option>
+
+                            <option value="critical"
+                                    selected="@(
+                                    Model.SeverityFilter
+                                    == "critical")">
+                                Critical
+                            </option>
+
+                            <option value="serious"
+                                    selected="@(
+                                    Model.SeverityFilter
+                                    == "serious")">
+                                Serious
+                            </option>
+
+                            <option value="moderate"
+                                    selected="@(
+                                    Model.SeverityFilter
+                                    == "moderate")">
+                                Moderate
+                            </option>
+
+                            <option value="minor"
+                                    selected="@(
+                                    Model.SeverityFilter
+                                    == "minor")">
+                                Minor
+                            </option>
+
+                        </select>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label">
+                            Assigned To
+                        </label>
+
+                        <select name="assigneeFilter"
+                                class="form-select">
+
+                            <option value="">
+                                All assignees
+                            </option>
+
+                            <option value="Unassigned"
+                                    selected="@(
+                                    Model.AssigneeFilter
+                                    == "Unassigned")">
+                                Unassigned
+                            </option>
+
+                            @foreach (var assignee
+                                in Model.AssigneeOptions)
+                            {
+                                <option value="@assignee"
+                                        selected="@(
+                                        Model.AssigneeFilter
+                                        == assignee)">
+                                    @assignee
+                                </option>
+                            }
+
+                        </select>
+                    </div>
+
+                </div>
+
+                <div class="d-flex gap-2 mt-3">
+
+                    <button type="submit"
+                            class="btn btn-primary">
+                        Apply Filters
+                    </button>
+
+                    <a asp-controller="AccessibilityRemediations"
+                       asp-action="Index"
+                       class="btn btn-outline-secondary">
+                        Clear
+                    </a>
+
+                </div>
+
+            </form>
+
+        </div>
+    </div>
+
     @if (Model.Items.Count == 0)
     {
         <div class="card shadow-sm">

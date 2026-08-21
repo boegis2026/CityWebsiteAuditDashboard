@@ -2,6 +2,30 @@
 
 public sealed class AccessibilityRemediationIndexViewModel
 {
+    public string? StatusFilter { get; set; }
+
+    public string? ApplicationFilter { get; set; }
+
+    public string? SeverityFilter { get; set; }
+
+    public string? AssigneeFilter { get; set; }
+
+    public List<string> ApplicationOptions { get; set; } = new();
+
+    public List<string> AssigneeOptions { get; set; } = new();
+
+    public int TotalCount { get; set; }
+
+    public int OpenCount { get; set; }
+
+    public int InProgressCount { get; set; }
+
+    public int FixedCount { get; set; }
+
+    public int VerifiedCount { get; set; }
+
+    public int WontFixCount { get; set; }
+
     public List<AccessibilityRemediationListItemViewModel> Items { get; set; }
         = new();
 }

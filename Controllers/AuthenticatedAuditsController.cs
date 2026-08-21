@@ -204,6 +204,32 @@ public sealed class AuthenticatedAuditsController : Controller
             return NotFound();
         }
 
+        List<int> findingIds =
+        auditRun.Steps
+            .SelectMany(step => step.Findings)
+            .Select(finding => finding.Id)
+            .ToList();
+
+        var remediationLookup =
+            await _dbContext.AccessibilityRemediationFindingOccurrences
+                .AsNoTracking()
+                .Where(occurrence =>
+                    findingIds.Contains(
+                        occurrence.AuthenticatedAuditFindingId))
+                .Select(occurrence => new
+                {
+                    occurrence.AuthenticatedAuditFindingId,
+                    RemediationItemId =
+                        occurrence.AccessibilityRemediationItemId,
+
+                    Status =
+                        occurrence.RemediationItem.Status
+                })
+                .ToDictionaryAsync(
+                    occurrence =>
+                        occurrence.AuthenticatedAuditFindingId,
+                    cancellationToken);
+
         /*
          * Map database entities into dashboard-specific view models.
          *
@@ -257,6 +283,19 @@ public sealed class AuthenticatedAuditsController : Controller
                                 new AuthenticatedAuditFindingDetailsViewModel
                                 {
                                     Id = finding.Id,
+                                    RemediationItemId =
+                                        remediationLookup.TryGetValue(
+                                            finding.Id,
+                                            out var remediation)
+                                            ? remediation.RemediationItemId
+                                            : null,
+
+                                    RemediationStatus =
+                                        remediationLookup.TryGetValue(
+                                            finding.Id,
+                                            out var remediationStatus)
+                                            ? remediationStatus.Status.ToString()
+                                            : null,
                                     FindingType = finding.FindingType,
                                     RuleId = finding.RuleId,
                                     Impact = finding.Impact,
