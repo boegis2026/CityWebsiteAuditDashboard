@@ -51,6 +51,9 @@ public sealed class AccessibilityRemediationDetailsViewModel
 
     public List<AccessibilityRemediationHistoryViewModel> History { get; set; }
         = new();
+
+    public List<AccessibilityRemediationRetestViewModel> Retests { get; set; }
+        = new();
 }
 
 public sealed class AccessibilityRemediationNodeViewModel
@@ -81,4 +84,25 @@ public sealed class AccessibilityRemediationHistoryViewModel
     public DateTime ChangedAt { get; set; }
 
     public string? ChangedBy { get; set; }
+}
+
+public sealed class AccessibilityRemediationRetestViewModel
+{
+    public int Id { get; set; }
+
+    public string Result { get; set; } = string.Empty;
+
+    public string? MatchMethod { get; set; }
+
+    public decimal? MatchConfidence { get; set; }
+
+    public DateTime RetestedAt { get; set; }
+
+    public string? Notes { get; set; }
+
+    public string? RetestedBy { get; set; }
+
+    public int? AuthenticatedAuditStepId { get; set; }
+
+    public int? MatchedAuthenticatedAuditFindingId { get; set; }
 }

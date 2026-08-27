@@ -224,6 +224,48 @@
 
                     </form>
 
+                    <hr />
+
+                    <h3 class="h6">
+                        Retest Accessibility Issue
+                    </h3>
+
+                    <p class="small text-muted">
+                        In the authenticated audit browser, navigate to the same page
+                        or workflow state where this issue was originally detected.
+                        Then run the retest below.
+                    </p>
+
+                    <form asp-controller="AccessibilityRemediations"
+                          asp-action="RetestCurrentState"
+                          method="post">
+
+                        @Html.AntiForgeryToken()
+
+                        <input type="hidden"
+                               name="id"
+                               value="@Model.Id" />
+
+                        <div class="mb-3">
+                            <label for="retestNotes"
+                                   class="form-label fw-semibold">
+                                Retest Notes
+                            </label>
+
+                            <textarea id="retestNotes"
+                                      name="notes"
+                                      rows="3"
+                                      maxlength="4000"
+                                      class="form-control"
+                                      placeholder="Optional notes about this retest..."></textarea>
+                        </div>
+
+                        <button type="submit"
+                                class="btn btn-outline-primary">
+                            Retest Current Page / State
+                        </button>
+
+                    </form>
                 </div>
             </div>
 
@@ -449,6 +491,175 @@
 
                             </div>
                         }
+                    }
+
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-4">
+
+                <div class="card-header">
+                    <div class="d-flex flex-wrap
+                        justify-content-between
+                        align-items-center
+                        gap-2">
+
+                        <h2 class="h5 mb-0">
+                            Retest History
+                        </h2>
+
+                        <span class="badge text-bg-secondary">
+                            @Model.Retests.Count
+                        </span>
+
+                    </div>
+                </div>
+
+                <div class="card-body">
+
+                    @if (Model.Retests.Count == 0)
+                    {
+                        <p class="text-muted mb-0">
+                            This remediation item has not been retested yet.
+                        </p>
+                    }
+                    else
+                    {
+                        <div class="d-flex flex-column gap-3">
+
+                            @foreach (var retest in Model.Retests)
+                            {
+                                string retestBadgeClass =
+                                    retest.Result switch
+                                    {
+                                        "Detected" =>
+                                            "text-bg-danger",
+
+                                        "NotDetected" =>
+                                            "text-bg-success",
+
+                                        "Inconclusive" =>
+                                            "text-bg-warning",
+
+                                        "Failed" =>
+                                            "text-bg-danger",
+
+                                        _ =>
+                                            "text-bg-secondary"
+                                    };
+
+                                string retestLabel =
+                                    retest.Result switch
+                                    {
+                                        "Detected" =>
+                                            "Issue Still Detected",
+
+                                        "NotDetected" =>
+                                            "Not Detected – Awaiting Verification",
+
+                                        "Inconclusive" =>
+                                            "Inconclusive",
+
+                                        "Failed" =>
+                                            "Scan Failed",
+
+                                        _ =>
+                                            retest.Result
+                                    };
+
+                                <div class="border rounded p-3">
+
+                                    <div class="d-flex flex-wrap
+                                        justify-content-between
+                                        align-items-start
+                                        gap-2">
+
+                                        <div>
+                                            <span class="badge @retestBadgeClass">
+                                                @retestLabel
+                                            </span>
+                                        </div>
+
+                                        <span class="small text-muted">
+                                            @retest.RetestedAt.ToString(
+                                                "yyyy-MM-dd HH:mm:ss")
+                                            UTC
+                                        </span>
+
+                                    </div>
+
+                                    <dl class="row mt-3 mb-0">
+
+                                        <dt class="col-sm-4">
+                                            Match Method
+                                        </dt>
+
+                                        <dd class="col-sm-8">
+                                            @(string.IsNullOrWhiteSpace(
+                                                retest.MatchMethod)
+                                                ? "Not available"
+                                                : retest.MatchMethod)
+                                        </dd>
+
+                                        <dt class="col-sm-4">
+                                            Match Confidence
+                                        </dt>
+
+                                        <dd class="col-sm-8">
+                                            @if (retest.MatchConfidence.HasValue)
+                                            {
+                                                @retest.MatchConfidence.Value.ToString("P0")
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">
+                                                    Not available
+                                                </span>
+                                            }
+                                        </dd>
+
+                                        @if (retest.AuthenticatedAuditStepId.HasValue)
+                                        {
+                                            <dt class="col-sm-4">
+                                                Retest Scan Step ID
+                                            </dt>
+
+                                            <dd class="col-sm-8">
+                                                @retest.AuthenticatedAuditStepId
+                                            </dd>
+                                        }
+
+                                    </dl>
+
+                                    @if (!string.IsNullOrWhiteSpace(
+                                        retest.Notes))
+                                    {
+                                        <div class="mt-3">
+                                            <strong>Notes</strong>
+
+                                            <div class="border rounded
+                                                bg-light
+                                                p-2
+                                                mt-1"
+                                                 style="white-space: pre-line;">
+                                                @retest.Notes
+                                            </div>
+                                        </div>
+                                    }
+
+                                    @if (!string.IsNullOrWhiteSpace(
+                                        retest.RetestedBy))
+                                    {
+                                        <div class="small text-muted mt-2">
+                                            Retested by:
+                                            @retest.RetestedBy
+                                        </div>
+                                    }
+
+                                </div>
+                            }
+
+                        </div>
                     }
 
                 </div>

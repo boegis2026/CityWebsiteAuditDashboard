@@ -61,6 +61,27 @@ public sealed class AccessibilityRemediationMatcher
                 "The authenticated audit step used for the retest could not be found.");
         }
 
+        if (!retestStep.ScanSucceeded)
+        {
+            return new AccessibilityRemediationMatchResult
+            {
+                Result =
+                    AccessibilityRemediationRetestResult.Failed,
+
+                MatchMethod =
+                    "ScanFailed",
+
+                MatchConfidence =
+                    0m,
+
+                Message =
+                    string.IsNullOrWhiteSpace(retestStep.ErrorMessage)
+                        ? "The accessibility retest scan did not complete successfully."
+                        : "The accessibility retest scan failed: " +
+                          retestStep.ErrorMessage
+            };
+        }
+
         AuthenticatedAuditFinding originalFinding =
             originalOccurrence.AuthenticatedAuditFinding;
 

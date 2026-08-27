@@ -4,6 +4,7 @@ using CityWebsiteAuditDashboard.Services.Remediation;
 using CityWebsiteAuditDashboard.ViewModels;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using CityWebsiteAuditDashboard.Services.AuthenticatedAuditing;
 
 namespace CityWebsiteAuditDashboard.Controllers;
 
@@ -11,12 +12,18 @@ public sealed class AccessibilityRemediationsController : Controller
 {
     private readonly AccessibilityRemediationService _remediationService;
     private readonly ApplicationDbContext _dbContext;
+    private readonly AccessibilityRemediationRetestService _remediationRetestService;
+    private readonly IAuthenticatedAuditService _authenticatedAuditService;
 
     public AccessibilityRemediationsController(
-    AccessibilityRemediationService remediationService,
-    ApplicationDbContext dbContext)
+        AccessibilityRemediationService remediationService,
+        AccessibilityRemediationRetestService remediationRetestService,
+        IAuthenticatedAuditService authenticatedAuditService,
+        ApplicationDbContext dbContext)
     {
         _remediationService = remediationService;
+        _remediationRetestService = remediationRetestService;
+        _authenticatedAuditService = authenticatedAuditService;
         _dbContext = dbContext;
     }
 
@@ -185,6 +192,7 @@ public sealed class AccessibilityRemediationsController : Controller
             await _dbContext.AccessibilityRemediationItems
                 .AsNoTracking()
                 .Include(item => item.History)
+                .Include(item => item.Retests)
                 .Include(item => item.FindingOccurrences)
                     .ThenInclude(occurrence =>
                         occurrence.AuthenticatedAuditFinding)
@@ -253,6 +261,33 @@ public sealed class AccessibilityRemediationsController : Controller
                         FailureSummary = node.FailureSummary,
                         ElementFixGuidance =
                             node.ElementFixGuidance
+                    })
+                .ToList(),
+
+            Retests = remediationItem.Retests
+                .OrderByDescending(retest => retest.RetestedAt)
+                .Select(retest =>
+                    new AccessibilityRemediationRetestViewModel
+                    {
+                        Id = retest.Id,
+
+                        Result = retest.Result.ToString(),
+
+                        MatchMethod = retest.MatchMethod,
+
+                        MatchConfidence = retest.MatchConfidence,
+
+                        RetestedAt = retest.RetestedAt,
+
+                        Notes = retest.Notes,
+
+                        RetestedBy = retest.RetestedBy,
+
+                        AuthenticatedAuditStepId =
+                            retest.AuthenticatedAuditStepId,
+
+                        MatchedAuthenticatedAuditFindingId =
+                            retest.MatchedAuthenticatedAuditFindingId
                     })
                 .ToList(),
 
@@ -330,5 +365,109 @@ public sealed class AccessibilityRemediationsController : Controller
         return RedirectToAction(
             nameof(Details),
             new { id = item.Id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RetestCurrentState(
+    int id,
+    string? notes,
+    CancellationToken cancellationToken)
+    {
+        try
+        {
+            AuthenticatedAuditSessionResult? activeSession =
+                _authenticatedAuditService.GetActiveSession();
+
+            if (activeSession is null)
+            {
+                TempData["ErrorMessage"] =
+                    "No authenticated audit browser session is currently active. " +
+                    "Start an authenticated audit, log in, and navigate to the " +
+                    "page or workflow state that needs to be retested.";
+
+                return RedirectToAction(
+                    nameof(Details),
+                    new { id });
+            }
+
+            /*
+             * Reuse the normal authenticated scanner.
+             * This saves a new AuthenticatedAuditStep using the current
+             * logged-in Playwright browser state.
+             */
+            AuthenticatedAuditStepResult scanResult =
+                await _authenticatedAuditService.ScanCurrentStepAsync(
+                    activeSession.SessionId,
+                    cancellationToken);
+
+            /*
+             * ScanCurrentStepAsync returns the step number, while the
+             * remediation matcher needs the database ID of the newly
+             * saved AuthenticatedAuditStep.
+             */
+            int? savedStepId =
+                await _dbContext.AuthenticatedAuditSteps
+                    .AsNoTracking()
+                    .Where(step =>
+                        step.AuthenticatedAuditRunId ==
+                            activeSession.AuditRunId &&
+                        step.StepNumber ==
+                            scanResult.StepNumber)
+                    .Select(step => (int?)step.Id)
+                    .SingleOrDefaultAsync(
+                        cancellationToken);
+
+            if (!savedStepId.HasValue)
+            {
+                throw new InvalidOperationException(
+                    "The newly scanned authenticated audit step could not be found.");
+            }
+
+            AccessibilityRemediationRetest retest =
+                await _remediationRetestService.RecordRetestAsync(
+                    id,
+                    savedStepId.Value,
+                    notes,
+                    cancellationToken: cancellationToken);
+
+            TempData["SuccessMessage"] =
+                retest.Result switch
+                {
+                    AccessibilityRemediationRetestResult.Detected =>
+                        "Retest completed. The tracked accessibility issue " +
+                        "is still detected.",
+
+                    AccessibilityRemediationRetestResult.NotDetected =>
+                        "Retest completed. The tracked issue was not detected. " +
+                        "It is still awaiting verification.",
+
+                    AccessibilityRemediationRetestResult.Inconclusive =>
+                        "Retest completed, but the result was inconclusive. " +
+                        "Confirm that the authenticated browser is on the " +
+                        "same page or workflow state.",
+
+                    AccessibilityRemediationRetestResult.Failed =>
+                        "The retest scan did not complete successfully.",
+
+                    _ =>
+                        "Retest completed."
+                };
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            TempData["ErrorMessage"] =
+                "The remediation retest could not be completed. " +
+                exception.Message;
+        }
+
+        return RedirectToAction(
+            nameof(Details),
+            new { id });
     }
 }
