@@ -470,4 +470,37 @@ public sealed class AccessibilityRemediationsController : Controller
             nameof(Details),
             new { id });
     }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Verify(
+    int id,
+    string? notes,
+    CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _remediationRetestService.VerifyAsync(
+                id,
+                notes,
+                cancellationToken: cancellationToken);
+
+            TempData["SuccessMessage"] =
+                "The remediation has been verified successfully.";
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (InvalidOperationException exception)
+        {
+            TempData["ErrorMessage"] =
+                exception.Message;
+        }
+
+        return RedirectToAction(
+            nameof(Details),
+            new { id });
+    }
 }

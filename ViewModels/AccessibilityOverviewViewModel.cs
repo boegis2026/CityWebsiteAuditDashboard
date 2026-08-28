@@ -18,6 +18,9 @@ public sealed class AccessibilityOverviewViewModel
     public AccessibilityHealthViewModel Health { get; init; }
         = new();
 
+    public AccessibilityRemediationProgressViewModel RemediationProgress
+    { get; init; } = new();
+
     public AccessibilityIssueBreakdownViewModel IssueBreakdown { get; init; }
         = new();
 
@@ -187,6 +190,33 @@ public sealed class AccessibilityApplicationRankingViewModel
         PreviousFindingCount.HasValue
             ? TotalFindingCount - PreviousFindingCount.Value
             : null;
+}
+
+/// <summary>
+/// Current remediation workflow progress for tracked accessibility findings.
+/// These values represent remediation status, not automated compliance.
+/// </summary>
+public sealed class AccessibilityRemediationProgressViewModel
+{
+    public int TotalTracked { get; init; }
+
+    public int Open { get; init; }
+
+    public int InProgress { get; init; }
+
+    public int AwaitingVerification { get; init; }
+
+    public int Verified { get; init; }
+
+    public int WontFix { get; init; }
+
+    public double VerifiedPercent =>
+        TotalTracked > 0
+            ? (double)Verified / TotalTracked * 100
+            : 0;
+
+    public bool HasData =>
+        TotalTracked > 0;
 }
 
 /// <summary>

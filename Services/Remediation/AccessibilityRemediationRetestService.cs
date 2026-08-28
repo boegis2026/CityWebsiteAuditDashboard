@@ -273,4 +273,113 @@ public sealed class AccessibilityRemediationRetestService
             ? combined
             : combined[..4000];
     }
+
+    public async Task VerifyAsync(
+    int remediationItemId,
+    string? notes = null,
+    string? verifiedBy = null,
+    CancellationToken cancellationToken = default)
+    {
+        AccessibilityRemediationItem? item =
+            await _dbContext.AccessibilityRemediationItems
+                .Include(item => item.Retests)
+                .FirstOrDefaultAsync(
+                    item => item.Id == remediationItemId,
+                    cancellationToken);
+
+        if (item is null)
+        {
+            throw new InvalidOperationException(
+                "The remediation item could not be found.");
+        }
+
+        if (item.Status != AccessibilityRemediationStatus.Fixed)
+        {
+            throw new InvalidOperationException(
+                "Only an item marked Fixed – Awaiting Verification can be verified.");
+        }
+
+        AccessibilityRemediationRetest? latestRetest =
+            item.Retests
+                .OrderByDescending(retest => retest.RetestedAt)
+                .ThenByDescending(retest => retest.Id)
+                .FirstOrDefault();
+
+        if (latestRetest is null)
+        {
+            throw new InvalidOperationException(
+                "This remediation item must be successfully retested before it can be verified.");
+        }
+
+        if (latestRetest.Result !=
+            AccessibilityRemediationRetestResult.NotDetected)
+        {
+            throw new InvalidOperationException(
+                "The latest retest did not confirm that the issue is no longer detected.");
+        }
+
+        string? cleanedNotes =
+            string.IsNullOrWhiteSpace(notes)
+                ? null
+                : notes.Trim();
+
+        if (cleanedNotes?.Length > 4000)
+        {
+            cleanedNotes = cleanedNotes[..4000];
+        }
+
+        string? cleanedVerifiedBy =
+            string.IsNullOrWhiteSpace(verifiedBy)
+                ? null
+                : verifiedBy.Trim();
+
+        if (cleanedVerifiedBy?.Length > 200)
+        {
+            cleanedVerifiedBy =
+                cleanedVerifiedBy[..200];
+        }
+
+        DateTime now = DateTime.UtcNow;
+
+        AccessibilityRemediationStatus previousStatus =
+            item.Status;
+
+        item.Status =
+            AccessibilityRemediationStatus.Verified;
+
+        item.UpdatedAt =
+            now;
+
+        item.History.Add(
+            new AccessibilityRemediationHistory
+            {
+                EventType =
+                    "Verified",
+
+                PreviousStatus =
+                    previousStatus,
+
+                NewStatus =
+                    AccessibilityRemediationStatus.Verified,
+
+                PreviousAssignee =
+                    item.AssignedTo,
+
+                NewAssignee =
+                    item.AssignedTo,
+
+                Notes =
+                    cleanedNotes ??
+                    "Verified after the latest retest no longer detected the tracked accessibility issue.",
+
+                ChangedAt =
+                    now,
+
+                ChangedBy =
+                    cleanedVerifiedBy
+            });
+
+        await _dbContext.SaveChangesAsync(
+            cancellationToken);
+    }
 }

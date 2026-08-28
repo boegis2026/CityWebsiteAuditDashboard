@@ -32,6 +32,16 @@
             "minor" => "text-bg-info",
             _ => "text-bg-secondary"
         };
+
+    var latestRetest =
+    Model.Retests
+        .OrderByDescending(retest => retest.RetestedAt)
+        .ThenByDescending(retest => retest.Id)
+        .FirstOrDefault();
+
+    bool canVerify =
+        Model.Status == "Fixed" &&
+        latestRetest?.Result == "NotDetected";
 }
 
 <div class="container py-4">
@@ -266,6 +276,48 @@
                         </button>
 
                     </form>
+
+                    @if (canVerify)
+                    {
+                        <hr />
+
+                        <div class="alert alert-success">
+                            <strong>Ready for verification.</strong>
+                            The latest accessibility retest did not detect this tracked issue.
+                            Review the result and confirm the remediation below.
+                        </div>
+
+                        <form asp-controller="AccessibilityRemediations"
+                              asp-action="Verify"
+                              method="post">
+
+                            @Html.AntiForgeryToken()
+
+                            <input type="hidden"
+                                   name="id"
+                                   value="@Model.Id" />
+
+                            <div class="mb-3">
+                                <label for="verificationNotes"
+                                       class="form-label fw-semibold">
+                                    Verification Notes
+                                </label>
+
+                                <textarea id="verificationNotes"
+                                          name="notes"
+                                          rows="3"
+                                          maxlength="4000"
+                                          class="form-control"
+                                          placeholder="Optional verification notes..."></textarea>
+                            </div>
+
+                            <button type="submit"
+                                    class="btn btn-success">
+                                Verify Remediation
+                            </button>
+
+                        </form>
+                    }
                 </div>
             </div>
 

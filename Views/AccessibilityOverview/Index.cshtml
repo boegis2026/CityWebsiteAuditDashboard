@@ -373,6 +373,221 @@ else
                 </div>
         </section>
 
+        <section aria-labelledby="remediation-progress-heading"
+            class="mb-4">
+
+            <div class="d-flex flex-wrap
+                justify-content-between
+                align-items-end
+                gap-2
+                mb-3">
+
+            <div>
+            <h2 id="remediation-progress-heading"
+                class="h3 mb-1">
+                Remediation Progress
+            </h2>
+
+            <p class="text-muted mb-0">
+                Current workflow status of accessibility findings
+                being tracked for remediation.
+            </p>
+            </div>
+
+            <a asp-controller="AccessibilityRemediations"
+           asp-action="Index"
+           class="btn btn-outline-primary">
+            Open Remediation Tracker
+            </a>
+
+            </div>
+
+        @if (!Model.RemediationProgress.HasData)
+        {
+        <div class="card shadow-sm">
+            <div class="card-body py-4">
+
+                <h3 class="h5">
+                    No remediation items are being tracked yet
+                </h3>
+
+                <p class="text-muted mb-0">
+                    Findings will appear here after remediation tracking
+                    is started from an authenticated accessibility audit.
+                </p>
+
+            </div>
+        </div>
+        }
+        else
+        {
+        <div class="row g-3 mb-3">
+
+            <div class="col-12 col-xl-4">
+                <article class="card shadow-sm h-100">
+
+                    <div class="card-body">
+
+                        <div class="text-muted small mb-1">
+                            Verified Remediation Progress
+                        </div>
+
+                        <div class="display-4 fw-bold">
+                            @Model.RemediationProgress.VerifiedPercent.ToString("0.0")%
+                        </div>
+
+                        <p class="text-muted mb-3">
+                            of tracked findings have been retested
+                            and verified.
+                        </p>
+
+                        <div class="progress"
+                             role="progressbar"
+                             aria-label="Verified remediation progress"
+                             aria-valuenow="@Model.RemediationProgress.VerifiedPercent"
+                             aria-valuemin="0"
+                             aria-valuemax="100"
+                             style="height: 12px;">
+
+                            <div class="progress-bar"
+                                 style="width: @Model.RemediationProgress.VerifiedPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%;">
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="card-footer bg-transparent">
+                        <span class="small text-muted">
+                            Verified means the issue was no longer detected
+                            during retesting and was then explicitly confirmed.
+                        </span>
+                    </div>
+
+                </article>
+            </div>
+
+            <div class="col-12 col-xl-8">
+
+                <div class="row g-3 h-100">
+
+                    <div class="col-6 col-lg-4">
+                        <article class="card shadow-sm h-100">
+                            <div class="card-body">
+
+                                <div class="text-muted small">
+                                    Total Tracked
+                                </div>
+
+                                <div class="fs-2 fw-bold">
+                                    @Model.RemediationProgress.TotalTracked
+                                </div>
+
+                            </div>
+                        </article>
+                    </div>
+
+                    <div class="col-6 col-lg-4">
+                        <article class="card shadow-sm h-100">
+                            <div class="card-body">
+
+                                <div class="text-muted small">
+                                    Open
+                                </div>
+
+                                <div class="fs-2 fw-bold text-danger">
+                                    @Model.RemediationProgress.Open
+                                </div>
+
+                            </div>
+                        </article>
+                    </div>
+
+                    <div class="col-6 col-lg-4">
+                        <article class="card shadow-sm h-100">
+                            <div class="card-body">
+
+                                <div class="text-muted small">
+                                    In Progress
+                                </div>
+
+                                <div class="fs-2 fw-bold">
+                                    @Model.RemediationProgress.InProgress
+                                </div>
+
+                            </div>
+                        </article>
+                    </div>
+
+                    <div class="col-6 col-lg-4">
+                        <article class="card shadow-sm h-100">
+                            <div class="card-body">
+
+                                <div class="text-muted small">
+                                    Awaiting Verification
+                                </div>
+
+                                <div class="fs-2 fw-bold">
+                                    @Model.RemediationProgress.AwaitingVerification
+                                </div>
+
+                            </div>
+                        </article>
+                    </div>
+
+                    <div class="col-6 col-lg-4">
+                        <article class="card shadow-sm h-100">
+                            <div class="card-body">
+
+                                <div class="text-muted small">
+                                    Verified
+                                </div>
+
+                                <div class="fs-2 fw-bold text-success">
+                                    @Model.RemediationProgress.Verified
+                                </div>
+
+                            </div>
+                        </article>
+                    </div>
+
+                    <div class="col-6 col-lg-4">
+                        <article class="card shadow-sm h-100">
+                            <div class="card-body">
+
+                                <div class="text-muted small">
+                                    Won't Fix
+                                </div>
+
+                                <div class="fs-2 fw-bold">
+                                    @Model.RemediationProgress.WontFix
+                                </div>
+
+                            </div>
+                        </article>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+
+            <div class="alert alert-light border mb-0"
+                role="note">
+
+            <strong>How to read this:</strong>
+            Open issues have not yet been addressed.
+            In Progress issues are actively being worked on.
+            Awaiting Verification means a fix has been reported but has
+            not yet been confirmed.
+            Verified means the issue passed retesting and was explicitly
+            confirmed.
+
+            </div>
+        }
+
+        </section>
+
         <section aria-labelledby="issue-breakdown-heading"
                  class="mb-4">
             <div class="mb-3">

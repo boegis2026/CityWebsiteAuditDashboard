@@ -133,6 +133,16 @@ public sealed class AccessibilityOverviewController : Controller
         AccessibilityIssueBreakdownViewModel issueBreakdown =
             BuildIssueBreakdown(filteredFindings);
 
+        AccessibilityRemediationProgressViewModel remediationProgress =
+            await LoadRemediationProgressAsync(
+            normalizedApplicationName,
+            normalizedStartDate,
+            endDateExclusive,
+            normalizedSeverity,
+            normalizedWcagLevel,
+            normalizedFindingType,
+            cancellationToken);
+
         List<AuthenticatedRunSnapshot>
             comparisonAuthenticatedRuns =
                 SelectLatestAndPreviousAuthenticatedRuns(
@@ -226,6 +236,9 @@ public sealed class AccessibilityOverviewController : Controller
                 Health =
                     health,
 
+                RemediationProgress =
+                    remediationProgress,
+
                 IssueBreakdown =
                     issueBreakdown,
 
@@ -240,6 +253,157 @@ public sealed class AccessibilityOverviewController : Controller
             };
 
         return View(model);
+    }
+
+    private async Task<AccessibilityRemediationProgressViewModel>
+    LoadRemediationProgressAsync(
+        string? applicationName,
+        DateTime? startDate,
+        DateTime? endDateExclusive,
+        string? severity,
+        string? wcagLevel,
+        string? findingType,
+        CancellationToken cancellationToken)
+    {
+        List<AccessibilityRemediationItem> remediationItems =
+            await _dbContext.AccessibilityRemediationItems
+                .AsNoTracking()
+                .Include(item => item.FindingOccurrences)
+                    .ThenInclude(occurrence =>
+                        occurrence.AuthenticatedAuditFinding)
+                        .ThenInclude(finding =>
+                            finding.AuthenticatedAuditStep)
+                            .ThenInclude(step =>
+                                step.AuthenticatedAuditRun)
+                .ToListAsync(cancellationToken);
+
+        List<AccessibilityRemediationItem> filteredItems =
+            new();
+
+        foreach (AccessibilityRemediationItem item in remediationItems)
+        {
+            AccessibilityRemediationFindingOccurrence? occurrence =
+                item.FindingOccurrences
+                    .OrderBy(occurrence => occurrence.LinkedAt)
+                    .FirstOrDefault();
+
+            if (occurrence is null)
+            {
+                continue;
+            }
+
+            AuthenticatedAuditFinding finding =
+                occurrence.AuthenticatedAuditFinding;
+
+            AuthenticatedAuditStep step =
+                finding.AuthenticatedAuditStep;
+
+            AuthenticatedAuditRun run =
+                step.AuthenticatedAuditRun;
+
+            if (!string.IsNullOrWhiteSpace(applicationName) &&
+                !string.Equals(
+                    run.ApplicationName,
+                    applicationName,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (startDate.HasValue &&
+                step.ScannedAt < startDate.Value)
+            {
+                continue;
+            }
+
+            if (endDateExclusive.HasValue &&
+                step.ScannedAt >= endDateExclusive.Value)
+            {
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(severity))
+            {
+                if (severity == "Unknown")
+                {
+                    if (IsKnownImpact(finding.Impact))
+                    {
+                        continue;
+                    }
+                }
+                else if (!string.Equals(
+                    finding.Impact,
+                    severity,
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(wcagLevel))
+            {
+                if (wcagLevel == "Unmapped")
+                {
+                    if (IsWcagLevel(
+                            finding.WcagLevel,
+                            "A") ||
+                        IsWcagLevel(
+                            finding.WcagLevel,
+                            "AA"))
+                    {
+                        continue;
+                    }
+                }
+                else if (!IsWcagLevel(
+                    finding.WcagLevel,
+                    wcagLevel))
+                {
+                    continue;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(findingType) &&
+                !string.Equals(
+                    finding.FindingType,
+                    findingType,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            filteredItems.Add(item);
+        }
+
+        return new AccessibilityRemediationProgressViewModel
+        {
+            TotalTracked =
+                filteredItems.Count,
+
+            Open =
+                filteredItems.Count(item =>
+                    item.Status ==
+                    AccessibilityRemediationStatus.Open),
+
+            InProgress =
+                filteredItems.Count(item =>
+                    item.Status ==
+                    AccessibilityRemediationStatus.InProgress),
+
+            AwaitingVerification =
+                filteredItems.Count(item =>
+                    item.Status ==
+                    AccessibilityRemediationStatus.Fixed),
+
+            Verified =
+                filteredItems.Count(item =>
+                    item.Status ==
+                    AccessibilityRemediationStatus.Verified),
+
+            WontFix =
+                filteredItems.Count(item =>
+                    item.Status ==
+                    AccessibilityRemediationStatus.WontFix)
+        };
     }
 
     private async Task<List<AuthenticatedRunSnapshot>>
