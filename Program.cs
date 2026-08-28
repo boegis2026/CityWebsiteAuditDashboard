@@ -32,6 +32,8 @@ builder.Services.AddScoped<AccessibilityRemediationMatcher>();
 
 builder.Services.AddScoped<AccessibilityRemediationRetestService>();
 
+builder.Services.AddScoped<AccessibilityRemediationWorkflowComparisonService>();
+
 // A singleton is required because the same authenticated Playwright browser
 // must remain alive across separate Start, Scan, and Stop HTTP requests.
 builder.Services.AddSingleton<

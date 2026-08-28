@@ -217,6 +217,51 @@ public sealed class AccessibilityRemediationProgressViewModel
 
     public bool HasData =>
         TotalTracked > 0;
+
+    public IReadOnlyList<AccessibilityApplicationRemediationProgressViewModel>
+    Applications { get; init; }
+        = Array.Empty<AccessibilityApplicationRemediationProgressViewModel>();
+
+    public IReadOnlyList<AccessibilityRemediationTrendPointViewModel>
+    Trends
+    { get; init; }
+        = Array.Empty<AccessibilityRemediationTrendPointViewModel>();
+}
+
+public sealed class AccessibilityRemediationTrendPointViewModel
+{
+    public DateTime Date { get; init; }
+
+    public int Verified { get; init; }
+
+    public int Reopened { get; init; }
+}
+
+public sealed class AccessibilityApplicationRemediationProgressViewModel
+{
+    public string ApplicationName { get; init; } = string.Empty;
+
+    public int TotalTracked { get; init; }
+
+    public int Open { get; init; }
+
+    public int InProgress { get; init; }
+
+    public int AwaitingVerification { get; init; }
+
+    public int Verified { get; init; }
+
+    public int WontFix { get; init; }
+
+    public int Remaining =>
+        Open +
+        InProgress +
+        AwaitingVerification;
+
+    public double VerifiedPercent =>
+        TotalTracked > 0
+            ? (double)Verified / TotalTracked * 100
+            : 0;
 }
 
 /// <summary>

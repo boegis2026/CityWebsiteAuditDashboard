@@ -92,6 +92,10 @@ public sealed class AccessibilityRemediationRetestViewModel
 
     public string Result { get; set; } = string.Empty;
 
+    public string RetestType { get; set; } = string.Empty;
+
+    public int? AuthenticatedAuditRunId { get; set; }
+
     public string? MatchMethod { get; set; }
 
     public decimal? MatchConfidence { get; set; }

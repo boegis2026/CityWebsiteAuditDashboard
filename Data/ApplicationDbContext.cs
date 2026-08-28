@@ -181,6 +181,9 @@ namespace CityWebsiteAuditDashboard.Data
                 entity.Property(retest => retest.MatchConfidence)
                     .HasPrecision(5, 4);
 
+                entity.Property(retest => retest.RetestType)
+                    .HasMaxLength(50);
+
                 entity.HasOne(retest => retest.RemediationItem)
                     .WithMany(item => item.Retests)
                     .HasForeignKey(retest =>
@@ -209,6 +212,13 @@ namespace CityWebsiteAuditDashboard.Data
                         retest.MatchedAuthenticatedAuditFindingId)
                     .OnDelete(DeleteBehavior.Restrict);
 
+                entity.HasOne(retest =>
+                        retest.AuthenticatedAuditRun)
+                    .WithMany()
+                    .HasForeignKey(retest =>
+                        retest.AuthenticatedAuditRunId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
                 entity.HasIndex(retest =>
                     retest.AccessibilityRemediationItemId);
 
@@ -217,6 +227,9 @@ namespace CityWebsiteAuditDashboard.Data
 
                 entity.HasIndex(retest =>
                     retest.Result);
+
+                entity.HasIndex(retest =>
+                    retest.AuthenticatedAuditRunId);
             });
         }
     }

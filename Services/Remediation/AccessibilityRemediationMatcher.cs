@@ -15,6 +15,99 @@ public sealed class AccessibilityRemediationMatcher
         _dbContext = dbContext;
     }
 
+    public async Task<AccessibilityRemediationStateMatch?>
+    FindBestMatchingStepAsync(
+        int remediationItemId,
+        int authenticatedAuditRunId,
+        CancellationToken cancellationToken = default)
+    {
+        AccessibilityRemediationFindingOccurrence? originalOccurrence =
+            await _dbContext.AccessibilityRemediationFindingOccurrences
+                .AsNoTracking()
+                .Where(occurrence =>
+                    occurrence.AccessibilityRemediationItemId ==
+                    remediationItemId)
+                .OrderBy(occurrence =>
+                    occurrence.LinkedAt)
+                .Include(occurrence =>
+                    occurrence.AuthenticatedAuditFinding)
+                    .ThenInclude(finding =>
+                        finding.AuthenticatedAuditStep)
+                        .ThenInclude(step =>
+                            step.AuthenticatedAuditRun)
+                .FirstOrDefaultAsync(cancellationToken);
+
+        if (originalOccurrence is null)
+        {
+            return null;
+        }
+
+        AuthenticatedAuditStep originalStep =
+            originalOccurrence
+                .AuthenticatedAuditFinding
+                .AuthenticatedAuditStep;
+
+        List<AuthenticatedAuditStep> candidateSteps =
+            await _dbContext.AuthenticatedAuditSteps
+                .AsNoTracking()
+                .Where(step =>
+                    step.AuthenticatedAuditRunId ==
+                    authenticatedAuditRunId)
+                .Include(step =>
+                    step.AuthenticatedAuditRun)
+                .ToListAsync(cancellationToken);
+
+        var bestMatch =
+            candidateSteps
+                .Select(step =>
+                    new
+                    {
+                        Step = step,
+
+                        Confidence =
+                            GetStateConfidence(
+                                originalStep,
+                                step)
+                    })
+                .Where(candidate =>
+                    candidate.Confidence > 0m)
+                .OrderByDescending(candidate =>
+                    candidate.Confidence)
+
+                // Step number is only a tie-breaker.
+                // It is NOT being used as the state identity.
+                .ThenBy(candidate =>
+                    Math.Abs(
+                        candidate.Step.StepNumber -
+                        originalStep.StepNumber))
+                .ThenBy(candidate =>
+                    candidate.Step.StepNumber)
+                .FirstOrDefault();
+
+        if (bestMatch is null)
+        {
+            return null;
+        }
+
+        return new AccessibilityRemediationStateMatch
+        {
+            AuthenticatedAuditStepId =
+                bestMatch.Step.Id,
+
+            StepNumber =
+                bestMatch.Step.StepNumber,
+
+            StepName =
+                bestMatch.Step.StepName,
+
+            Url =
+                bestMatch.Step.Url,
+
+            StateConfidence =
+                bestMatch.Confidence
+        };
+    }
+
     public async Task<AccessibilityRemediationMatchResult> MatchAsync(
         int remediationItemId,
         int authenticatedAuditStepId,
@@ -373,4 +466,17 @@ public sealed class AccessibilityRemediationMatchResult
                 message
         };
     }
+}
+
+public sealed class AccessibilityRemediationStateMatch
+{
+    public int AuthenticatedAuditStepId { get; init; }
+
+    public int StepNumber { get; init; }
+
+    public string? StepName { get; init; }
+
+    public string Url { get; init; } = string.Empty;
+
+    public decimal StateConfidence { get; init; }
 }

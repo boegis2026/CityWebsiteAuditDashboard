@@ -584,6 +584,262 @@ else
             confirmed.
 
             </div>
+
+            @if (Model.RemediationProgress.Applications.Count > 0)
+                    {
+                        <div class="card shadow-sm mt-3">
+
+                            <div class="card-header bg-transparent">
+                                <h3 class="h5 mb-1">
+                                    Remediation Progress by Application
+                                </h3>
+
+                                <p class="small text-muted mb-0">
+                                    Applications with the most remaining remediation work
+                                    appear first when verification progress is lower.
+                                </p>
+                            </div>
+
+                            <div class="table-responsive">
+
+                                <table class="table align-middle mb-0">
+
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">
+                                                Application
+                                            </th>
+
+                                            <th scope="col"
+                                                class="text-end">
+                                                Tracked
+                                            </th>
+
+                                            <th scope="col"
+                                                class="text-end">
+                                                Open
+                                            </th>
+
+                                            <th scope="col"
+                                                class="text-end">
+                                                In Progress
+                                            </th>
+
+                                            <th scope="col"
+                                                class="text-end">
+                                                Awaiting Verification
+                                            </th>
+
+                                            <th scope="col"
+                                                class="text-end">
+                                                Verified
+                                            </th>
+
+                                            <th scope="col"
+                                                style="min-width: 180px;">
+                                                Progress
+                                            </th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+
+                                        @foreach (var application
+                                            in Model.RemediationProgress.Applications)
+                                        {
+                                            <tr>
+
+                                                <th scope="row">
+                                                    @application.ApplicationName
+                                                </th>
+
+                                                <td class="text-end fw-semibold">
+                                                    @application.TotalTracked
+                                                </td>
+
+                                                <td class="text-end">
+                                                    @application.Open
+                                                </td>
+
+                                                <td class="text-end">
+                                                    @application.InProgress
+                                                </td>
+
+                                                <td class="text-end">
+                                                    @application.AwaitingVerification
+                                                </td>
+
+                                                <td class="text-end fw-semibold text-success">
+                                                    @application.Verified
+                                                </td>
+
+                                                <td>
+
+                                                    <div class="d-flex
+                                                        justify-content-between
+                                                        gap-2
+                                                        small
+                                                        mb-1">
+
+                                                        <span>
+                                                            Verified
+                                                        </span>
+
+                                                        <strong>
+                                                            @application.VerifiedPercent.ToString("0.0")%
+                                                        </strong>
+
+                                                    </div>
+
+                                                    <div class="progress"
+                                                         role="progressbar"
+                                                         aria-label="Verified remediation progress for @application.ApplicationName"
+                                                         aria-valuenow="@application.VerifiedPercent"
+                                                         aria-valuemin="0"
+                                                         aria-valuemax="100"
+                                                         style="height: 8px;">
+
+                                                        <div class="progress-bar bg-success"
+                                                             style="width: @application.VerifiedPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%;">
+                                                        </div>
+
+                                                    </div>
+
+                                                </td>
+
+                                            </tr>
+                                        }
+
+                                    </tbody>
+
+                                </table>
+
+                            </div>
+
+                        </div>
+            }
+
+            @if (Model.RemediationProgress.Trends.Count > 0)
+                    {
+                        <div class="card shadow-sm mt-3">
+
+                            <div class="card-header bg-transparent">
+                                <h3 class="h5 mb-1">
+                                    Remediation Activity
+                                </h3>
+
+                                <p class="small text-muted mb-0">
+                                    Verified remediations and issues that were detected again
+                                    during later retesting.
+                                </p>
+                            </div>
+
+                            <div class="table-responsive">
+
+                                <table class="table align-middle mb-0">
+
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">
+                                                Date
+                                            </th>
+
+                                            <th scope="col"
+                                                class="text-end">
+                                                Verified
+                                            </th>
+
+                                            <th scope="col"
+                                                class="text-end">
+                                                Reopened
+                                            </th>
+
+                                            <th scope="col"
+                                                class="text-end">
+                                                Net Progress
+                                            </th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+
+                                        @foreach (var point
+                                            in Model.RemediationProgress.Trends
+                                                .OrderByDescending(point => point.Date))
+                                        {
+                                            int netProgress =
+                                                point.Verified - point.Reopened;
+
+                                            <tr>
+
+                                                <td>
+                                                    @point.Date.ToString("MMM d, yyyy")
+                                                </td>
+
+                                                <td class="text-end">
+                                                    <span class="badge text-bg-success">
+                                                        +@point.Verified
+                                                    </span>
+                                                </td>
+
+                                                <td class="text-end">
+
+                                                    @if (point.Reopened > 0)
+                                                    {
+                                                        <span class="badge text-bg-danger">
+                                                            @point.Reopened
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">
+                                                            0
+                                                        </span>
+                                                    }
+
+                                                </td>
+
+                                                <td class="text-end fw-semibold">
+
+                                                    @if (netProgress > 0)
+                                                    {
+                                                        <span class="text-success">
+                                                            +@netProgress
+                                                        </span>
+                                                    }
+                                                    else if (netProgress < 0)
+                                                    {
+                                                        <span class="text-danger">
+                                                            @netProgress
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">
+                                                            0
+                                                        </span>
+                                                    }
+
+                                                </td>
+
+                                            </tr>
+                                        }
+
+                                    </tbody>
+
+                                </table>
+
+                            </div>
+
+                            <div class="card-footer bg-transparent">
+                                <p class="small text-muted mb-0">
+                                    A reopened issue was previously marked fixed or verified
+                                    but was detected again during accessibility retesting.
+                                </p>
+                            </div>
+
+                        </div>
+            }
         }
 
         </section>

@@ -273,6 +273,12 @@ public sealed class AccessibilityRemediationsController : Controller
 
                         Result = retest.Result.ToString(),
 
+                        RetestType =
+                            retest.RetestType,
+
+                        AuthenticatedAuditRunId =
+                            retest.AuthenticatedAuditRunId,
+
                         MatchMethod = retest.MatchMethod,
 
                         MatchConfidence = retest.MatchConfidence,

@@ -23,11 +23,22 @@
             </p>
         </div>
 
-        <a asp-controller="AccessibilityOverview"
-           asp-action="Index"
-           class="btn btn-outline-secondary">
-            Accessibility Overview
-        </a>
+        <div class="d-flex flex-wrap gap-2">
+
+            <a asp-controller="AccessibilityWorkflowRetests"
+               asp-action="Index"
+               class="btn btn-outline-primary">
+                Compare Workflow Retests
+            </a>
+
+            <a asp-controller="AccessibilityOverview"
+               asp-action="Index"
+               class="btn btn-outline-secondary">
+                Accessibility Overview
+            </a>
+
+        </div>
+
     </div>
 
     <div class="alert alert-info">

@@ -374,6 +374,119 @@ public sealed class AccessibilityOverviewController : Controller
             filteredItems.Add(item);
         }
 
+        HashSet<int> filteredItemIds =
+                filteredItems
+                    .Select(item => item.Id)
+                    .ToHashSet();
+
+        List<AccessibilityRemediationHistory> remediationHistory =
+            await _dbContext.AccessibilityRemediationHistories
+                .AsNoTracking()
+                .Where(history =>
+                    filteredItemIds.Contains(
+                        history.AccessibilityRemediationItemId))
+                .ToListAsync(cancellationToken);
+
+        List<AccessibilityRemediationTrendPointViewModel>
+            remediationTrends =
+            remediationHistory
+            .Where(history =>
+                string.Equals(
+                    history.EventType,
+                    "Verified",
+                    StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(
+                    history.EventType,
+                    "Reopened",
+                    StringComparison.OrdinalIgnoreCase))
+            .GroupBy(history =>
+                history.ChangedAt.Date)
+            .Select(group =>
+                new AccessibilityRemediationTrendPointViewModel
+                {
+                    Date =
+                        group.Key,
+
+                    Verified =
+                        group.Count(history =>
+                            string.Equals(
+                                history.EventType,
+                                "Verified",
+                                StringComparison.OrdinalIgnoreCase)),
+
+                    Reopened =
+                        group.Count(history =>
+                            string.Equals(
+                                history.EventType,
+                                "Reopened",
+                                StringComparison.OrdinalIgnoreCase))
+                })
+            .OrderBy(point =>
+                point.Date)
+            .ToList();
+
+        List<AccessibilityApplicationRemediationProgressViewModel>
+            applicationProgress =
+            filteredItems
+            .GroupBy(
+                item =>
+                {
+                    AccessibilityRemediationFindingOccurrence occurrence =
+                        item.FindingOccurrences
+                            .OrderBy(occurrence =>
+                                occurrence.LinkedAt)
+                            .First();
+
+                    return occurrence
+                        .AuthenticatedAuditFinding
+                        .AuthenticatedAuditStep
+                        .AuthenticatedAuditRun
+                        .ApplicationName
+                        .Trim();
+                },
+                StringComparer.OrdinalIgnoreCase)
+            .Select(group =>
+                new AccessibilityApplicationRemediationProgressViewModel
+                {
+                    ApplicationName =
+                        group.Key,
+
+                    TotalTracked =
+                        group.Count(),
+
+                    Open =
+                        group.Count(item =>
+                            item.Status ==
+                            AccessibilityRemediationStatus.Open),
+
+                    InProgress =
+                        group.Count(item =>
+                            item.Status ==
+                            AccessibilityRemediationStatus.InProgress),
+
+                    AwaitingVerification =
+                        group.Count(item =>
+                            item.Status ==
+                            AccessibilityRemediationStatus.Fixed),
+
+                    Verified =
+                        group.Count(item =>
+                            item.Status ==
+                            AccessibilityRemediationStatus.Verified),
+
+                    WontFix =
+                        group.Count(item =>
+                            item.Status ==
+                            AccessibilityRemediationStatus.WontFix)
+                })
+            .OrderBy(application =>
+                application.VerifiedPercent)
+            .ThenByDescending(application =>
+                application.Remaining)
+            .ThenBy(application =>
+                application.ApplicationName)
+            .ToList();
+
         return new AccessibilityRemediationProgressViewModel
         {
             TotalTracked =
@@ -402,7 +515,13 @@ public sealed class AccessibilityOverviewController : Controller
             WontFix =
                 filteredItems.Count(item =>
                     item.Status ==
-                    AccessibilityRemediationStatus.WontFix)
+                    AccessibilityRemediationStatus.WontFix),
+
+            Applications =
+                applicationProgress,
+
+            Trends =
+                remediationTrends
         };
     }
 

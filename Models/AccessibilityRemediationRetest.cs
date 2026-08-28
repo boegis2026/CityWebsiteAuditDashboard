@@ -8,6 +8,8 @@ public sealed class AccessibilityRemediationRetest
 
     public int AccessibilityRemediationItemId { get; set; }
 
+    public int? AuthenticatedAuditRunId { get; set; }
+
     /*
      * The newly scanned authenticated state used for this retest.
      * Nullable so a failed retest can still be recorded even if a
@@ -26,6 +28,9 @@ public sealed class AccessibilityRemediationRetest
     public AccessibilityRemediationRetestResult Result { get; set; }
         = AccessibilityRemediationRetestResult.Inconclusive;
 
+    [StringLength(50)]
+    public string RetestType { get; set; } = "CurrentState";
+
     [StringLength(100)]
     public string? MatchMethod { get; set; }
 
@@ -41,6 +46,8 @@ public sealed class AccessibilityRemediationRetest
 
     public AccessibilityRemediationItem RemediationItem { get; set; }
         = null!;
+
+    public AuthenticatedAuditRun? AuthenticatedAuditRun { get; set; }
 
     public AuthenticatedAuditStep? AuthenticatedAuditStep { get; set; }
 
