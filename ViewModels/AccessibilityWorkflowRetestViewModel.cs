@@ -135,6 +135,16 @@ public sealed class AccessibilityWorkflowRetestHistoryViewModel
 
     public int NotDetected { get; init; }
 
+    public int VerifiedFromThisRetest { get; init; }
+
+    public string VerificationState =>
+        NotDetected == 0 ||
+        VerifiedFromThisRetest == 0
+            ? "Applied"
+            : VerifiedFromThisRetest < NotDetected
+                ? "Partially Verified"
+                : "Fully Verified";
+
     public int Inconclusive { get; init; }
 
     public int Failed { get; init; }
@@ -159,6 +169,16 @@ public sealed class AccessibilityWorkflowRetestDetailsViewModel
 
     public int NotDetected { get; init; }
 
+    public int VerifiedFromThisRetest { get; init; }
+
+    public string VerificationState =>
+        NotDetected == 0 ||
+        VerifiedFromThisRetest == 0
+            ? "Applied"
+            : VerifiedFromThisRetest < NotDetected
+                ? "Partially Verified"
+                : "Fully Verified";
+
     public int Inconclusive { get; init; }
 
     public int Failed { get; init; }
@@ -175,6 +195,10 @@ public sealed class AccessibilityWorkflowRetestDetailsViewModel
 public sealed class AccessibilityWorkflowRetestSavedItemViewModel
 {
     public int RemediationItemId { get; init; }
+
+    public int? OriginalAuthenticatedAuditFindingId { get; init; }
+
+    public int? MatchedAuthenticatedAuditFindingId { get; init; }
 
     public AccessibilityRemediationStatus CurrentStatus { get; init; }
 
@@ -214,4 +238,6 @@ public sealed class AccessibilityWorkflowRetestSavedItemViewModel
     public bool CanVerify { get; init; }
 
     public bool WasReopened { get; init; }
+
+    public bool VerifiedFromThisRetest { get; init; }
 }

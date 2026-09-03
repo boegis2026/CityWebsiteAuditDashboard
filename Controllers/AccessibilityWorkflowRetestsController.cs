@@ -128,6 +128,8 @@ public sealed class AccessibilityWorkflowRetestsController
                                     originalAuditRunId.Value))
                         .Include(retest =>
                             retest.AuthenticatedAuditRun)
+                        .Include(retest =>
+                            retest.RemediationItem)
                         .ToListAsync(cancellationToken);
 
             List<int> formalRetestItemIds =
@@ -136,6 +138,41 @@ public sealed class AccessibilityWorkflowRetestsController
                     retest.AccessibilityRemediationItemId)
                     .Distinct()
                     .ToList();
+
+            Dictionary<int, int> latestRetestIdsForHistory =
+                formalRetestItemIds.Count == 0
+                    ? new Dictionary<int, int>()
+                    : await _dbContext.AccessibilityRemediationRetests
+                .AsNoTracking()
+                .Where(retest =>
+                    formalRetestItemIds.Contains(
+                    retest.AccessibilityRemediationItemId))
+                .GroupBy(retest =>
+                    retest.AccessibilityRemediationItemId)
+                .Select(group =>
+                    new
+                    {
+                    RemediationItemId =
+                        group.Key,
+
+                    LatestRetestId =
+                        group
+                            .OrderByDescending(retest =>
+                                retest.RetestedAt)
+                            .ThenByDescending(retest =>
+                                retest.Id)
+                            .Select(retest =>
+                                retest.Id)
+                            .First()
+                    })
+                .ToDictionaryAsync(
+                    row =>
+                    row.RemediationItemId,
+
+                    row =>
+                    row.LatestRetestId,
+
+                    cancellationToken);
 
             List<AccessibilityRemediationHistory> reopenedHistory =
                 formalRetestItemIds.Count == 0
@@ -164,6 +201,18 @@ public sealed class AccessibilityWorkflowRetestsController
                                     retest.AccessibilityRemediationItemId &&
                                 history.ChangedAt ==
                                     retest.RetestedAt));
+
+                        int verifiedFromThisRetest =
+                            group.Count(retest =>
+                                retest.Result ==
+                                    AccessibilityRemediationRetestResult.NotDetected &&
+                                retest.RemediationItem.Status ==
+                                    AccessibilityRemediationStatus.Verified &&
+                                latestRetestIdsForHistory.TryGetValue(
+                                    retest.AccessibilityRemediationItemId,
+                                    out int latestRetestId) &&
+                                latestRetestId ==
+                                    retest.Id);
 
                         return new AccessibilityWorkflowRetestHistoryViewModel
                         {
@@ -196,6 +245,9 @@ public sealed class AccessibilityWorkflowRetestsController
                                     retest.Result ==
                                     AccessibilityRemediationRetestResult
                                         .NotDetected),
+
+                            VerifiedFromThisRetest =
+                                verifiedFromThisRetest,
 
                             Inconclusive =
                                 group.Count(retest =>
@@ -569,11 +621,28 @@ public sealed class AccessibilityWorkflowRetestsController
                 latestRetestId ==
                     retest.Id;
 
+            bool verifiedFromThisRetest =
+                retest.RemediationItem.Status ==
+                    AccessibilityRemediationStatus.Verified &&
+                retest.Result ==
+                    AccessibilityRemediationRetestResult.NotDetected &&
+                latestRetestIds.TryGetValue(
+                    retest.AccessibilityRemediationItemId,
+                    out int latestVerifiedRetestId) &&
+                latestVerifiedRetestId ==
+                    retest.Id;
+
             items.Add(
                 new AccessibilityWorkflowRetestSavedItemViewModel
                 {
                     RemediationItemId =
                         retest.AccessibilityRemediationItemId,
+
+                    OriginalAuthenticatedAuditFindingId =
+                        originalFinding.Id,
+
+                    MatchedAuthenticatedAuditFindingId =
+                        retest.MatchedAuthenticatedAuditFindingId,
 
                     CurrentStatus =
                         retest.RemediationItem.Status,
@@ -629,6 +698,9 @@ public sealed class AccessibilityWorkflowRetestsController
                     CanVerify =
                         canVerify,
 
+                    VerifiedFromThisRetest =
+                        verifiedFromThisRetest,
+
                     WasReopened =
                         wasReopened
                 });
@@ -665,6 +737,10 @@ public sealed class AccessibilityWorkflowRetestsController
                     items.Count(item =>
                         item.Result ==
                         AccessibilityRemediationRetestResult.NotDetected),
+
+                VerifiedFromThisRetest =
+                    items.Count(item =>
+                        item.VerifiedFromThisRetest),
 
                 Inconclusive =
                     items.Count(item =>

@@ -234,6 +234,10 @@
                             Not Detected
                         </th>
 
+                        <th scope="col">
+                            Verification
+                        </th>
+
                         <th scope="col"
                             class="text-end">
                             Inconclusive
@@ -323,6 +327,37 @@
                                 <span class="badge text-bg-success">
                                     @history.NotDetected
                                 </span>
+
+                            </td>
+
+                            <td>
+
+                                @{
+                                    string verificationBadgeClass =
+                                        history.VerificationState switch
+                                        {
+                                            "Fully Verified" =>
+                                            "text-bg-success",
+
+                                            "Partially Verified" =>
+                                            "text-bg-warning",
+
+                                            _ =>
+                                            "text-bg-secondary"
+                                        };
+                                }
+
+                                <span class="badge @verificationBadgeClass">
+                                    @history.VerificationState
+                                </span>
+
+                                @if (history.NotDetected > 0)
+                                {
+                                    <div class="small text-muted mt-1">
+                                        @history.VerifiedFromThisRetest /
+                                        @history.NotDetected verified
+                                    </div>
+                                }
 
                             </td>
 

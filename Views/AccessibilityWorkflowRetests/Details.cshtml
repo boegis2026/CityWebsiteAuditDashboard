@@ -441,6 +441,38 @@
                                     </div>
                                 }
 
+                                @if (item.OriginalAuthenticatedAuditFindingId.HasValue)
+                                    {
+                                        <div class="small mt-1">
+                                            <span class="text-muted">
+                                                Original:
+                                            </span>
+
+                                            Finding #@item.OriginalAuthenticatedAuditFindingId.Value
+                                        </div>
+                                    }
+
+                                <div class="small">
+
+                                        <span class="text-muted">
+                                            Retest:
+                                        </span>
+
+                                        @if (item.MatchedAuthenticatedAuditFindingId.HasValue)
+                                        {
+                                            <span>
+                                                Finding #@item.MatchedAuthenticatedAuditFindingId.Value
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">
+                                                None
+                                            </span>
+                                        }
+
+                                </div>
+
                             </td>
 
                             <td>
