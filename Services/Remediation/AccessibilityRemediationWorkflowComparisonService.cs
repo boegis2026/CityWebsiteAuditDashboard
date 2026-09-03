@@ -138,7 +138,9 @@ public sealed class AccessibilityRemediationWorkflowComparisonService
                 await _matcher.FindBestMatchingStepAsync(
                     remediationItem.Id,
                     retestAuditRunId,
-                    cancellationToken);
+                    cancellationToken,
+                    originalAuthenticatedAuditFindingId:
+                    originalFinding.Id);
 
             if (stateMatch is null)
             {
@@ -147,6 +149,9 @@ public sealed class AccessibilityRemediationWorkflowComparisonService
                     {
                         RemediationItemId =
                             remediationItem.Id,
+
+                        OriginalAuthenticatedAuditFindingId =
+                            originalFinding.Id,
 
                         CurrentStatus =
                             remediationItem.Status,
@@ -191,13 +196,18 @@ public sealed class AccessibilityRemediationWorkflowComparisonService
                 await _matcher.MatchAsync(
                     remediationItem.Id,
                     stateMatch.AuthenticatedAuditStepId,
-                    cancellationToken);
+                    cancellationToken,
+                    originalAuthenticatedAuditFindingId:
+                    originalFinding.Id);
 
             comparisonItems.Add(
                 new AccessibilityRemediationWorkflowComparisonItem
                 {
                     RemediationItemId =
                         remediationItem.Id,
+
+                    OriginalAuthenticatedAuditFindingId =
+                        originalFinding.Id,
 
                     CurrentStatus =
                         remediationItem.Status,
@@ -356,6 +366,8 @@ public sealed class AccessibilityRemediationWorkflowComparisonResult
 public sealed class AccessibilityRemediationWorkflowComparisonItem
 {
     public int RemediationItemId { get; init; }
+
+    public int OriginalAuthenticatedAuditFindingId { get; init; }
 
     public AccessibilityRemediationStatus CurrentStatus { get; init; }
 

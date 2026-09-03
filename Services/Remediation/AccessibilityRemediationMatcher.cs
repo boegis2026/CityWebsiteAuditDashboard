@@ -19,16 +19,23 @@ public sealed class AccessibilityRemediationMatcher
     FindBestMatchingStepAsync(
         int remediationItemId,
         int authenticatedAuditRunId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        int? originalAuthenticatedAuditFindingId = null)
     {
         AccessibilityRemediationFindingOccurrence? originalOccurrence =
             await _dbContext.AccessibilityRemediationFindingOccurrences
                 .AsNoTracking()
                 .Where(occurrence =>
                     occurrence.AccessibilityRemediationItemId ==
-                    remediationItemId)
+                        remediationItemId &&
+                    (!originalAuthenticatedAuditFindingId.HasValue ||
+                    occurrence.AuthenticatedAuditFindingId ==
+                    originalAuthenticatedAuditFindingId.Value)
+                    )
                 .OrderBy(occurrence =>
                     occurrence.LinkedAt)
+                .ThenBy(occurrence =>
+                    occurrence.Id)
                 .Include(occurrence =>
                     occurrence.AuthenticatedAuditFinding)
                     .ThenInclude(finding =>
@@ -111,14 +118,22 @@ public sealed class AccessibilityRemediationMatcher
     public async Task<AccessibilityRemediationMatchResult> MatchAsync(
         int remediationItemId,
         int authenticatedAuditStepId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        int? originalAuthenticatedAuditFindingId = null)
     {
         AccessibilityRemediationFindingOccurrence? originalOccurrence =
             await _dbContext.AccessibilityRemediationFindingOccurrences
                 .AsNoTracking()
                 .Where(occurrence =>
                     occurrence.AccessibilityRemediationItemId ==
-                    remediationItemId)
+                        remediationItemId &&
+                    (!originalAuthenticatedAuditFindingId.HasValue ||
+                    occurrence.AuthenticatedAuditFindingId ==
+                        originalAuthenticatedAuditFindingId.Value))
+                .OrderBy(occurrence =>
+                    occurrence.LinkedAt)
+                .ThenBy(occurrence =>
+                    occurrence.Id)
                 .OrderBy(occurrence => occurrence.LinkedAt)
                 .Include(occurrence =>
                     occurrence.AuthenticatedAuditFinding)

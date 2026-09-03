@@ -1,0 +1,714 @@
+﻿@model CityWebsiteAuditDashboard.ViewModels.AccessibilityWorkflowRetestDetailsViewModel
+
+@{
+    ViewData["Title"] = "Formal Workflow Retest Details";
+}
+
+<div class="container py-4">
+
+    <div class="d-flex flex-wrap
+        justify-content-between
+        align-items-start
+        gap-3
+        mb-4">
+
+        <div>
+
+            <h1 class="h2 mb-1">
+                Formal Workflow Retest Details
+            </h1>
+
+            <p class="text-muted mb-0">
+                Saved full-workflow accessibility retest results for
+                @Model.ApplicationName.
+            </p>
+
+        </div>
+
+        <div class="d-flex flex-wrap gap-2">
+
+            <a asp-controller="AccessibilityWorkflowRetests"
+               asp-action="Index"
+               asp-route-originalAuditRunId="@Model.OriginalAuditRunId"
+               class="btn btn-outline-secondary">
+                Back to Workflow Retests
+            </a>
+
+            <a asp-controller="AuthenticatedAudits"
+               asp-action="Details"
+               asp-route-id="@Model.RetestAuditRunId"
+               class="btn btn-outline-primary">
+                View Retest Audit
+            </a>
+
+        </div>
+
+    </div>
+
+    <div class="card shadow-sm mb-4">
+
+        <div class="card-body">
+
+            <div class="row g-3">
+
+                <div class="col-md-4">
+
+                    <div class="text-muted small">
+                        Application
+                    </div>
+
+                    <div class="fw-semibold">
+                        @Model.ApplicationName
+                    </div>
+
+                </div>
+
+                <div class="col-md-4">
+
+                    <div class="text-muted small">
+                        Original Audit
+                    </div>
+
+                    <div>
+                        <a asp-controller="AuthenticatedAudits"
+                           asp-action="Details"
+                           asp-route-id="@Model.OriginalAuditRunId">
+                            Run #@Model.OriginalAuditRunId
+                        </a>
+                    </div>
+
+                </div>
+
+                <div class="col-md-4">
+
+                    <div class="text-muted small">
+                        Retest Audit
+                    </div>
+
+                    <div>
+                        <a asp-controller="AuthenticatedAudits"
+                           asp-action="Details"
+                           asp-route-id="@Model.RetestAuditRunId">
+                            Run #@Model.RetestAuditRunId
+                        </a>
+                    </div>
+
+                </div>
+
+                <div class="col-md-4">
+
+                    <div class="text-muted small">
+                        Formal Retest Recorded
+                    </div>
+
+                    <div>
+                        @Model.RetestedAt.ToString("yyyy-MM-dd HH:mm:ss")
+                        UTC
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="row g-3 mb-4">
+
+        <div class="col-6 col-lg">
+
+            <div class="card shadow-sm h-100">
+
+                <div class="card-body">
+
+                    <div class="text-muted small">
+                        Tracked
+                    </div>
+
+                    <div class="fs-2 fw-bold">
+                        @Model.TotalTracked
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="col-6 col-lg">
+
+            <div class="card shadow-sm h-100">
+
+                <div class="card-body">
+
+                    <div class="text-muted small">
+                        Still Detected
+                    </div>
+
+                    <div class="fs-2 fw-bold text-danger">
+                        @Model.StillDetected
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="col-6 col-lg">
+
+            <div class="card shadow-sm h-100">
+
+                <div class="card-body">
+
+                    <div class="text-muted small">
+                        Not Detected
+                    </div>
+
+                    <div class="fs-2 fw-bold text-success">
+                        @Model.NotDetected
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="col-6 col-lg">
+
+            <div class="card shadow-sm h-100">
+
+                <div class="card-body">
+
+                    <div class="text-muted small">
+                        Reopened
+                    </div>
+
+                    <div class="fs-2 fw-bold text-warning">
+                        @Model.Reopened
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="col-6 col-lg">
+
+            <div class="card shadow-sm h-100">
+
+                <div class="card-body">
+
+                    <div class="text-muted small">
+                        Inconclusive
+                    </div>
+
+                    <div class="fs-2 fw-bold">
+                        @Model.Inconclusive
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="col-6 col-lg">
+
+            <div class="card shadow-sm h-100">
+
+                <div class="card-body">
+
+                    <div class="text-muted small">
+                        Failed
+                    </div>
+
+                    <div class="fs-2 fw-bold">
+                        @Model.Failed
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    @{
+    int verificationCandidateCount =
+        Model.Items.Count(item =>
+            item.CanVerify);
+    }
+
+    <form asp-controller="AccessibilityWorkflowRetests"
+        asp-action="VerifySelected"
+        method="post"
+        onsubmit="return confirm(
+          'Verify the selected accessibility issues? ' +
+          'Only issues supported by the latest Not Detected retest evidence will be verified.'
+        );">
+
+    @Html.AntiForgeryToken()
+
+    <input type="hidden"
+           name="originalAuditRunId"
+           value="@Model.OriginalAuditRunId" />
+
+    <input type="hidden"
+           name="retestAuditRunId"
+           value="@Model.RetestAuditRunId" />
+
+    <div class="card shadow-sm">
+
+        <div class="card-header bg-transparent">
+
+            <h2 class="h4 mb-0">
+                Saved Retest Results
+            </h2>
+
+        </div>
+
+        <div class="table-responsive">
+
+            <table class="table table-hover align-middle mb-0">
+
+                <thead>
+
+                    <tr>
+
+                        <th scope="col"
+                            style="width: 48px;">
+
+                            @if (verificationCandidateCount > 0)
+                            {
+                                <input type="checkbox"
+                                    id="selectAllEligible"
+                                    class="form-check-input"
+                                    aria-label="Select all issues eligible for verification" />
+                            }
+                            else
+                            {
+                                <span class="visually-hidden">
+                                    Select
+                                </span>
+                            }
+
+                        </th>
+
+                        <th scope="col">
+                            Finding
+                        </th>
+
+                        <th scope="col">
+                            Original State
+                        </th>
+
+                        <th scope="col">
+                            Retest State
+                        </th>
+
+                        <th scope="col">
+                            Saved Result
+                        </th>
+
+                        <th scope="col">
+                            Match
+                        </th>
+
+                        <th scope="col">
+                            Current Status
+                        </th>
+
+                        <th scope="col"></th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                    @foreach (var item in Model.Items)
+                    {
+                        string resultBadgeClass =
+                            item.Result switch
+                            {
+                                CityWebsiteAuditDashboard.Models
+                                    .AccessibilityRemediationRetestResult
+                                    .Detected =>
+                                        "text-bg-danger",
+
+                                CityWebsiteAuditDashboard.Models
+                                    .AccessibilityRemediationRetestResult
+                                    .NotDetected =>
+                                        "text-bg-success",
+
+                                CityWebsiteAuditDashboard.Models
+                                    .AccessibilityRemediationRetestResult
+                                    .Inconclusive =>
+                                        "text-bg-warning",
+
+                                CityWebsiteAuditDashboard.Models
+                                    .AccessibilityRemediationRetestResult
+                                    .Failed =>
+                                        "text-bg-secondary",
+
+                                _ =>
+                                    "text-bg-secondary"
+                            };
+
+                        string resultLabel =
+                            item.Result switch
+                            {
+                                CityWebsiteAuditDashboard.Models
+                                    .AccessibilityRemediationRetestResult
+                                    .Detected =>
+                                        "Still Detected",
+
+                                CityWebsiteAuditDashboard.Models
+                                    .AccessibilityRemediationRetestResult
+                                    .NotDetected =>
+                                        "Not Detected",
+
+                                CityWebsiteAuditDashboard.Models
+                                    .AccessibilityRemediationRetestResult
+                                    .Inconclusive =>
+                                        "Inconclusive",
+
+                                CityWebsiteAuditDashboard.Models
+                                    .AccessibilityRemediationRetestResult
+                                    .Failed =>
+                                        "Scan Failed",
+
+                                _ =>
+                                    item.Result.ToString()
+                            };
+
+                        string statusLabel =
+                            item.CurrentStatus switch
+                            {
+                                CityWebsiteAuditDashboard.Models
+                                    .AccessibilityRemediationStatus
+                                    .InProgress =>
+                                        "In Progress",
+
+                                CityWebsiteAuditDashboard.Models
+                                    .AccessibilityRemediationStatus
+                                    .Fixed =>
+                                        "Fixed – Awaiting Verification",
+
+                                CityWebsiteAuditDashboard.Models
+                                    .AccessibilityRemediationStatus
+                                    .WontFix =>
+                                        "Won't Fix",
+
+                                _ =>
+                                    item.CurrentStatus.ToString()
+                            };
+
+                        <tr>
+
+                            <td>
+
+                                @if (item.CanVerify)
+                                {
+                                    <input type="checkbox"
+                                        name="remediationItemIds"
+                                        value="@item.RemediationItemId"
+                                        class="form-check-input verification-item-checkbox"
+                                        aria-label="Select remediation item @item.RemediationItemId for verification" />
+                                }
+
+                            </td>
+
+                            <td>
+
+                                <div class="fw-semibold">
+                                    @item.RuleId
+                                </div>
+
+                                <div class="small text-muted">
+                                    @item.FindingType
+                                </div>
+
+                                @if (!string.IsNullOrWhiteSpace(item.Impact))
+                                {
+                                    <div class="small text-muted">
+                                        @item.Impact
+                                    </div>
+                                }
+
+                            </td>
+
+                            <td>
+
+                                <div>
+                                    Step @item.OriginalStepNumber
+                                </div>
+
+                                <div class="small text-muted">
+                                    @item.OriginalStepName
+                                </div>
+
+                            </td>
+
+                            <td>
+
+                                @if (item.RetestStepNumber.HasValue)
+                                {
+                                    <div>
+                                        Step @item.RetestStepNumber
+                                    </div>
+
+                                    <div class="small text-muted">
+                                        @item.RetestStepName
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">
+                                        No matched state
+                                    </span>
+                                }
+
+                            </td>
+
+                            <td>
+
+                                <span class="badge @resultBadgeClass">
+                                    @resultLabel
+                                </span>
+
+                                @if (item.WasReopened)
+                                {
+                                    <span class="badge text-bg-warning ms-1">
+                                        Reopened
+                                    </span>
+                                }
+
+                            </td>
+
+                            <td>
+
+                                @if (item.MatchConfidence.HasValue)
+                                {
+                                    <div>
+                                        @item.MatchConfidence.Value.ToString("P0")
+                                    </div>
+                                }
+
+                                @if (!string.IsNullOrWhiteSpace(
+                                    item.MatchMethod))
+                                {
+                                    <div class="small text-muted">
+                                        @item.MatchMethod
+                                    </div>
+                                }
+
+                            </td>
+
+                            <td>
+                                @statusLabel
+                            </td>
+
+                            <td class="text-end">
+
+                                <a asp-controller="AccessibilityRemediations"
+                                   asp-action="Details"
+                                   asp-route-id="@item.RemediationItemId"
+                                   class="btn btn-sm btn-outline-primary">
+                                    View Remediation
+                                </a>
+
+                            </td>
+
+                        </tr>
+
+                        @if (!string.IsNullOrWhiteSpace(item.Notes))
+                        {
+                            <tr>
+
+                                <td colspan="8"
+                                    class="bg-light">
+
+                                    <div class="small">
+                                        <strong>Retest notes:</strong>
+                                        @item.Notes
+                                    </div>
+
+                                </td>
+
+                            </tr>
+                        }
+                    }
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+        @if (verificationCandidateCount > 0)
+            {
+                <div class="card border-success shadow-sm mt-4">
+
+                    <div class="card-body">
+
+                        <div class="d-flex flex-wrap
+                            justify-content-between
+                            align-items-start
+                            gap-3">
+
+                            <div>
+
+                                <h2 class="h5 mb-1">
+                                    Verify Selected Issues
+                                </h2>
+
+                                <p class="text-muted mb-0">
+                                    @verificationCandidateCount issue(s) from this
+                                    workflow retest are currently eligible for
+                                    verification.
+                                </p>
+
+                                <p class="small mb-0 mt-1">
+                                    Selected:
+                                    <strong id="selectedVerificationCount">
+                                        0
+                                    </strong>
+                                </p>
+
+                            </div>
+
+                            <button type="submit"
+                                    id="verifySelectedButton"
+                                    class="btn btn-success"
+                                    disabled>
+                                Verify Selected Issues
+                            </button>
+
+                        </div>
+
+                        <div class="mt-3">
+
+                            <label for="verificationNotes"
+                                   class="form-label fw-semibold">
+                                Verification Notes
+                            </label>
+
+                            <textarea id="verificationNotes"
+                                      name="notes"
+                                      rows="3"
+                                      maxlength="4000"
+                                      class="form-control"
+                                      placeholder="Optional notes about this verification review..."></textarea>
+
+                        </div>
+
+                    </div>
+
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-secondary mt-4 mb-0">
+
+                    There are currently no issues from this workflow retest
+                    awaiting verification.
+
+                </div>
+            }
+
+    </form>
+
+    </div>
+
+</div>
+
+@section Scripts
+{
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+
+            const selectAll =
+                document.getElementById("selectAllEligible");
+
+            const itemCheckboxes =
+                Array.from(
+                    document.querySelectorAll(
+                        ".verification-item-checkbox"
+                    )
+                );
+
+            const selectedCount =
+                document.getElementById(
+                    "selectedVerificationCount"
+                );
+
+            const verifyButton =
+                document.getElementById(
+                    "verifySelectedButton"
+                );
+
+            function updateSelectionState() {
+
+                const checkedCount =
+                    itemCheckboxes.filter(
+                        checkbox => checkbox.checked
+                    ).length;
+
+                if (selectedCount) {
+                    selectedCount.textContent =
+                        checkedCount.toString();
+                }
+
+                if (verifyButton) {
+                    verifyButton.disabled =
+                        checkedCount === 0;
+                }
+
+                if (selectAll) {
+
+                    selectAll.checked =
+                        itemCheckboxes.length > 0 &&
+                        checkedCount ===
+                            itemCheckboxes.length;
+
+                    selectAll.indeterminate =
+                        checkedCount > 0 &&
+                        checkedCount <
+                            itemCheckboxes.length;
+                }
+            }
+
+            if (selectAll) {
+
+                selectAll.addEventListener(
+                    "change",
+                    function () {
+
+                        itemCheckboxes.forEach(
+                            checkbox => {
+                                checkbox.checked =
+                                    selectAll.checked;
+                            });
+
+                        updateSelectionState();
+                    });
+            }
+
+            itemCheckboxes.forEach(
+                checkbox => {
+
+                    checkbox.addEventListener(
+                        "change",
+                        updateSelectionState);
+                });
+
+            updateSelectionState();
+        });
+    </script>
+}

@@ -18,6 +18,15 @@ public sealed class AccessibilityRemediationRetest
     public int? AuthenticatedAuditStepId { get; set; }
 
     /*
+    * The exact original authenticated finding that this retest
+    * was evaluating.
+    *
+    * Nullable because older retests and some current-state retests
+    * may not have this historical source recorded.
+    */
+    public int? OriginalAuthenticatedAuditFindingId { get; set; }
+
+    /*
      * When the tracked rule is detected again, this points to the
      * matching finding from the new scan.
      *
@@ -50,6 +59,9 @@ public sealed class AccessibilityRemediationRetest
     public AuthenticatedAuditRun? AuthenticatedAuditRun { get; set; }
 
     public AuthenticatedAuditStep? AuthenticatedAuditStep { get; set; }
+
+    public AuthenticatedAuditFinding? OriginalAuthenticatedAuditFinding
+    { get; set; }
 
     public AuthenticatedAuditFinding? MatchedAuthenticatedAuditFinding
     { get; set; }

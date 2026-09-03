@@ -180,6 +180,184 @@
 
 </section>
 
+@if (Model.OriginalAuditRunId.HasValue &&
+     Model.FormalWorkflowRetests.Count > 0)
+{
+    <section class="card shadow-sm mb-4">
+
+        <div class="card-header bg-transparent">
+
+            <h2 class="h4 mb-1">
+                Previous Formal Workflow Retests
+            </h2>
+
+            <p class="small text-muted mb-0">
+                Saved full-workflow retests for remediation items
+                tracked from Original Run #@Model.OriginalAuditRunId.
+            </p>
+
+        </div>
+
+        <div class="table-responsive">
+
+            <table class="table align-middle mb-0">
+
+                <thead>
+
+                    <tr>
+
+                        <th scope="col">
+                            Retest Audit
+                        </th>
+
+                        <th scope="col">
+                            Retested
+                        </th>
+
+                        <th scope="col"
+                            class="text-end">
+                            Tracked
+                        </th>
+
+                        <th scope="col"
+                            class="text-end">
+                            Still Detected
+                        </th>
+
+                        <th scope="col"
+                            class="text-end">
+                            Reopened
+                        </th>
+
+                        <th scope="col"
+                            class="text-end">
+                            Not Detected
+                        </th>
+
+                        <th scope="col"
+                            class="text-end">
+                            Inconclusive
+                        </th>
+
+                        <th scope="col"
+                            class="text-end">
+                            Failed
+                        </th>
+
+                        <th scope="col"></th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                    @foreach (var history
+                        in Model.FormalWorkflowRetests)
+                    {
+                        <tr>
+
+                            <td>
+
+                                <a asp-controller="AuthenticatedAudits"
+                                   asp-action="Details"
+                                   asp-route-id="@history.RetestAuditRunId"
+                                   class="fw-semibold">
+                                    Run #@history.RetestAuditRunId
+                                </a>
+
+                                <div class="small text-muted">
+                                    @history.ApplicationName
+                                </div>
+
+                            </td>
+
+                            <td>
+                                @history.RetestedAt.ToString(
+                                    "MMM d, yyyy HH:mm")
+                                <div class="small text-muted">
+                                    UTC
+                                </div>
+                            </td>
+
+                            <td class="text-end fw-semibold">
+                                @history.TotalTracked
+                            </td>
+
+                            <td class="text-end">
+
+                                @if (history.StillDetected > 0)
+                                {
+                                    <span class="badge text-bg-danger">
+                                        @history.StillDetected
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">
+                                        0
+                                    </span>
+                                }
+
+                            </td>
+
+                            <td class="text-end">
+
+                                @if (history.Reopened > 0)
+                                {
+                                    <span class="badge text-bg-warning">
+                                        @history.Reopened
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">
+                                        0
+                                    </span>
+                                }
+
+                            </td>
+
+                            <td class="text-end">
+
+                                <span class="badge text-bg-success">
+                                    @history.NotDetected
+                                </span>
+
+                            </td>
+
+                            <td class="text-end">
+                                @history.Inconclusive
+                            </td>
+
+                            <td class="text-end">
+                                @history.Failed
+                            </td>
+
+                            <td class="text-end">
+
+                                <a asp-controller="AccessibilityWorkflowRetests"
+                                   asp-action="Details"
+                                   asp-route-originalAuditRunId="@Model.OriginalAuditRunId"
+                                   asp-route-retestAuditRunId="@history.RetestAuditRunId"
+                                   class="btn btn-sm btn-outline-primary">
+                                    Review
+                                </a>
+
+                            </td>
+
+                        </tr>
+                    }
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </section>
+}
+
 @if (Model.Comparison is not null)
 {
     var comparison = Model.Comparison;

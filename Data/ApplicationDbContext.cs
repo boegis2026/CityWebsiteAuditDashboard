@@ -212,6 +212,16 @@ namespace CityWebsiteAuditDashboard.Data
                         retest.MatchedAuthenticatedAuditFindingId)
                     .OnDelete(DeleteBehavior.Restrict);
 
+                /*
+                * Preserve the exact original finding that the retest evaluated.
+                */
+                entity.HasOne(retest =>
+                        retest.OriginalAuthenticatedAuditFinding)
+                    .WithMany()
+                    .HasForeignKey(retest =>
+                        retest.OriginalAuthenticatedAuditFindingId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
                 entity.HasOne(retest =>
                         retest.AuthenticatedAuditRun)
                     .WithMany()
@@ -230,6 +240,9 @@ namespace CityWebsiteAuditDashboard.Data
 
                 entity.HasIndex(retest =>
                     retest.AuthenticatedAuditRunId);
+
+                entity.HasIndex(retest =>
+                    retest.OriginalAuthenticatedAuditFindingId);
             });
         }
     }

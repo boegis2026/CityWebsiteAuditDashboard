@@ -678,6 +678,38 @@
                                             </dd>
                                         }
 
+                                        @if (retest.OriginalAuthenticatedAuditFindingId.HasValue)
+                                        {
+                                            <dt class="col-sm-4">
+                                                Original Finding
+                                            </dt>
+
+                                            <dd class="col-sm-8">
+                                                Finding #@retest.OriginalAuthenticatedAuditFindingId.Value
+                                            </dd>
+                                        }
+
+                                        @if (retest.MatchedAuthenticatedAuditFindingId.HasValue)
+                                        {
+                                            <dt class="col-sm-4">
+                                                Matched Retest Finding
+                                            </dt>
+
+                                            <dd class="col-sm-8">
+                                                Finding #@retest.MatchedAuthenticatedAuditFindingId.Value
+                                            </dd>
+                                        }
+                                        else
+                                        {
+                                            <dt class="col-sm-4">
+                                                Matched Retest Finding
+                                            </dt>
+
+                                            <dd class="col-sm-8 text-muted">
+                                                None
+                                            </dd>
+                                        }
+
                                         <dt class="col-sm-4">
                                             Match Method
                                         </dt>

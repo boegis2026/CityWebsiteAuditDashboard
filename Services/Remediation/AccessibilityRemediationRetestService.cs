@@ -56,6 +56,21 @@ public sealed class AccessibilityRemediationRetestService
                 "The authenticated audit step used for the retest could not be found.");
         }
 
+        int? originalAuthenticatedAuditFindingId =
+            await _dbContext
+        .AccessibilityRemediationFindingOccurrences
+        .AsNoTracking()
+        .Where(occurrence =>
+            occurrence.AccessibilityRemediationItemId ==
+                remediationItemId)
+        .OrderBy(occurrence =>
+            occurrence.LinkedAt)
+        .ThenBy(occurrence =>
+            occurrence.Id)
+        .Select(occurrence =>
+            (int?)occurrence.AuthenticatedAuditFindingId)
+        .FirstOrDefaultAsync(cancellationToken);
+
         AccessibilityRemediationMatchResult match =
             await _matcher.MatchAsync(
                 remediationItemId,
@@ -156,6 +171,9 @@ public sealed class AccessibilityRemediationRetestService
 
             AuthenticatedAuditStepId =
                 authenticatedAuditStepId,
+
+            OriginalAuthenticatedAuditFindingId =
+                originalAuthenticatedAuditFindingId,
 
             MatchedAuthenticatedAuditFindingId =
                 match.MatchedAuthenticatedAuditFindingId,
@@ -354,6 +372,7 @@ public sealed class AccessibilityRemediationRetestService
                 .AsNoTracking()
                 .AnyAsync(
                     retest =>
+                        retest.RetestType == "FullWorkflow" &&
                         retest.AuthenticatedAuditRunId ==
                             retestAuditRunId &&
                         remediationItemIds.Contains(
@@ -479,6 +498,10 @@ public sealed class AccessibilityRemediationRetestService
 
                     AuthenticatedAuditStepId =
                         comparisonItem.RetestStepId,
+
+                    OriginalAuthenticatedAuditFindingId =
+                        comparisonItem
+                        .OriginalAuthenticatedAuditFindingId,
 
                     MatchedAuthenticatedAuditFindingId =
                         comparisonItem
@@ -654,6 +677,189 @@ public sealed class AccessibilityRemediationRetestService
         };
     }
 
+    public async Task<AccessibilityWorkflowVerificationResult>
+    VerifyWorkflowItemsAsync(
+        int retestAuditRunId,
+        IEnumerable<int> remediationItemIds,
+        string? notes = null,
+        string? verifiedBy = null,
+        CancellationToken cancellationToken = default)
+    {
+        List<int> selectedItemIds =
+            remediationItemIds
+                .Distinct()
+                .ToList();
+
+        if (selectedItemIds.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "Select at least one remediation item to verify.");
+        }
+
+        string? cleanedNotes =
+            string.IsNullOrWhiteSpace(notes)
+                ? null
+                : notes.Trim();
+
+        if (cleanedNotes?.Length > 4000)
+        {
+            cleanedNotes =
+                cleanedNotes[..4000];
+        }
+
+        string? cleanedVerifiedBy =
+            string.IsNullOrWhiteSpace(verifiedBy)
+                ? null
+                : verifiedBy.Trim();
+
+        if (cleanedVerifiedBy?.Length > 200)
+        {
+            cleanedVerifiedBy =
+                cleanedVerifiedBy[..200];
+        }
+
+        List<AccessibilityRemediationItem> items =
+            await _dbContext.AccessibilityRemediationItems
+                .Where(item =>
+                    selectedItemIds.Contains(item.Id))
+                .Include(item =>
+                    item.Retests)
+                .ToListAsync(cancellationToken);
+
+        if (items.Count != selectedItemIds.Count)
+        {
+            throw new InvalidOperationException(
+                "One or more selected remediation items could not be found.");
+        }
+
+        foreach (AccessibilityRemediationItem item in items)
+        {
+            if (item.Status !=
+                AccessibilityRemediationStatus.Fixed)
+            {
+                throw new InvalidOperationException(
+                    $"Remediation item #{item.Id} is not awaiting verification.");
+            }
+
+            AccessibilityRemediationRetest? workflowRetest =
+                item.Retests
+                    .Where(retest =>
+                        retest.RetestType == "FullWorkflow" &&
+                        retest.AuthenticatedAuditRunId ==
+                            retestAuditRunId)
+                    .OrderByDescending(retest =>
+                        retest.RetestedAt)
+                    .ThenByDescending(retest =>
+                        retest.Id)
+                    .FirstOrDefault();
+
+            if (workflowRetest is null)
+            {
+                throw new InvalidOperationException(
+                    $"Remediation item #{item.Id} does not have a saved " +
+                    "full-workflow retest for this audit run.");
+            }
+
+            if (workflowRetest.Result !=
+                AccessibilityRemediationRetestResult.NotDetected)
+            {
+                throw new InvalidOperationException(
+                    $"Remediation item #{item.Id} cannot be verified because " +
+                    "the workflow retest did not return Not Detected.");
+            }
+
+            /*
+             * Verification must still be based on the latest retest evidence.
+             * A later retest may have detected the issue again.
+             */
+            AccessibilityRemediationRetest? latestRetest =
+                item.Retests
+                    .OrderByDescending(retest =>
+                        retest.RetestedAt)
+                    .ThenByDescending(retest =>
+                        retest.Id)
+                    .FirstOrDefault();
+
+            if (latestRetest is null ||
+                latestRetest.Id != workflowRetest.Id)
+            {
+                throw new InvalidOperationException(
+                    $"Remediation item #{item.Id} has newer retest evidence. " +
+                    "Review the remediation item before verifying it.");
+            }
+        }
+
+        DateTime now =
+            DateTime.UtcNow;
+
+        await using var transaction =
+            await _dbContext.Database.BeginTransactionAsync(
+                cancellationToken);
+
+        foreach (AccessibilityRemediationItem item in items)
+        {
+            AccessibilityRemediationStatus previousStatus =
+                item.Status;
+
+            item.Status =
+                AccessibilityRemediationStatus.Verified;
+
+            item.UpdatedAt =
+                now;
+
+            string historyNotes =
+                cleanedNotes ??
+                $"Verified after full workflow retest audit " +
+                $"run #{retestAuditRunId} no longer detected the tracked issue.";
+
+            item.History.Add(
+                new AccessibilityRemediationHistory
+                {
+                    EventType =
+                        "Verified",
+
+                    PreviousStatus =
+                        previousStatus,
+
+                    NewStatus =
+                        AccessibilityRemediationStatus.Verified,
+
+                    PreviousAssignee =
+                        item.AssignedTo,
+
+                    NewAssignee =
+                        item.AssignedTo,
+
+                    Notes =
+                        historyNotes,
+
+                    ChangedAt =
+                        now,
+
+                    ChangedBy =
+                        cleanedVerifiedBy
+                });
+        }
+
+        await _dbContext.SaveChangesAsync(
+            cancellationToken);
+
+        await transaction.CommitAsync(
+            cancellationToken);
+
+        return new AccessibilityWorkflowVerificationResult
+        {
+            RetestAuditRunId =
+                retestAuditRunId,
+
+            Selected =
+                selectedItemIds.Count,
+
+            Verified =
+                items.Count
+        };
+    }
+
     public async Task VerifyAsync(
     int remediationItemId,
     string? notes = null,
@@ -781,4 +987,13 @@ public sealed class AccessibilityWorkflowRetestApplyResult
     public int Failed { get; init; }
 
     public int Reopened { get; init; }
+}
+
+public sealed class AccessibilityWorkflowVerificationResult
+{
+    public int RetestAuditRunId { get; init; }
+
+    public int Selected { get; init; }
+
+    public int Verified { get; init; }
 }

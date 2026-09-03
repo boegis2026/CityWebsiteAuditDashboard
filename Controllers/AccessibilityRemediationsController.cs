@@ -279,6 +279,9 @@ public sealed class AccessibilityRemediationsController : Controller
                         AuthenticatedAuditRunId =
                             retest.AuthenticatedAuditRunId,
 
+                        OriginalAuthenticatedAuditFindingId =
+                            retest.OriginalAuthenticatedAuditFindingId,
+
                         MatchMethod = retest.MatchMethod,
 
                         MatchConfidence = retest.MatchConfidence,

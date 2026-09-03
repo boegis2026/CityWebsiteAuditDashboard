@@ -1,4 +1,5 @@
 ﻿using CityWebsiteAuditDashboard.Data;
+using CityWebsiteAuditDashboard.Models;
 using CityWebsiteAuditDashboard.Services.Remediation;
 using CityWebsiteAuditDashboard.ViewModels;
 using Microsoft.AspNetCore.Mvc;
@@ -104,6 +105,116 @@ public sealed class AccessibilityWorkflowRetestsController
             }
         }
 
+        List<AccessibilityWorkflowRetestHistoryViewModel>
+            formalWorkflowRetests =
+            new();
+
+        if (originalAuditRunId.HasValue)
+        {
+            List<AccessibilityRemediationRetest>
+                formalRetestRows =
+                    await _dbContext.AccessibilityRemediationRetests
+                        .AsNoTracking()
+                        .Where(retest =>
+                            retest.RetestType == "FullWorkflow" &&
+                            retest.AuthenticatedAuditRunId.HasValue &&
+                            retest.RemediationItem
+                                .FindingOccurrences
+                                .Any(occurrence =>
+                                    occurrence
+                                        .AuthenticatedAuditFinding
+                                        .AuthenticatedAuditStep
+                                        .AuthenticatedAuditRunId ==
+                                    originalAuditRunId.Value))
+                        .Include(retest =>
+                            retest.AuthenticatedAuditRun)
+                        .ToListAsync(cancellationToken);
+
+            List<int> formalRetestItemIds =
+                formalRetestRows
+                    .Select(retest =>
+                    retest.AccessibilityRemediationItemId)
+                    .Distinct()
+                    .ToList();
+
+            List<AccessibilityRemediationHistory> reopenedHistory =
+                formalRetestItemIds.Count == 0
+                    ? new List<AccessibilityRemediationHistory>()
+                    : await _dbContext.AccessibilityRemediationHistories
+                        .AsNoTracking()
+                        .Where(history =>
+                            formalRetestItemIds.Contains(
+                                history.AccessibilityRemediationItemId) &&
+                            history.EventType == "Reopened")
+                        .ToListAsync(cancellationToken);
+
+            formalWorkflowRetests =
+                formalRetestRows
+                    .GroupBy(retest =>
+                        retest.AuthenticatedAuditRunId!.Value)
+                    .Select(group =>
+                    {
+                        AccessibilityRemediationRetest first =
+                            group.First();
+
+                        int reopenedCount =
+                            group.Count(retest =>
+                                reopenedHistory.Any(history =>
+                                    history.AccessibilityRemediationItemId ==
+                                    retest.AccessibilityRemediationItemId &&
+                                history.ChangedAt ==
+                                    retest.RetestedAt));
+
+                        return new AccessibilityWorkflowRetestHistoryViewModel
+                        {
+                            RetestAuditRunId =
+                                group.Key,
+
+                            ApplicationName =
+                                first.AuthenticatedAuditRun?
+                                    .ApplicationName ??
+                                string.Empty,
+
+                            RetestedAt =
+                                group.Max(retest =>
+                                    retest.RetestedAt),
+
+                            TotalTracked =
+                                group.Count(),
+
+                            StillDetected =
+                                group.Count(retest =>
+                                    retest.Result ==
+                                    AccessibilityRemediationRetestResult
+                                        .Detected),
+
+                            Reopened =
+                                reopenedCount,
+
+                            NotDetected =
+                                group.Count(retest =>
+                                    retest.Result ==
+                                    AccessibilityRemediationRetestResult
+                                        .NotDetected),
+
+                            Inconclusive =
+                                group.Count(retest =>
+                                    retest.Result ==
+                                    AccessibilityRemediationRetestResult
+                                        .Inconclusive),
+
+                            Failed =
+                                group.Count(retest =>
+                                    retest.Result ==
+                                    AccessibilityRemediationRetestResult
+                                        .Failed)
+                        };
+                    })
+                    .OrderByDescending(history =>
+                        history.RetestedAt)
+                    .ToList();
+        }
+
         AccessibilityWorkflowRetestComparisonViewModel?
             comparison = null;
 
@@ -132,6 +243,7 @@ public sealed class AccessibilityWorkflowRetestsController
                         .AsNoTracking()
                         .AnyAsync(
                             retest =>
+                                retest.RetestType == "FullWorkflow" &&
                                 retest.AuthenticatedAuditRunId ==
                                     retestAuditRunId.Value &&
                                 comparedRemediationItemIds.Contains(
@@ -256,8 +368,386 @@ public sealed class AccessibilityWorkflowRetestsController
                 EligibleRetestRuns =
                     eligibleRetestRuns,
 
+                FormalWorkflowRetests =
+                    formalWorkflowRetests,
+
+
                 Comparison =
                     comparison
+            });
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> Details(
+    int originalAuditRunId,
+    int retestAuditRunId,
+    CancellationToken cancellationToken)
+    {
+        AuthenticatedAuditRun? originalRun =
+            await _dbContext.AuthenticatedAuditRuns
+                .AsNoTracking()
+                .SingleOrDefaultAsync(
+                    run =>
+                        run.Id == originalAuditRunId,
+                    cancellationToken);
+
+        if (originalRun is null)
+        {
+            return NotFound();
+        }
+
+        AuthenticatedAuditRun? retestRun =
+            await _dbContext.AuthenticatedAuditRuns
+                .AsNoTracking()
+                .SingleOrDefaultAsync(
+                    run =>
+                        run.Id == retestAuditRunId,
+                    cancellationToken);
+
+        if (retestRun is null)
+        {
+            return NotFound();
+        }
+
+        List<AccessibilityRemediationRetest> savedRetests =
+            await _dbContext.AccessibilityRemediationRetests
+                .AsNoTracking()
+                .Where(retest =>
+                    retest.RetestType == "FullWorkflow" &&
+                    retest.AuthenticatedAuditRunId ==
+                        retestAuditRunId &&
+                    retest.RemediationItem
+                        .FindingOccurrences
+                        .Any(occurrence =>
+                            occurrence
+                                .AuthenticatedAuditFinding
+                                .AuthenticatedAuditStep
+                                .AuthenticatedAuditRunId ==
+                            originalAuditRunId))
+                .Include(retest =>
+                    retest.AuthenticatedAuditStep)
+
+                .Include(retest =>
+                    retest.OriginalAuthenticatedAuditFinding)
+                    .ThenInclude(finding =>
+                        finding.AuthenticatedAuditStep)
+
+                .Include(retest =>
+                    retest.RemediationItem)
+                    .ThenInclude(item =>
+                        item.FindingOccurrences)
+                        .ThenInclude(occurrence =>
+                            occurrence.AuthenticatedAuditFinding)
+                            .ThenInclude(finding =>
+                                finding.AuthenticatedAuditStep)
+                .ToListAsync(cancellationToken);
+
+        if (savedRetests.Count == 0)
+        {
+            return NotFound();
+        }
+
+        List<int> remediationItemIds =
+            savedRetests
+                .Select(retest =>
+                    retest.AccessibilityRemediationItemId)
+                .Distinct()
+                .ToList();
+
+        Dictionary<int, int> latestRetestIds =
+            await _dbContext.AccessibilityRemediationRetests
+        .AsNoTracking()
+        .Where(retest =>
+            remediationItemIds.Contains(
+                retest.AccessibilityRemediationItemId))
+        .GroupBy(retest =>
+            retest.AccessibilityRemediationItemId)
+        .Select(group =>
+            new
+            {
+                RemediationItemId =
+                    group.Key,
+
+                LatestRetestId =
+                    group
+                        .OrderByDescending(retest =>
+                            retest.RetestedAt)
+                        .ThenByDescending(retest =>
+                            retest.Id)
+                        .Select(retest =>
+                            retest.Id)
+                        .First()
+            })
+        .ToDictionaryAsync(
+            row =>
+                row.RemediationItemId,
+
+            row =>
+                row.LatestRetestId,
+
+            cancellationToken);
+
+        List<AccessibilityRemediationHistory> reopenedHistory =
+            await _dbContext.AccessibilityRemediationHistories
+                .AsNoTracking()
+                .Where(history =>
+                    remediationItemIds.Contains(
+                        history.AccessibilityRemediationItemId) &&
+                    history.EventType == "Reopened")
+                .ToListAsync(cancellationToken);
+
+        List<AccessibilityWorkflowRetestSavedItemViewModel>
+            items =
+                new();
+
+        foreach (AccessibilityRemediationRetest retest
+            in savedRetests)
+        {
+            AuthenticatedAuditFinding? originalFinding =
+                retest.OriginalAuthenticatedAuditFinding;
+
+            /*
+             * Older formal workflow retests were saved before the exact
+             * OriginalAuthenticatedAuditFindingId field existed.
+             *
+             * Keep a fallback for those historical rows only.
+             */
+            if (originalFinding is null)
+            {
+                AccessibilityRemediationFindingOccurrence?
+                    originalOccurrence =
+                        retest.RemediationItem
+                            .FindingOccurrences
+                            .Where(occurrence =>
+                                occurrence
+                                    .AuthenticatedAuditFinding
+                                    .AuthenticatedAuditStep
+                                    .AuthenticatedAuditRunId ==
+                                originalAuditRunId)
+                            .OrderBy(occurrence =>
+                                occurrence.LinkedAt)
+                            .ThenBy(occurrence =>
+                                occurrence.Id)
+                            .FirstOrDefault();
+
+                originalFinding =
+                    originalOccurrence?
+                        .AuthenticatedAuditFinding;
+            }
+
+            if (originalFinding is null)
+            {
+                continue;
+            }
+
+            AuthenticatedAuditStep originalStep =
+                originalFinding.AuthenticatedAuditStep;
+
+            if (originalStep.AuthenticatedAuditRunId !=
+                originalAuditRunId)
+            {
+                throw new InvalidOperationException(
+                    $"Formal workflow retest #{retest.Id} references an " +
+                    "original finding from a different authenticated audit run.");
+            }
+
+            bool wasReopened =
+                reopenedHistory.Any(history =>
+                    history.AccessibilityRemediationItemId ==
+                        retest.AccessibilityRemediationItemId &&
+                    history.ChangedAt ==
+                        retest.RetestedAt);
+
+            bool canVerify =
+                retest.RemediationItem.Status ==
+                    AccessibilityRemediationStatus.Fixed &&
+                retest.Result ==
+                    AccessibilityRemediationRetestResult.NotDetected &&
+                latestRetestIds.TryGetValue(
+                    retest.AccessibilityRemediationItemId,
+                    out int latestRetestId) &&
+                latestRetestId ==
+                    retest.Id;
+
+            items.Add(
+                new AccessibilityWorkflowRetestSavedItemViewModel
+                {
+                    RemediationItemId =
+                        retest.AccessibilityRemediationItemId,
+
+                    CurrentStatus =
+                        retest.RemediationItem.Status,
+
+                    RuleId =
+                        originalFinding.RuleId,
+
+                    FindingType =
+                        originalFinding.FindingType,
+
+                    Impact =
+                        originalFinding.Impact,
+
+                    OriginalStepNumber =
+                        originalStep.StepNumber,
+
+                    OriginalStepName =
+                        originalStep.StepName,
+
+                    OriginalUrl =
+                        originalStep.Url,
+
+                    RetestStepId =
+                        retest.AuthenticatedAuditStepId,
+
+                    RetestStepNumber =
+                        retest.AuthenticatedAuditStep?
+                            .StepNumber,
+
+                    RetestStepName =
+                        retest.AuthenticatedAuditStep?
+                            .StepName,
+
+                    RetestUrl =
+                        retest.AuthenticatedAuditStep?
+                            .Url,
+
+                    Result =
+                        retest.Result,
+
+                    MatchMethod =
+                        retest.MatchMethod,
+
+                    MatchConfidence =
+                        retest.MatchConfidence,
+
+                    Notes =
+                        retest.Notes,
+
+                    RetestedAt =
+                        retest.RetestedAt,
+
+                    CanVerify =
+                        canVerify,
+
+                    WasReopened =
+                        wasReopened
+                });
+        }
+
+        DateTime retestedAt =
+            savedRetests.Max(retest =>
+                retest.RetestedAt);
+
+        AccessibilityWorkflowRetestDetailsViewModel model =
+            new()
+            {
+                OriginalAuditRunId =
+                    originalAuditRunId,
+
+                RetestAuditRunId =
+                    retestAuditRunId,
+
+                ApplicationName =
+                    retestRun.ApplicationName,
+
+                RetestedAt =
+                    retestedAt,
+
+                TotalTracked =
+                    items.Count,
+
+                StillDetected =
+                    items.Count(item =>
+                        item.Result ==
+                        AccessibilityRemediationRetestResult.Detected),
+
+                NotDetected =
+                    items.Count(item =>
+                        item.Result ==
+                        AccessibilityRemediationRetestResult.NotDetected),
+
+                Inconclusive =
+                    items.Count(item =>
+                        item.Result ==
+                        AccessibilityRemediationRetestResult.Inconclusive),
+
+                Failed =
+                    items.Count(item =>
+                        item.Result ==
+                        AccessibilityRemediationRetestResult.Failed),
+
+                Reopened =
+                    items.Count(item =>
+                        item.WasReopened),
+
+                Items =
+                    items
+                        .OrderBy(item =>
+                            item.Result ==
+                            AccessibilityRemediationRetestResult.Detected
+                                ? 0
+                                : item.Result ==
+                                  AccessibilityRemediationRetestResult.Failed
+                                    ? 1
+                                    : item.Result ==
+                                      AccessibilityRemediationRetestResult.Inconclusive
+                                        ? 2
+                                        : 3)
+                        .ThenBy(item =>
+                            item.OriginalStepNumber)
+                        .ThenBy(item =>
+                            item.RuleId)
+                        .ToList()
+            };
+
+        return View(model);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> VerifySelected(
+    int originalAuditRunId,
+    int retestAuditRunId,
+    List<int>? remediationItemIds,
+    string? notes,
+    CancellationToken cancellationToken)
+    {
+        try
+        {
+            AccessibilityWorkflowVerificationResult result =
+                await _retestService.VerifyWorkflowItemsAsync(
+                    retestAuditRunId,
+                    remediationItemIds ??
+                        new List<int>(),
+                    notes,
+                    cancellationToken: cancellationToken);
+
+            TempData["WorkflowVerificationSuccess"] =
+                $"{result.Verified} remediation issue(s) were verified.";
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (InvalidOperationException exception)
+        {
+            TempData["WorkflowVerificationError"] =
+                exception.Message;
+        }
+        catch (Exception exception)
+        {
+            TempData["WorkflowVerificationError"] =
+                "The selected remediation issues could not be verified. " +
+                exception.Message;
+        }
+
+        return RedirectToAction(
+            nameof(Details),
+            new
+            {
+                originalAuditRunId,
+                retestAuditRunId
             });
     }
 

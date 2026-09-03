@@ -96,6 +96,8 @@ public sealed class AccessibilityRemediationRetestViewModel
 
     public int? AuthenticatedAuditRunId { get; set; }
 
+    public int? OriginalAuthenticatedAuditFindingId { get; set; }
+
     public string? MatchMethod { get; set; }
 
     public decimal? MatchConfidence { get; set; }
