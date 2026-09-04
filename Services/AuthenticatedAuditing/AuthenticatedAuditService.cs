@@ -1453,6 +1453,50 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 cancellationToken);
 
             /*
+            * Some applications populate dependent controls asynchronously.
+            *
+            * CSR, for example, loads the Service dropdown after an Agency or
+            * Office/Location selection changes. Give those dependent controls
+            * one additional fill pass after the application's JavaScript has
+            * had time to update the page.
+            */
+            AuthenticatedAuditFieldFillResult delayedFillResult =
+                await FillSafeFieldsAsync(activePage);
+
+            if (delayedFillResult.RequiresManualInteraction)
+            {
+                return new AuthenticatedAuditAutomaticNavigationResult
+                {
+                    Status = "ManualActionRequired",
+
+                    UrlBefore = urlBefore,
+                    UrlAfter = activePage.Url,
+
+                    FilledFieldCount =
+                        fillResult.FilledFieldCount +
+                        delayedFillResult.FilledFieldCount,
+
+                    SkippedFieldCount =
+                        delayedFillResult.SkippedFieldCount,
+
+                    NavigationAttempted = false,
+                    Navigated = false,
+
+                    RequiresManualInteraction = true,
+
+                    Message =
+                        "Automatic navigation stopped before clicking anything.",
+
+                    StopReason =
+                        delayedFillResult.StopReason
+                };
+            }
+
+            await Task.Delay(
+                TimeSpan.FromSeconds(1),
+                cancellationToken);
+
+            /*
              * Only treat it as a static page after attempting to inspect/fill it.
              * Some application screens contain controls without a normal <form>.
              */
