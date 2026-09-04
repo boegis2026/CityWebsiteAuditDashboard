@@ -15,12 +15,22 @@ public sealed class AccessibilityRemediationMatcher
         _dbContext = dbContext;
     }
 
+    /// <summary>
+    /// Finds the most likely matching rendered workflow state in a later
+    /// authenticated audit run.
+    ///
+    /// For a normal single-state retest, originalAuthenticatedAuditFindingId
+    /// may be null and the remediation item's earliest occurrence is used.
+    ///
+    /// For a formal full-workflow retest, the exact finding from the selected
+    /// original audit run should be supplied.
+    /// </summary>
     public async Task<AccessibilityRemediationStateMatch?>
-    FindBestMatchingStepAsync(
-        int remediationItemId,
-        int authenticatedAuditRunId,
-        CancellationToken cancellationToken = default,
-        int? originalAuthenticatedAuditFindingId = null)
+        FindBestMatchingStepAsync(
+            int remediationItemId,
+            int authenticatedAuditRunId,
+            CancellationToken cancellationToken = default,
+            int? originalAuthenticatedAuditFindingId = null)
     {
         AccessibilityRemediationFindingOccurrence? originalOccurrence =
             await _dbContext.AccessibilityRemediationFindingOccurrences
@@ -29,9 +39,8 @@ public sealed class AccessibilityRemediationMatcher
                     occurrence.AccessibilityRemediationItemId ==
                         remediationItemId &&
                     (!originalAuthenticatedAuditFindingId.HasValue ||
-                    occurrence.AuthenticatedAuditFindingId ==
-                    originalAuthenticatedAuditFindingId.Value)
-                    )
+                     occurrence.AuthenticatedAuditFindingId ==
+                        originalAuthenticatedAuditFindingId.Value))
                 .OrderBy(occurrence =>
                     occurrence.LinkedAt)
                 .ThenBy(occurrence =>
@@ -59,7 +68,7 @@ public sealed class AccessibilityRemediationMatcher
                 .AsNoTracking()
                 .Where(step =>
                     step.AuthenticatedAuditRunId ==
-                    authenticatedAuditRunId)
+                        authenticatedAuditRunId)
                 .Include(step =>
                     step.AuthenticatedAuditRun)
                 .ToListAsync(cancellationToken);
@@ -81,8 +90,11 @@ public sealed class AccessibilityRemediationMatcher
                 .OrderByDescending(candidate =>
                     candidate.Confidence)
 
-                // Step number is only a tie-breaker.
-                // It is NOT being used as the state identity.
+                /*
+                 * Step number is only a tie-breaker.
+                 * It is not treated as the workflow-state identity because
+                 * workflows can gain or lose intermediate states between runs.
+                 */
                 .ThenBy(candidate =>
                     Math.Abs(
                         candidate.Step.StepNumber -
@@ -115,11 +127,19 @@ public sealed class AccessibilityRemediationMatcher
         };
     }
 
-    public async Task<AccessibilityRemediationMatchResult> MatchAsync(
-        int remediationItemId,
-        int authenticatedAuditStepId,
-        CancellationToken cancellationToken = default,
-        int? originalAuthenticatedAuditFindingId = null)
+    /// <summary>
+    /// Compares one tracked accessibility finding against a newly scanned
+    /// authenticated workflow state.
+    ///
+    /// NotDetected is returned only when the rendered state is matched with
+    /// sufficient confidence and the tracked rule is absent.
+    /// </summary>
+    public async Task<AccessibilityRemediationMatchResult>
+        MatchAsync(
+            int remediationItemId,
+            int authenticatedAuditStepId,
+            CancellationToken cancellationToken = default,
+            int? originalAuthenticatedAuditFindingId = null)
     {
         AccessibilityRemediationFindingOccurrence? originalOccurrence =
             await _dbContext.AccessibilityRemediationFindingOccurrences
@@ -128,16 +148,16 @@ public sealed class AccessibilityRemediationMatcher
                     occurrence.AccessibilityRemediationItemId ==
                         remediationItemId &&
                     (!originalAuthenticatedAuditFindingId.HasValue ||
-                    occurrence.AuthenticatedAuditFindingId ==
+                     occurrence.AuthenticatedAuditFindingId ==
                         originalAuthenticatedAuditFindingId.Value))
                 .OrderBy(occurrence =>
                     occurrence.LinkedAt)
                 .ThenBy(occurrence =>
                     occurrence.Id)
-                .OrderBy(occurrence => occurrence.LinkedAt)
                 .Include(occurrence =>
                     occurrence.AuthenticatedAuditFinding)
-                    .ThenInclude(finding => finding.Nodes)
+                    .ThenInclude(finding =>
+                        finding.Nodes)
                 .Include(occurrence =>
                     occurrence.AuthenticatedAuditFinding)
                     .ThenInclude(finding =>
@@ -156,11 +176,15 @@ public sealed class AccessibilityRemediationMatcher
         AuthenticatedAuditStep? retestStep =
             await _dbContext.AuthenticatedAuditSteps
                 .AsNoTracking()
-                .Include(step => step.AuthenticatedAuditRun)
-                .Include(step => step.Findings)
-                    .ThenInclude(finding => finding.Nodes)
+                .Include(step =>
+                    step.AuthenticatedAuditRun)
+                .Include(step =>
+                    step.Findings)
+                    .ThenInclude(finding =>
+                        finding.Nodes)
                 .FirstOrDefaultAsync(
-                    step => step.Id == authenticatedAuditStepId,
+                    step =>
+                        step.Id == authenticatedAuditStepId,
                     cancellationToken);
 
         if (retestStep is null)
@@ -183,10 +207,11 @@ public sealed class AccessibilityRemediationMatcher
                     0m,
 
                 Message =
-                    string.IsNullOrWhiteSpace(retestStep.ErrorMessage)
-                        ? "The accessibility retest scan did not complete successfully."
-                        : "The accessibility retest scan failed: " +
-                          retestStep.ErrorMessage
+                    string.IsNullOrWhiteSpace(
+                        retestStep.ErrorMessage)
+                            ? "The accessibility retest scan did not complete successfully."
+                            : "The accessibility retest scan failed: " +
+                              retestStep.ErrorMessage
             };
         }
 
@@ -221,8 +246,10 @@ public sealed class AccessibilityRemediationMatcher
                         StringComparison.OrdinalIgnoreCase));
 
         /*
-         * Do not report the issue as fixed if we only have weak evidence
-         * that the user scanned the same rendered state.
+         * Rule is absent.
+         *
+         * Do not call this NotDetected unless the underlying workflow state
+         * itself matched with sufficient confidence.
          */
         if (matchingRule is null)
         {
@@ -249,22 +276,31 @@ public sealed class AccessibilityRemediationMatcher
             };
         }
 
+        /*
+         * Strongest finding-level match:
+         * same axe rule and one of the same affected targets.
+         */
         HashSet<string> originalTargets =
             originalFinding.Nodes
-                .Select(node => NormalizeTarget(node.Target))
+                .Select(node =>
+                    NormalizeTarget(node.Target))
                 .Where(target =>
                     !string.IsNullOrWhiteSpace(target))
-                .ToHashSet(StringComparer.Ordinal);
+                .ToHashSet(
+                    StringComparer.Ordinal);
 
         HashSet<string> retestTargets =
             matchingRule.Nodes
-                .Select(node => NormalizeTarget(node.Target))
+                .Select(node =>
+                    NormalizeTarget(node.Target))
                 .Where(target =>
                     !string.IsNullOrWhiteSpace(target))
-                .ToHashSet(StringComparer.Ordinal);
+                .ToHashSet(
+                    StringComparer.Ordinal);
 
         bool targetMatched =
-            originalTargets.Overlaps(retestTargets);
+            originalTargets.Overlaps(
+                retestTargets);
 
         if (targetMatched)
         {
@@ -280,29 +316,40 @@ public sealed class AccessibilityRemediationMatcher
                     "RuleAndTarget",
 
                 MatchConfidence =
-                    Math.Min(1.0000m, stateConfidence),
+                    Math.Min(
+                        1.0000m,
+                        stateConfidence),
 
                 Message =
                     "The same rule was detected again on at least one of the original affected targets."
             };
         }
 
+        /*
+         * Second-strongest finding-level match:
+         * same axe rule and equivalent saved element HTML.
+         */
         HashSet<string> originalHtml =
             originalFinding.Nodes
-                .Select(node => NormalizeHtml(node.Html))
+                .Select(node =>
+                    NormalizeHtml(node.Html))
                 .Where(html =>
                     !string.IsNullOrWhiteSpace(html))
-                .ToHashSet(StringComparer.Ordinal);
+                .ToHashSet(
+                    StringComparer.Ordinal);
 
         HashSet<string> retestHtml =
             matchingRule.Nodes
-                .Select(node => NormalizeHtml(node.Html))
+                .Select(node =>
+                    NormalizeHtml(node.Html))
                 .Where(html =>
                     !string.IsNullOrWhiteSpace(html))
-                .ToHashSet(StringComparer.Ordinal);
+                .ToHashSet(
+                    StringComparer.Ordinal);
 
         bool htmlMatched =
-            originalHtml.Overlaps(retestHtml);
+            originalHtml.Overlaps(
+                retestHtml);
 
         if (htmlMatched)
         {
@@ -318,7 +365,9 @@ public sealed class AccessibilityRemediationMatcher
                     "RuleAndHtml",
 
                 MatchConfidence =
-                    Math.Min(0.9000m, stateConfidence),
+                    Math.Min(
+                        0.9000m,
+                        stateConfidence),
 
                 Message =
                     "The same accessibility rule and affected HTML were detected again."
@@ -326,9 +375,11 @@ public sealed class AccessibilityRemediationMatcher
         }
 
         /*
-         * A remediation item currently represents a rule-level finding
-         * for one rendered state, so the rule appearing again is still
-         * meaningful even when the exact node changed.
+         * A remediation item represents one rule-level finding for one
+         * rendered workflow state.
+         *
+         * If the state matched strongly and the same rule remains, the issue
+         * is still considered detected even if the exact affected node changed.
          */
         if (stateConfidence >= 0.80m)
         {
@@ -344,7 +395,9 @@ public sealed class AccessibilityRemediationMatcher
                     "RuleOnly",
 
                 MatchConfidence =
-                    Math.Min(0.8000m, stateConfidence),
+                    Math.Min(
+                        0.8000m,
+                        stateConfidence),
 
                 Message =
                     "The same accessibility rule is still present, although the exact affected element changed."
@@ -356,24 +409,37 @@ public sealed class AccessibilityRemediationMatcher
             "The rule was detected, but the rendered state and affected elements could not be matched confidently.");
     }
 
+    /// <summary>
+    /// Scores how confidently two authenticated audit steps represent the same
+    /// rendered page or workflow state.
+    /// </summary>
     private static decimal GetStateConfidence(
         AuthenticatedAuditStep originalStep,
         AuthenticatedAuditStep retestStep)
     {
         string originalApplication =
-            originalStep.AuthenticatedAuditRun.ApplicationName;
+            originalStep
+                .AuthenticatedAuditRun
+                .ApplicationName;
 
         string retestApplication =
-            retestStep.AuthenticatedAuditRun.ApplicationName;
+            retestStep
+                .AuthenticatedAuditRun
+                .ApplicationName;
 
         if (!string.Equals(
-            originalApplication,
-            retestApplication,
+            originalApplication.Trim(),
+            retestApplication.Trim(),
             StringComparison.OrdinalIgnoreCase))
         {
             return 0m;
         }
 
+        /*
+         * Exact DOM fingerprint is the strongest state evidence.
+         * It is not required because a legitimate accessibility fix may
+         * intentionally change the DOM.
+         */
         if (!string.IsNullOrWhiteSpace(
                 originalStep.DomFingerprint) &&
             string.Equals(
@@ -395,29 +461,41 @@ public sealed class AccessibilityRemediationMatcher
             return 0m;
         }
 
-        if (!string.IsNullOrWhiteSpace(originalStep.Heading) &&
+        if (!string.IsNullOrWhiteSpace(
+                originalStep.Heading) &&
             string.Equals(
-                originalStep.Heading,
-                retestStep.Heading,
+                originalStep.Heading.Trim(),
+                retestStep.Heading?.Trim(),
                 StringComparison.OrdinalIgnoreCase))
         {
             return 0.9000m;
         }
 
-        if (!string.IsNullOrWhiteSpace(originalStep.PageTitle) &&
+        if (!string.IsNullOrWhiteSpace(
+                originalStep.PageTitle) &&
             string.Equals(
-                originalStep.PageTitle,
-                retestStep.PageTitle,
+                originalStep.PageTitle.Trim(),
+                retestStep.PageTitle?.Trim(),
                 StringComparison.OrdinalIgnoreCase))
         {
             return 0.8500m;
         }
 
+        /*
+         * Same application + same normalized URL is useful evidence,
+         * but not enough by itself to declare a missing rule fixed.
+         */
         return 0.7000m;
     }
 
-    private static string NormalizeUrl(string url)
+    private static string NormalizeUrl(
+        string url)
     {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return string.Empty;
+        }
+
         if (!Uri.TryCreate(
             url,
             UriKind.Absolute,
@@ -426,17 +504,26 @@ public sealed class AccessibilityRemediationMatcher
             return url.Trim();
         }
 
-        return
-            $"{parsedUrl.Scheme}://{parsedUrl.Host}" +
-            parsedUrl.AbsolutePath.TrimEnd('/');
+        string authority =
+            parsedUrl.GetLeftPart(
+                UriPartial.Authority);
+
+        string path =
+            parsedUrl.AbsolutePath
+                .TrimEnd('/');
+
+        return authority + path;
     }
 
-    private static string NormalizeTarget(string? target)
+    private static string NormalizeTarget(
+        string? target)
     {
-        return target?.Trim() ?? string.Empty;
+        return target?.Trim() ??
+               string.Empty;
     }
 
-    private static string NormalizeHtml(string? html)
+    private static string NormalizeHtml(
+        string? html)
     {
         if (string.IsNullOrWhiteSpace(html))
         {
@@ -456,7 +543,8 @@ public sealed class AccessibilityRemediationMatchResult
 
     public int? MatchedAuthenticatedAuditFindingId { get; init; }
 
-    public string MatchMethod { get; init; } = string.Empty;
+    public string MatchMethod { get; init; }
+        = string.Empty;
 
     public decimal MatchConfidence { get; init; }
 
@@ -491,7 +579,8 @@ public sealed class AccessibilityRemediationStateMatch
 
     public string? StepName { get; init; }
 
-    public string Url { get; init; } = string.Empty;
+    public string Url { get; init; }
+        = string.Empty;
 
     public decimal StateConfidence { get; init; }
 }

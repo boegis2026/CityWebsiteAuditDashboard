@@ -19,7 +19,8 @@ public sealed class AccessibilityOverviewViewModel
         = new();
 
     public AccessibilityRemediationProgressViewModel RemediationProgress
-    { get; init; } = new();
+    { get; init; }
+        = new();
 
     public AccessibilityIssueBreakdownViewModel IssueBreakdown { get; init; }
         = new();
@@ -79,7 +80,6 @@ public sealed class AccessibilityOverviewSummaryViewModel
     public int PublicPagesWithFindings { get; init; }
 
     public int AuthenticatedStatesWithFindings { get; init; }
-
 }
 
 /// <summary>
@@ -132,7 +132,7 @@ public sealed class AccessibilityIssueBreakdownViewModel
 }
 
 /// <summary>
-/// One reporting period displayed in the trends section.
+/// One reporting period displayed in the automated-results trends section.
 /// </summary>
 public sealed class AccessibilityTrendPointViewModel
 {
@@ -150,13 +150,16 @@ public sealed class AccessibilityTrendPointViewModel
 /// </summary>
 public sealed class AccessibilityApplicationRankingViewModel
 {
-    public string ApplicationName { get; init; } = string.Empty;
+    public string ApplicationName { get; init; }
+        = string.Empty;
 
     public int LatestRunId { get; init; }
 
-    public string StartingUrl { get; init; } = string.Empty;
+    public string StartingUrl { get; init; }
+        = string.Empty;
 
-    public string Status { get; init; } = string.Empty;
+    public string Status { get; init; }
+        = string.Empty;
 
     public DateTime LatestAuditDate { get; init; }
 
@@ -188,13 +191,16 @@ public sealed class AccessibilityApplicationRankingViewModel
 
     public int? FindingCountChange =>
         PreviousFindingCount.HasValue
-            ? TotalFindingCount - PreviousFindingCount.Value
+            ? TotalFindingCount -
+              PreviousFindingCount.Value
             : null;
 }
 
 /// <summary>
 /// Current remediation workflow progress for tracked accessibility findings.
-/// These values represent remediation status, not automated compliance.
+///
+/// These values represent remediation workflow state.
+/// They are not ADA or WCAG compliance determinations.
 /// </summary>
 public sealed class AccessibilityRemediationProgressViewModel
 {
@@ -210,24 +216,138 @@ public sealed class AccessibilityRemediationProgressViewModel
 
     public int WontFix { get; init; }
 
+    /// <summary>
+    /// Formal full-workflow retesting and verification progress.
+    /// </summary>
+    public AccessibilityFormalWorkflowProgressViewModel
+        FormalWorkflow
+    { get; init; }
+        = new();
+
     public double VerifiedPercent =>
         TotalTracked > 0
-            ? (double)Verified / TotalTracked * 100
+            ? (double)Verified /
+              TotalTracked *
+              100
             : 0;
 
     public bool HasData =>
         TotalTracked > 0;
 
-    public IReadOnlyList<AccessibilityApplicationRemediationProgressViewModel>
-    Applications { get; init; }
-        = Array.Empty<AccessibilityApplicationRemediationProgressViewModel>();
-
-    public IReadOnlyList<AccessibilityRemediationTrendPointViewModel>
-    Trends
+    public IReadOnlyList<
+        AccessibilityApplicationRemediationProgressViewModel>
+        Applications
     { get; init; }
-        = Array.Empty<AccessibilityRemediationTrendPointViewModel>();
+        = Array.Empty<
+            AccessibilityApplicationRemediationProgressViewModel>();
+
+    public IReadOnlyList<
+        AccessibilityRemediationTrendPointViewModel>
+        Trends
+    { get; init; }
+        = Array.Empty<
+            AccessibilityRemediationTrendPointViewModel>();
 }
 
+/// <summary>
+/// Management-level summary of saved formal full-workflow retests.
+///
+/// One formal workflow retest is one completed authenticated audit run that
+/// has been applied as retest evidence to tracked remediation items.
+/// </summary>
+public sealed class AccessibilityFormalWorkflowProgressViewModel
+{
+    /// <summary>
+    /// Number of distinct authenticated audit runs that have been saved as
+    /// formal workflow retests within the selected reporting scope.
+    /// </summary>
+    public int TotalFormalRetestRuns { get; init; }
+
+    /// <summary>
+    /// Number of applications that have at least one saved formal
+    /// workflow retest within the selected reporting scope.
+    /// </summary>
+    public int ApplicationsFormallyRetested { get; init; }
+
+    /// <summary>
+    /// Latest formal workflow retest for the application has been applied,
+    /// but none of its Not Detected findings are currently verified from
+    /// that retest evidence.
+    /// </summary>
+    public int LatestApplied { get; init; }
+
+    /// <summary>
+    /// Some, but not all, Not Detected findings from the application's
+    /// latest formal workflow retest are currently verified from that
+    /// retest evidence.
+    /// </summary>
+    public int LatestPartiallyVerified { get; init; }
+
+    /// <summary>
+    /// Every Not Detected finding from the application's latest formal
+    /// workflow retest is currently verified from that retest evidence.
+    /// </summary>
+    public int LatestFullyVerified { get; init; }
+
+    /// <summary>
+    /// Latest saved formal workflow retest time across the selected scope.
+    /// </summary>
+    public DateTime? LatestFormalRetestAt { get; init; }
+
+    public bool HasData =>
+        TotalFormalRetestRuns > 0;
+
+    public IReadOnlyList<
+        AccessibilityApplicationFormalWorkflowProgressViewModel>
+        Applications
+    { get; init; }
+        = Array.Empty<
+            AccessibilityApplicationFormalWorkflowProgressViewModel>();
+}
+
+/// <summary>
+/// Latest formal workflow retest status for one application.
+/// </summary>
+public sealed class AccessibilityApplicationFormalWorkflowProgressViewModel
+{
+    public string ApplicationName { get; init; }
+        = string.Empty;
+
+    public int RetestAuditRunId { get; init; }
+
+    public DateTime RetestedAt { get; init; }
+
+    public int TotalTracked { get; init; }
+
+    public int StillDetected { get; init; }
+
+    public int NotDetected { get; init; }
+
+    public int VerifiedFromThisRetest { get; init; }
+
+    public int Inconclusive { get; init; }
+
+    public int Failed { get; init; }
+
+    public int Reopened { get; init; }
+
+    /// <summary>
+    /// Applied, Partially Verified, or Fully Verified.
+    /// </summary>
+    public string VerificationState { get; init; }
+        = "Applied";
+
+    public double VerifiedPassedIssuePercent =>
+        NotDetected > 0
+            ? (double)VerifiedFromThisRetest /
+              NotDetected *
+              100
+            : 0;
+}
+
+/// <summary>
+/// Daily remediation lifecycle events.
+/// </summary>
 public sealed class AccessibilityRemediationTrendPointViewModel
 {
     public DateTime Date { get; init; }
@@ -237,9 +357,13 @@ public sealed class AccessibilityRemediationTrendPointViewModel
     public int Reopened { get; init; }
 }
 
+/// <summary>
+/// Current remediation status totals for one application.
+/// </summary>
 public sealed class AccessibilityApplicationRemediationProgressViewModel
 {
-    public string ApplicationName { get; init; } = string.Empty;
+    public string ApplicationName { get; init; }
+        = string.Empty;
 
     public int TotalTracked { get; init; }
 
@@ -260,7 +384,9 @@ public sealed class AccessibilityApplicationRemediationProgressViewModel
 
     public double VerifiedPercent =>
         TotalTracked > 0
-            ? (double)Verified / TotalTracked * 100
+            ? (double)Verified /
+              TotalTracked *
+              100
             : 0;
 }
 
@@ -269,9 +395,11 @@ public sealed class AccessibilityApplicationRemediationProgressViewModel
 /// </summary>
 public sealed class AccessibilityTopFindingViewModel
 {
-    public string RuleId { get; init; } = string.Empty;
+    public string RuleId { get; init; }
+        = string.Empty;
 
-    public string FindingType { get; init; } = string.Empty;
+    public string FindingType { get; init; }
+        = string.Empty;
 
     public string? Impact { get; init; }
 

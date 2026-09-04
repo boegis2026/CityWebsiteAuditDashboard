@@ -13,237 +13,391 @@ namespace CityWebsiteAuditDashboard.Data
 
         public DbSet<WebsiteScan> WebsiteScans { get; set; }
 
-        public DbSet<WaveAccessibilityIssue> WaveAccessibilityIssues { get; set; }
+        public DbSet<WaveAccessibilityIssue>
+            WaveAccessibilityIssues
+        { get; set; }
 
-        // Stores one record for each authenticated Playwright auditing session.
-        public DbSet<AuthenticatedAuditRun> AuthenticatedAuditRuns { get; set; }
+        /*
+         * Stores one record for each authenticated
+         * Playwright auditing session.
+         */
+        public DbSet<AuthenticatedAuditRun>
+            AuthenticatedAuditRuns
+        { get; set; }
 
-        // Stores each separately rendered form/page state scanned during a run.
-        public DbSet<AuthenticatedAuditStep> AuthenticatedAuditSteps { get; set; }
+        /*
+         * Stores each separately rendered form/page state
+         * scanned during an authenticated audit run.
+         */
+        public DbSet<AuthenticatedAuditStep>
+            AuthenticatedAuditSteps
+        { get; set; }
 
-        // Stores rule-level violations and needs-review results for each
-        // authenticated rendered-state scan.
-        public DbSet<AuthenticatedAuditFinding> AuthenticatedAuditFindings { get; set; }
+        /*
+         * Stores rule-level violations and needs-review
+         * results for each authenticated rendered-state scan.
+         */
+        public DbSet<AuthenticatedAuditFinding>
+            AuthenticatedAuditFindings
+        { get; set; }
 
-        public DbSet<AuthenticatedAuditFindingNode> AuthenticatedAuditFindingNodes { get; set; }
+        public DbSet<AuthenticatedAuditFindingNode>
+            AuthenticatedAuditFindingNodes
+        { get; set; }
 
-        public DbSet<AccessibilityRemediationItem> AccessibilityRemediationItems { get; set; }
+        public DbSet<AccessibilityRemediationItem>
+            AccessibilityRemediationItems
+        { get; set; }
 
-        public DbSet<AccessibilityRemediationHistory> AccessibilityRemediationHistories { get; set; }
+        public DbSet<AccessibilityRemediationHistory>
+            AccessibilityRemediationHistories
+        { get; set; }
 
-        public DbSet<AccessibilityRemediationFindingOccurrence> AccessibilityRemediationFindingOccurrences { get; set; }
+        public DbSet<AccessibilityRemediationFindingOccurrence>
+            AccessibilityRemediationFindingOccurrences
+        { get; set; }
 
-        public DbSet<AccessibilityRemediationRetest>  AccessibilityRemediationRetests { get; set; }
+        public DbSet<AccessibilityRemediationRetest>
+            AccessibilityRemediationRetests
+        { get; set; }
 
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
+
+        protected override void OnModelCreating(
+            ModelBuilder modelBuilder)
         {
-            base.OnModelCreating(modelBuilder);
+            base.OnModelCreating(
+                modelBuilder);
 
-            modelBuilder.Entity<AuthenticatedAuditRun>(entity =>
-            {
-                // Audit history will commonly be displayed newest-first.
-                entity.HasIndex(run => run.StartedAt);
 
-                // Helps filter the dashboard by Running, Completed, or Failed.
-                entity.HasIndex(run => run.Status);
-            });
-
-            modelBuilder.Entity<AuthenticatedAuditStep>(entity =>
-            {
-                // Each rendered step belongs to exactly one authenticated audit run.
-                // Deleting a run also deletes its related step records so orphaned
-                // audit steps are not left in the database.
-                entity.HasOne(step => step.AuthenticatedAuditRun)
-                    .WithMany(run => run.Steps)
-                    .HasForeignKey(step => step.AuthenticatedAuditRunId)
-                    .OnDelete(DeleteBehavior.Cascade);
-
-                // A run should never contain two records with the same step number.
-                entity.HasIndex(step => new
+            modelBuilder.Entity<AuthenticatedAuditRun>(
+                entity =>
                 {
-                    step.AuthenticatedAuditRunId,
-                    step.StepNumber
-                })
-                    .IsUnique();
+                    /*
+                     * Audit history is commonly displayed
+                     * newest-first.
+                     */
+                    entity.HasIndex(run =>
+                        run.StartedAt);
 
-                // Useful when displaying or querying steps by scan time.
-                entity.HasIndex(step => step.ScannedAt);
+                    /*
+                     * Helps filter by Running, Completed,
+                     * Interrupted, or Failed.
+                     */
+                    entity.HasIndex(run =>
+                        run.Status);
+                });
 
 
-            });
-
-            modelBuilder.Entity<AuthenticatedAuditFindingNode>(entity =>
-            {
-                entity.Property(node => node.Target)
-                    .HasMaxLength(2000);
-
-                entity.Property(node => node.Html)
-                    .HasMaxLength(10000);
-
-                entity.Property(node => node.FailureSummary)
-                    .HasMaxLength(4000);
-
-                /*
-                 * A finding may affect multiple page elements. Deleting the finding
-                 * should also delete its saved affected-element records.
-                 */
-                entity.HasOne(node => node.AuthenticatedAuditFinding)
-                    .WithMany(finding => finding.Nodes)
-                    .HasForeignKey(node => node.AuthenticatedAuditFindingId)
-                    .OnDelete(DeleteBehavior.Cascade);
-            });
-
-            modelBuilder.Entity<AuthenticatedAuditFinding>(entity =>
-            {
-                /*
-                 * Each finding belongs to one scanned rendered state.
-                 *
-                 * Deleting an audit step also removes its rule-level findings so
-                 * inaccessible orphan records cannot remain in the database.
-                 */
-                entity.HasOne(finding => finding.AuthenticatedAuditStep)
-                    .WithMany(step => step.Findings)
-                    .HasForeignKey(finding => finding.AuthenticatedAuditStepId)
-                    .OnDelete(DeleteBehavior.Cascade);
-
-                /*
-                 * Axe reports each rule once within a result category for a given
-                 * page state. This prevents the same Violation or NeedsReview rule
-                 * from accidentally being saved twice for the same scanned step.
-                 */
-                entity.HasIndex(finding => new
+            modelBuilder.Entity<AuthenticatedAuditStep>(
+                entity =>
                 {
-                    finding.AuthenticatedAuditStepId,
-                    finding.FindingType,
-                    finding.RuleId
-                })
-                    .IsUnique();
-            });
+                    /*
+                     * Each rendered state belongs to exactly one
+                     * authenticated audit run.
+                     *
+                     * Deleting a run normally deletes its child
+                     * steps, unless remediation evidence references
+                     * those steps/findings through a Restrict FK.
+                     */
+                    entity.HasOne(step =>
+                            step.AuthenticatedAuditRun)
+                        .WithMany(run =>
+                            run.Steps)
+                        .HasForeignKey(step =>
+                            step.AuthenticatedAuditRunId)
+                        .OnDelete(
+                            DeleteBehavior.Cascade);
 
-            modelBuilder.Entity<AccessibilityRemediationItem>(entity =>
-            {
-                entity.Property(item => item.Status)
-                    .HasConversion<string>()
-                    .HasMaxLength(30);
+                    /*
+                     * A run must not contain duplicate step numbers.
+                     */
+                    entity.HasIndex(step =>
+                            new
+                            {
+                                step.AuthenticatedAuditRunId,
+                                step.StepNumber
+                            })
+                        .IsUnique();
 
-                entity.HasIndex(item => item.Status);
+                    entity.HasIndex(step =>
+                        step.ScannedAt);
+                });
 
-                entity.HasIndex(item => item.AssignedTo);
-            });
 
-            modelBuilder.Entity<AccessibilityRemediationHistory>(entity =>
-            {
-                entity.Property(history => history.PreviousStatus)
-                    .HasConversion<string>()
-                    .HasMaxLength(30);
+            modelBuilder.Entity<AuthenticatedAuditFindingNode>(
+                entity =>
+                {
+                    entity.Property(node =>
+                            node.Target)
+                        .HasMaxLength(
+                            2000);
 
-                entity.Property(history => history.NewStatus)
-                    .HasConversion<string>()
-                    .HasMaxLength(30);
+                    entity.Property(node =>
+                            node.Html)
+                        .HasMaxLength(
+                            10000);
 
-                entity.HasOne(history => history.RemediationItem)
-                    .WithMany(item => item.History)
-                    .HasForeignKey(history => history.AccessibilityRemediationItemId)
-                    .OnDelete(DeleteBehavior.Cascade);
+                    entity.Property(node =>
+                            node.FailureSummary)
+                        .HasMaxLength(
+                            4000);
 
-                entity.HasIndex(history => history.AccessibilityRemediationItemId);
+                    /*
+                     * A finding may affect multiple elements.
+                     * Deleting the finding removes its nodes.
+                     */
+                    entity.HasOne(node =>
+                            node.AuthenticatedAuditFinding)
+                        .WithMany(finding =>
+                            finding.Nodes)
+                        .HasForeignKey(node =>
+                            node.AuthenticatedAuditFindingId)
+                        .OnDelete(
+                            DeleteBehavior.Cascade);
+                });
 
-                entity.HasIndex(history => history.ChangedAt);
-            });
 
-            modelBuilder.Entity<AccessibilityRemediationFindingOccurrence>(entity =>
-            {
-                entity.Property(occurrence => occurrence.MatchConfidence)
-                    .HasPrecision(5, 4);
+            modelBuilder.Entity<AuthenticatedAuditFinding>(
+                entity =>
+                {
+                    /*
+                     * Each finding belongs to one rendered
+                     * authenticated audit state.
+                     */
+                    entity.HasOne(finding =>
+                            finding.AuthenticatedAuditStep)
+                        .WithMany(step =>
+                            step.Findings)
+                        .HasForeignKey(finding =>
+                            finding.AuthenticatedAuditStepId)
+                        .OnDelete(
+                            DeleteBehavior.Cascade);
 
-                entity.HasOne(occurrence => occurrence.RemediationItem)
-                    .WithMany(item => item.FindingOccurrences)
-                    .HasForeignKey(occurrence => occurrence.AccessibilityRemediationItemId)
-                    .OnDelete(DeleteBehavior.Cascade);
+                    /*
+                     * axe-core reports each rule once within a result
+                     * category for a rendered state.
+                     *
+                     * Prevent duplicate Violation / NeedsReview rows.
+                     */
+                    entity.HasIndex(finding =>
+                            new
+                            {
+                                finding.AuthenticatedAuditStepId,
+                                finding.FindingType,
+                                finding.RuleId
+                            })
+                        .IsUnique();
+                });
 
-                entity.HasOne(occurrence => occurrence.AuthenticatedAuditFinding)
-                    .WithMany()
-                    .HasForeignKey(occurrence => occurrence.AuthenticatedAuditFindingId)
-                    .OnDelete(DeleteBehavior.Cascade);
 
-                entity.HasIndex(occurrence => occurrence.AuthenticatedAuditFindingId)
-                    .IsUnique();
+            modelBuilder.Entity<AccessibilityRemediationItem>(
+                entity =>
+                {
+                    entity.Property(item =>
+                            item.Status)
+                        .HasConversion<string>()
+                        .HasMaxLength(
+                            30);
 
-                entity.HasIndex(occurrence => occurrence.AccessibilityRemediationItemId);
-            });
+                    entity.HasIndex(item =>
+                        item.Status);
 
-            modelBuilder.Entity<AccessibilityRemediationRetest>(entity =>
-            {
-                entity.Property(retest => retest.Result)
-                    .HasConversion<string>()
-                    .HasMaxLength(30);
+                    entity.HasIndex(item =>
+                        item.AssignedTo);
+                });
 
-                entity.Property(retest => retest.MatchConfidence)
-                    .HasPrecision(5, 4);
 
-                entity.Property(retest => retest.RetestType)
-                    .HasMaxLength(50);
+            modelBuilder.Entity<AccessibilityRemediationHistory>(
+                entity =>
+                {
+                    entity.Property(history =>
+                            history.PreviousStatus)
+                        .HasConversion<string>()
+                        .HasMaxLength(
+                            30);
 
-                entity.HasOne(retest => retest.RemediationItem)
-                    .WithMany(item => item.Retests)
-                    .HasForeignKey(retest =>
-                        retest.AccessibilityRemediationItemId)
-                    .OnDelete(DeleteBehavior.Cascade);
+                    entity.Property(history =>
+                            history.NewStatus)
+                        .HasConversion<string>()
+                        .HasMaxLength(
+                            30);
 
-                /*
-                 * Retests are historical evidence.
-                 * Do not allow an authenticated audit step to be deleted while
-                 * a remediation retest references it.
-                 */
-                entity.HasOne(retest => retest.AuthenticatedAuditStep)
-                    .WithMany()
-                    .HasForeignKey(retest =>
-                        retest.AuthenticatedAuditStepId)
-                    .OnDelete(DeleteBehavior.Restrict);
+                    /*
+                     * Remediation history belongs to the durable
+                     * remediation item itself.
+                     *
+                     * If the remediation item is explicitly deleted,
+                     * its history can be removed with it.
+                     */
+                    entity.HasOne(history =>
+                            history.RemediationItem)
+                        .WithMany(item =>
+                            item.History)
+                        .HasForeignKey(history =>
+                            history.AccessibilityRemediationItemId)
+                        .OnDelete(
+                            DeleteBehavior.Cascade);
 
-                /*
-                 * Likewise, preserve the matched finding used as evidence for
-                 * the retest result.
-                 */
-                entity.HasOne(retest =>
-                        retest.MatchedAuthenticatedAuditFinding)
-                    .WithMany()
-                    .HasForeignKey(retest =>
-                        retest.MatchedAuthenticatedAuditFindingId)
-                    .OnDelete(DeleteBehavior.Restrict);
+                    entity.HasIndex(history =>
+                        history.AccessibilityRemediationItemId);
 
-                /*
-                * Preserve the exact original finding that the retest evaluated.
-                */
-                entity.HasOne(retest =>
-                        retest.OriginalAuthenticatedAuditFinding)
-                    .WithMany()
-                    .HasForeignKey(retest =>
-                        retest.OriginalAuthenticatedAuditFindingId)
-                    .OnDelete(DeleteBehavior.Restrict);
+                    entity.HasIndex(history =>
+                        history.ChangedAt);
+                });
 
-                entity.HasOne(retest =>
-                        retest.AuthenticatedAuditRun)
-                    .WithMany()
-                    .HasForeignKey(retest =>
-                        retest.AuthenticatedAuditRunId)
-                    .OnDelete(DeleteBehavior.Restrict);
 
-                entity.HasIndex(retest =>
-                    retest.AccessibilityRemediationItemId);
+            modelBuilder.Entity<
+                AccessibilityRemediationFindingOccurrence>(
+                entity =>
+                {
+                    entity.Property(occurrence =>
+                            occurrence.MatchConfidence)
+                        .HasPrecision(
+                            5,
+                            4);
 
-                entity.HasIndex(retest =>
-                    retest.RetestedAt);
+                    /*
+                     * Occurrences are part of the durable
+                     * remediation item.
+                     */
+                    entity.HasOne(occurrence =>
+                            occurrence.RemediationItem)
+                        .WithMany(item =>
+                            item.FindingOccurrences)
+                        .HasForeignKey(occurrence =>
+                            occurrence.AccessibilityRemediationItemId)
+                        .OnDelete(
+                            DeleteBehavior.Cascade);
 
-                entity.HasIndex(retest =>
-                    retest.Result);
+                    /*
+                     * IMPORTANT:
+                     *
+                     * An occurrence links durable remediation work to
+                     * immutable authenticated audit evidence.
+                     *
+                     * Do NOT cascade-delete the occurrence when its
+                     * source finding is deleted.
+                     *
+                     * Instead, prevent deletion of the source audit
+                     * evidence while remediation still references it.
+                     */
+                    entity.HasOne(occurrence =>
+                            occurrence.AuthenticatedAuditFinding)
+                        .WithMany()
+                        .HasForeignKey(occurrence =>
+                            occurrence.AuthenticatedAuditFindingId)
+                        .OnDelete(
+                            DeleteBehavior.Restrict);
 
-                entity.HasIndex(retest =>
-                    retest.AuthenticatedAuditRunId);
+                    /*
+                     * One immutable finding can belong to only one
+                     * durable remediation item.
+                     */
+                    entity.HasIndex(occurrence =>
+                            occurrence.AuthenticatedAuditFindingId)
+                        .IsUnique();
 
-                entity.HasIndex(retest =>
-                    retest.OriginalAuthenticatedAuditFindingId);
-            });
+                    entity.HasIndex(occurrence =>
+                        occurrence.AccessibilityRemediationItemId);
+                });
+
+
+            modelBuilder.Entity<AccessibilityRemediationRetest>(
+                entity =>
+                {
+                    entity.Property(retest =>
+                            retest.Result)
+                        .HasConversion<string>()
+                        .HasMaxLength(
+                            30);
+
+                    entity.Property(retest =>
+                            retest.MatchConfidence)
+                        .HasPrecision(
+                            5,
+                            4);
+
+                    entity.Property(retest =>
+                            retest.RetestType)
+                        .HasMaxLength(
+                            50);
+
+                    /*
+                     * Retests belong to the durable remediation item.
+                     */
+                    entity.HasOne(retest =>
+                            retest.RemediationItem)
+                        .WithMany(item =>
+                            item.Retests)
+                        .HasForeignKey(retest =>
+                            retest.AccessibilityRemediationItemId)
+                        .OnDelete(
+                            DeleteBehavior.Cascade);
+
+                    /*
+                     * Retests are historical evidence.
+                     *
+                     * Do not allow the authenticated state used by a
+                     * retest to be deleted while the retest references it.
+                     */
+                    entity.HasOne(retest =>
+                            retest.AuthenticatedAuditStep)
+                        .WithMany()
+                        .HasForeignKey(retest =>
+                            retest.AuthenticatedAuditStepId)
+                        .OnDelete(
+                            DeleteBehavior.Restrict);
+
+                    /*
+                     * Preserve the matched finding used as evidence
+                     * when a rule was detected again.
+                     */
+                    entity.HasOne(retest =>
+                            retest.MatchedAuthenticatedAuditFinding)
+                        .WithMany()
+                        .HasForeignKey(retest =>
+                            retest.MatchedAuthenticatedAuditFindingId)
+                        .OnDelete(
+                            DeleteBehavior.Restrict);
+
+                    /*
+                     * Preserve the exact original finding being retested.
+                     */
+                    entity.HasOne(retest =>
+                            retest.OriginalAuthenticatedAuditFinding)
+                        .WithMany()
+                        .HasForeignKey(retest =>
+                            retest.OriginalAuthenticatedAuditFindingId)
+                        .OnDelete(
+                            DeleteBehavior.Restrict);
+
+                    /*
+                     * Preserve the authenticated audit run that supplied
+                     * formal/current-state retest evidence.
+                     */
+                    entity.HasOne(retest =>
+                            retest.AuthenticatedAuditRun)
+                        .WithMany()
+                        .HasForeignKey(retest =>
+                            retest.AuthenticatedAuditRunId)
+                        .OnDelete(
+                            DeleteBehavior.Restrict);
+
+                    entity.HasIndex(retest =>
+                        retest.AccessibilityRemediationItemId);
+
+                    entity.HasIndex(retest =>
+                        retest.RetestedAt);
+
+                    entity.HasIndex(retest =>
+                        retest.Result);
+
+                    entity.HasIndex(retest =>
+                        retest.AuthenticatedAuditRunId);
+
+                    entity.HasIndex(retest =>
+                        retest.OriginalAuthenticatedAuditFindingId);
+                });
         }
     }
 }

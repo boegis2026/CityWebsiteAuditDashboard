@@ -6,86 +6,134 @@
     string statusBadgeClass =
         Model.Status switch
         {
-            "Open" => "text-bg-danger",
-            "InProgress" => "text-bg-primary",
-            "Fixed" => "text-bg-warning",
-            "Verified" => "text-bg-success",
-            "WontFix" => "text-bg-secondary",
-            _ => "text-bg-secondary"
+            "Open" =>
+                "text-bg-danger",
+
+            "InProgress" =>
+                "text-bg-primary",
+
+            "Fixed" =>
+                "text-bg-warning",
+
+            "Verified" =>
+                "text-bg-success",
+
+            "WontFix" =>
+                "text-bg-secondary",
+
+            _ =>
+                "text-bg-secondary"
         };
 
     string statusLabel =
         Model.Status switch
         {
-            "InProgress" => "In Progress",
-            "Fixed" => "Fixed – Awaiting Verification",
-            "WontFix" => "Won't Fix",
-            _ => Model.Status
+            "InProgress" =>
+                "In Progress",
+
+            "Fixed" =>
+                "Fixed – Awaiting Verification",
+
+            "WontFix" =>
+                "Won't Fix",
+
+            _ =>
+                Model.Status
         };
 
     string impactBadgeClass =
-        Model.Impact?.ToLowerInvariant() switch
+        Model.Impact?.Trim().ToLowerInvariant() switch
         {
-            "critical" => "text-bg-danger",
-            "serious" => "text-bg-danger",
-            "moderate" => "text-bg-warning",
-            "minor" => "text-bg-info",
-            _ => "text-bg-secondary"
+            "critical" =>
+                "text-bg-danger",
+
+            "serious" =>
+                "text-bg-danger",
+
+            "moderate" =>
+                "text-bg-warning",
+
+            "minor" =>
+                "text-bg-info",
+
+            _ =>
+                "text-bg-secondary"
         };
 
     var latestRetest =
-    Model.Retests
-        .OrderByDescending(retest => retest.RetestedAt)
-        .ThenByDescending(retest => retest.Id)
-        .FirstOrDefault();
+        Model.Retests
+            .OrderByDescending(retest =>
+                retest.RetestedAt)
+            .ThenByDescending(retest =>
+                retest.Id)
+            .FirstOrDefault();
 
     bool canVerify =
         Model.Status == "Fixed" &&
         latestRetest?.Result == "NotDetected";
+
+    bool isVerified =
+        Model.Status == "Verified";
 }
+
 
 <div class="container py-4">
 
-    @if (TempData["SuccessMessage"] is string successMessage)
+    @if (TempData["SuccessMessage"]
+        is string successMessage)
     {
-        <div class="alert alert-success">
+        <div class="alert alert-success"
+             role="status">
             @successMessage
         </div>
     }
 
-    @if (TempData["ErrorMessage"] is string errorMessage)
+
+    @if (TempData["ErrorMessage"]
+        is string errorMessage)
     {
-        <div class="alert alert-danger">
+        <div class="alert alert-danger"
+             role="alert">
             @errorMessage
         </div>
     }
 
+
     <div class="d-flex flex-wrap
-        justify-content-between
-        align-items-start
-        gap-3
-        mb-4">
+                justify-content-between
+                align-items-start
+                gap-3
+                mb-4">
 
         <div>
-            <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+
+            <div class="d-flex flex-wrap
+                        align-items-center
+                        gap-2
+                        mb-1">
+
                 <h1 class="h2 mb-0">
                     Remediation #@Model.Id
                 </h1>
 
-                <span class="badge @statusBadgeClass">
+                <span class="badge @statusBadgeClass fs-6">
                     @statusLabel
                 </span>
+
             </div>
 
             <p class="text-muted mb-0">
-                Manage assignment, remediation progress,
-                retesting, and verification for this finding.
+                Track assignment, remediation work, retesting,
+                and verification for this accessibility finding.
             </p>
+
         </div>
+
 
         <div class="d-flex flex-wrap gap-2">
 
-            <a asp-action="Index"
+            <a asp-controller="AccessibilityRemediations"
+               asp-action="Index"
                class="btn btn-outline-secondary">
                 Back to Tracker
             </a>
@@ -97,54 +145,121 @@
                 View Original Audit
             </a>
 
+            <a asp-controller="AccessibilityOverview"
+               asp-action="Index"
+               class="btn btn-outline-secondary">
+                Accessibility Overview
+            </a>
+
         </div>
+
     </div>
+
+
+    @if (canVerify)
+    {
+        <div class="alert alert-success mb-4"
+             role="status">
+
+            <strong>
+                Ready for verification.
+            </strong>
+
+            The latest retest no longer detected this tracked issue.
+            Review the evidence below, then explicitly verify the
+            remediation when appropriate.
+
+        </div>
+    }
+    else if (isVerified)
+    {
+        <div class="alert alert-success mb-4"
+             role="status">
+
+            <strong>
+                Remediation verified.
+            </strong>
+
+            This item is currently Verified. A later retest that detects
+            the issue again will automatically reopen it to In Progress.
+
+        </div>
+    }
+
 
     <div class="row g-4">
 
         <div class="col-lg-4">
 
-            <div class="card shadow-sm mb-4">
 
-                <div class="card-header">
-                    <h2 class="h5 mb-0">
+            <section aria-labelledby="remediation-status-heading"
+                     class="card shadow-sm mb-4">
+
+                <div class="card-header bg-transparent">
+
+                    <h2 id="remediation-status-heading"
+                        class="h5 mb-0">
                         Remediation Status
                     </h2>
+
                 </div>
+
 
                 <div class="card-body">
 
                     <dl class="mb-0">
 
-                        <dt>Status</dt>
+                        <dt>
+                            Status
+                        </dt>
+
                         <dd>
                             <span class="badge @statusBadgeClass">
                                 @statusLabel
                             </span>
                         </dd>
 
-                        <dt>Assigned To</dt>
+
+                        <dt>
+                            Assigned To
+                        </dt>
+
                         <dd>
-                            @(string.IsNullOrWhiteSpace(Model.AssignedTo)
+
+                            @(string.IsNullOrWhiteSpace(
+                                Model.AssignedTo)
                                 ? "Unassigned"
                                 : Model.AssignedTo)
+
                         </dd>
 
-                        <dt>Created</dt>
+
+                        <dt>
+                            Created
+                        </dt>
+
                         <dd>
-                            @Model.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss")
+                            @Model.CreatedAt.ToString(
+                                "MMM d, yyyy HH:mm:ss")
                             UTC
                         </dd>
 
-                        <dt>Last Updated</dt>
+
+                        <dt>
+                            Last Updated
+                        </dt>
+
                         <dd class="mb-0">
-                            @Model.UpdatedAt.ToString("yyyy-MM-dd HH:mm:ss")
+                            @Model.UpdatedAt.ToString(
+                                "MMM d, yyyy HH:mm:ss")
                             UTC
                         </dd>
 
                     </dl>
 
+
                     <hr />
+
 
                     <form asp-controller="AccessibilityRemediations"
                           asp-action="Update"
@@ -156,45 +271,122 @@
                                name="id"
                                value="@Model.Id" />
 
+
                         <div class="mb-3">
+
                             <label for="status"
                                    class="form-label fw-semibold">
                                 Status
                             </label>
 
-                            <select id="status"
-                                    name="status"
-                                    class="form-select">
 
-                                <option value="Open"
-                                        selected="@(Model.Status == "Open")">
-                                    Open
-                                </option>
+                            @if (isVerified)
+                            {
+                                <input type="hidden"
+                                       name="status"
+                                       value="Verified" />
 
-                                <option value="InProgress"
-                                        selected="@(Model.Status == "InProgress")">
-                                    In Progress
-                                </option>
+                                <select id="status"
+                                        class="form-select"
+                                        disabled>
 
-                                <option value="Fixed"
-                                        selected="@(Model.Status == "Fixed")">
-                                    Fixed – Awaiting Verification
-                                </option>
+                                    <option value="Verified"
+                                            selected>
+                                        Verified
+                                    </option>
 
-                                <option value="WontFix"
-                                        selected="@(Model.Status == "WontFix")">
-                                    Won't Fix
-                                </option>
+                                </select>
 
-                            </select>
+                                <div class="form-text">
 
-                            <div class="form-text">
-                                Verified is only available after successful
-                                retesting and verification.
-                            </div>
+                                    Verified items cannot be manually
+                                    reopened. Run another retest. If the
+                                    issue is detected again, the item will
+                                    automatically reopen to In Progress.
+
+                                </div>
+                            }
+                            else
+                            {
+                                <select id="status"
+                                        name="status"
+                                        class="form-select">
+
+                                    @if (Model.Status == "Open")
+                                    {
+                                        <option value="Open"
+                                                selected>
+                                            Open
+                                        </option>
+                                    }
+                                    else
+                                    {
+                                        <option value="Open">
+                                            Open
+                                        </option>
+                                    }
+
+
+                                    @if (Model.Status == "InProgress")
+                                    {
+                                        <option value="InProgress"
+                                                selected>
+                                            In Progress
+                                        </option>
+                                    }
+                                    else
+                                    {
+                                        <option value="InProgress">
+                                            In Progress
+                                        </option>
+                                    }
+
+
+                                    @if (Model.Status == "Fixed")
+                                    {
+                                        <option value="Fixed"
+                                                selected>
+                                            Fixed – Awaiting Verification
+                                        </option>
+                                    }
+                                    else
+                                    {
+                                        <option value="Fixed">
+                                            Fixed – Awaiting Verification
+                                        </option>
+                                    }
+
+
+                                    @if (Model.Status == "WontFix")
+                                    {
+                                        <option value="WontFix"
+                                                selected>
+                                            Won't Fix
+                                        </option>
+                                    }
+                                    else
+                                    {
+                                        <option value="WontFix">
+                                            Won't Fix
+                                        </option>
+                                    }
+
+                                </select>
+
+                                <div class="form-text">
+
+                                    Verified cannot be selected manually.
+                                    Use the verification workflow after a
+                                    qualifying Not Detected retest.
+
+                                </div>
+                            }
+
                         </div>
 
+
                         <div class="mb-3">
+
                             <label for="assignedTo"
                                    class="form-label fw-semibold">
                                 Assigned To
@@ -207,9 +399,12 @@
                                    maxlength="200"
                                    class="form-control"
                                    placeholder="Name or team" />
+
                         </div>
 
+
                         <div class="mb-3">
+
                             <label for="notes"
                                    class="form-label fw-semibold">
                                 Notes
@@ -220,12 +415,25 @@
                                       rows="4"
                                       maxlength="4000"
                                       class="form-control"
-                                      placeholder="Add remediation notes, progress, or reason for status change..."></textarea>
+                                      placeholder="Add remediation notes, progress, or a reason for the status change..."></textarea>
 
-                            <div class="form-text">
-                                A reason is required when selecting Won't Fix.
-                            </div>
+                            @if (!isVerified)
+                            {
+                                <div class="form-text">
+                                    A reason is required when changing an
+                                    item to Won't Fix.
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="form-text">
+                                    You can still update the assignment or
+                                    add notes while this item remains Verified.
+                                </div>
+                            }
+
                         </div>
+
 
                         <button type="submit"
                                 class="btn btn-primary">
@@ -234,21 +442,32 @@
 
                     </form>
 
+
                     <hr />
 
+
                     <h3 class="h6">
-                        Retest Accessibility Issue
+                        Retest Current Page / State
                     </h3>
 
                     <p class="small text-muted">
-                        In the authenticated audit browser, navigate to the same page
-                        or workflow state where this issue was originally detected.
-                        Then run the retest below.
+
+                        Use an active authenticated browser session for
+
+                        <strong>
+                            @Model.ApplicationName
+                        </strong>,
+
+                        navigate to the relevant page or workflow state,
+                        then scan it as new retest evidence.
+
                     </p>
+
 
                     <form asp-controller="AccessibilityRemediations"
                           asp-action="RetestCurrentState"
-                          method="post">
+                          method="post"
+                          id="currentStateRetestForm">
 
                         @Html.AntiForgeryToken()
 
@@ -256,7 +475,9 @@
                                name="id"
                                value="@Model.Id" />
 
+
                         <div class="mb-3">
+
                             <label for="retestNotes"
                                    class="form-label fw-semibold">
                                 Retest Notes
@@ -268,7 +489,9 @@
                                       maxlength="4000"
                                       class="form-control"
                                       placeholder="Optional notes about this retest..."></textarea>
+
                         </div>
+
 
                         <button type="submit"
                                 class="btn btn-outline-primary">
@@ -277,19 +500,31 @@
 
                     </form>
 
+
                     @if (canVerify)
                     {
                         <hr />
 
                         <div class="alert alert-success">
-                            <strong>Ready for verification.</strong>
-                            The latest accessibility retest did not detect this tracked issue.
-                            Review the result and confirm the remediation below.
+
+                            <strong>
+                                Latest evidence: Not Detected
+                            </strong>
+
+                            <div class="small mt-1">
+
+                                Retest #@latestRetest!.Id can currently
+                                support explicit verification.
+
+                            </div>
+
                         </div>
+
 
                         <form asp-controller="AccessibilityRemediations"
                               asp-action="Verify"
-                              method="post">
+                              method="post"
+                              id="verifyRemediationForm">
 
                             @Html.AntiForgeryToken()
 
@@ -297,7 +532,9 @@
                                    name="id"
                                    value="@Model.Id" />
 
+
                             <div class="mb-3">
+
                                 <label for="verificationNotes"
                                        class="form-label fw-semibold">
                                     Verification Notes
@@ -308,8 +545,10 @@
                                           rows="3"
                                           maxlength="4000"
                                           class="form-control"
-                                          placeholder="Optional verification notes..."></textarea>
+                                          placeholder="Optional notes about the verification review..."></textarea>
+
                             </div>
+
 
                             <button type="submit"
                                     class="btn btn-success">
@@ -318,48 +557,120 @@
 
                         </form>
                     }
+
                 </div>
-            </div>
 
-            <div class="card shadow-sm">
+            </section>
 
-                <div class="card-header">
-                    <h2 class="h5 mb-0">
-                        Source
+
+            <section aria-labelledby="source-heading"
+                     class="card shadow-sm">
+
+                <div class="card-header bg-transparent">
+
+                    <h2 id="source-heading"
+                        class="h5 mb-0">
+                        Original Source
                     </h2>
+
                 </div>
+
 
                 <div class="card-body">
 
                     <dl class="mb-0">
 
-                        <dt>Application</dt>
-                        <dd>@Model.ApplicationName</dd>
+                        <dt>
+                            Application
+                        </dt>
 
-                        <dt>Workflow State</dt>
                         <dd>
-                            Step @Model.StepNumber:
-                            @Model.StepName
+                            @Model.ApplicationName
                         </dd>
 
-                        <dt>Page Title</dt>
+
+                        <dt>
+                            Audit Run
+                        </dt>
+
                         <dd>
-                            @(Model.PageTitle ?? "Not detected")
+
+                            <a asp-controller="AuthenticatedAudits"
+                               asp-action="Details"
+                               asp-route-id="@Model.AuditRunId">
+
+                                Run #@Model.AuditRunId
+
+                            </a>
+
                         </dd>
 
-                        <dt>Main Heading</dt>
+
+                        <dt>
+                            Workflow State
+                        </dt>
+
                         <dd>
-                            @(Model.Heading ?? "Not detected")
+
+                            Step @Model.StepNumber
+
+                            @if (!string.IsNullOrWhiteSpace(
+                                Model.StepName))
+                            {
+                                <span>
+                                    — @Model.StepName
+                                </span>
+                            }
+
                         </dd>
 
-                        <dt>Detected</dt>
+
+                        <dt>
+                            Page Title
+                        </dt>
+
                         <dd>
+
+                            @(string.IsNullOrWhiteSpace(
+                                Model.PageTitle)
+                                ? "Not detected"
+                                : Model.PageTitle)
+
+                        </dd>
+
+
+                        <dt>
+                            Main Heading
+                        </dt>
+
+                        <dd>
+
+                            @(string.IsNullOrWhiteSpace(
+                                Model.Heading)
+                                ? "Not detected"
+                                : Model.Heading)
+
+                        </dd>
+
+
+                        <dt>
+                            Originally Detected
+                        </dt>
+
+                        <dd>
+
                             @Model.DetectedAt.ToString(
-                                "yyyy-MM-dd HH:mm:ss")
+                                "MMM d, yyyy HH:mm:ss")
+
                             UTC
+
                         </dd>
 
-                        <dt>URL</dt>
+
+                        <dt>
+                            URL
+                        </dt>
+
                         <dd class="text-break mb-0">
                             @Model.Url
                         </dd>
@@ -367,26 +678,41 @@
                     </dl>
 
                 </div>
-            </div>
+
+            </section>
 
         </div>
 
+
         <div class="col-lg-8">
 
-            <div class="card shadow-sm mb-4">
 
-                <div class="card-header">
-                    <h2 class="h5 mb-0">
+            <section aria-labelledby="finding-heading"
+                     class="card shadow-sm mb-4">
+
+                <div class="card-header bg-transparent">
+
+                    <h2 id="finding-heading"
+                        class="h5 mb-0">
                         Accessibility Finding
                     </h2>
+
                 </div>
+
 
                 <div class="card-body">
 
-                    <div class="d-flex flex-wrap gap-2 mb-3">
+                    <div class="d-flex flex-wrap
+                                gap-2
+                                mb-3">
 
                         <span class="badge @impactBadgeClass">
-                            @(Model.Impact ?? "Unknown impact")
+
+                            @(string.IsNullOrWhiteSpace(
+                                Model.Impact)
+                                ? "Unknown impact"
+                                : Model.Impact)
+
                         </span>
 
                         <span class="badge text-bg-dark">
@@ -407,16 +733,20 @@
 
                     </div>
 
+
                     <h3 class="h5">
                         @Model.RuleId
                     </h3>
 
-                    @if (!string.IsNullOrWhiteSpace(Model.Help))
+
+                    @if (!string.IsNullOrWhiteSpace(
+                        Model.Help))
                     {
                         <p class="fw-semibold">
                             @Model.Help
                         </p>
                     }
+
 
                     @if (!string.IsNullOrWhiteSpace(
                         Model.Description))
@@ -426,14 +756,21 @@
                         </p>
                     }
 
+
                     @if (!string.IsNullOrWhiteSpace(
                         Model.WcagTags))
                     {
                         <div class="small text-muted mb-3">
-                            <strong>WCAG tags:</strong>
+
+                            <strong>
+                                WCAG tags:
+                            </strong>
+
                             @Model.WcagTags
+
                         </div>
                     }
+
 
                     @if (!string.IsNullOrWhiteSpace(
                         Model.HelpUrl))
@@ -442,20 +779,44 @@
                            target="_blank"
                            rel="noopener noreferrer"
                            class="btn btn-sm btn-outline-primary">
+
                             View Rule Guidance
+
+                            <span class="visually-hidden">
+                                opens in a new tab
+                            </span>
+
                         </a>
                     }
 
                 </div>
-            </div>
 
-            <div class="card shadow-sm mb-4">
+            </section>
 
-                <div class="card-header">
-                    <h2 class="h5 mb-0">
-                        Affected Elements
-                    </h2>
+
+            <section aria-labelledby="affected-elements-heading"
+                     class="card shadow-sm mb-4">
+
+                <div class="card-header bg-transparent">
+
+                    <div class="d-flex flex-wrap
+                                justify-content-between
+                                align-items-center
+                                gap-2">
+
+                        <h2 id="affected-elements-heading"
+                            class="h5 mb-0">
+                            Affected Elements
+                        </h2>
+
+                        <span class="badge text-bg-secondary">
+                            @Model.Nodes.Count saved
+                        </span>
+
+                    </div>
+
                 </div>
+
 
                 <div class="card-body">
 
@@ -471,51 +832,66 @@
                             i < Model.Nodes.Count;
                             i++)
                         {
-                            var node = Model.Nodes[i];
+                            var node =
+                                Model.Nodes[i];
 
-                            <div class="border rounded p-3 mb-3">
+                            <article class="border rounded
+                                            p-3
+                                            mb-3">
 
                                 <h3 class="h6">
                                     Affected Element @(i + 1)
                                 </h3>
 
+
                                 <div class="mb-3">
+
                                     <strong>
                                         CSS selector / target
                                     </strong>
 
                                     <code class="d-block
-                                        border
-                                        rounded
-                                        p-2
-                                        mt-1
-                                        text-break">
+                                                 border
+                                                 rounded
+                                                 p-2
+                                                 mt-1
+                                                 text-break">
+
                                         @(string.IsNullOrWhiteSpace(
                                             node.Target)
                                             ? "Target not available"
                                             : node.Target)
+
                                     </code>
+
                                 </div>
+
 
                                 @if (!string.IsNullOrWhiteSpace(
                                     node.FailureSummary))
                                 {
                                     <div class="mb-3">
+
                                         <strong>
                                             Why this element failed
                                         </strong>
 
-                                        <div class="border rounded p-2 mt-1"
+                                        <div class="border rounded
+                                                    p-2
+                                                    mt-1"
                                              style="white-space: pre-line;">
                                             @node.FailureSummary
                                         </div>
+
                                     </div>
                                 }
+
 
                                 @if (!string.IsNullOrWhiteSpace(
                                     node.ElementFixGuidance))
                                 {
                                     <div class="alert alert-success">
+
                                         <strong>
                                             How to fix this element
                                         </strong>
@@ -523,49 +899,71 @@
                                         <div style="white-space: pre-line;">
                                             @node.ElementFixGuidance
                                         </div>
+
                                     </div>
                                 }
+
 
                                 @if (!string.IsNullOrWhiteSpace(
                                     node.Html))
                                 {
                                     <div>
-                                        <strong>HTML snippet</strong>
+
+                                        <strong>
+                                            HTML snippet
+                                        </strong>
 
                                         <pre class="border
-                                        rounded
-                                        p-2
-                                        mt-1
-                                        mb-0
-                                        text-wrap"><code>@node.Html</code></pre>
+                                                    rounded
+                                                    p-2
+                                                    mt-1
+                                                    mb-0
+                                                    text-wrap"><code>@node.Html</code></pre>
+
                                     </div>
                                 }
 
-                            </div>
+                            </article>
                         }
                     }
 
                 </div>
-            </div>
 
-            <div class="card shadow-sm mb-4">
+            </section>
 
-                <div class="card-header">
+
+            <section aria-labelledby="retest-history-heading"
+                     class="card shadow-sm mb-4">
+
+                <div class="card-header bg-transparent">
+
                     <div class="d-flex flex-wrap
-                        justify-content-between
-                        align-items-center
-                        gap-2">
+                                justify-content-between
+                                align-items-center
+                                gap-2">
 
-                        <h2 class="h5 mb-0">
-                            Retest History
-                        </h2>
+                        <div>
+
+                            <h2 id="retest-history-heading"
+                                class="h5 mb-1">
+                                Retest History
+                            </h2>
+
+                            <p class="small text-muted mb-0">
+                                Current-state and formal full-workflow
+                                retest evidence for this remediation item.
+                            </p>
+
+                        </div>
 
                         <span class="badge text-bg-secondary">
                             @Model.Retests.Count
                         </span>
 
                     </div>
+
                 </div>
+
 
                 <div class="card-body">
 
@@ -579,8 +977,14 @@
                     {
                         <div class="d-flex flex-column gap-3">
 
-                            @foreach (var retest in Model.Retests)
+                            @foreach (var retest
+                                in Model.Retests)
                             {
+                                bool isLatestEvidence =
+                                    latestRetest is not null &&
+                                    latestRetest.Id ==
+                                        retest.Id;
+
                                 string retestBadgeClass =
                                     retest.Result switch
                                     {
@@ -594,7 +998,7 @@
                                             "text-bg-warning",
 
                                         "Failed" =>
-                                            "text-bg-danger",
+                                            "text-bg-secondary",
 
                                         _ =>
                                             "text-bg-secondary"
@@ -607,7 +1011,7 @@
                                             "Issue Still Detected",
 
                                         "NotDetected" =>
-                                            "Not Detected – Awaiting Verification",
+                                            "Not Detected",
 
                                         "Inconclusive" =>
                                             "Inconclusive",
@@ -619,49 +1023,81 @@
                                             retest.Result
                                     };
 
-                                    string retestTypeLabel =
-                                        retest.RetestType switch
-                                        {
-                                            "FullWorkflow" =>
-                                                "Full Workflow",
+                                string retestTypeLabel =
+                                    retest.RetestType switch
+                                    {
+                                        "FullWorkflow" =>
+                                            "Full Workflow",
 
-                                            "CurrentState" =>
-                                                "Current Page / State",
+                                        "CurrentState" =>
+                                            "Current Page / State",
 
-                                            _ =>
-                                                string.IsNullOrWhiteSpace(retest.RetestType)
-                                                    ? "Retest"
-                                                    : retest.RetestType
-                                        };
+                                        _ =>
+                                            string.IsNullOrWhiteSpace(
+                                                retest.RetestType)
+                                                ? "Retest"
+                                                : retest.RetestType
+                                    };
 
-                                    <span class="badge text-bg-light border text-dark">
-                                        @retestTypeLabel
-                                    </span>
+                                string retestTypeBadgeClass =
+                                    retest.RetestType ==
+                                        "FullWorkflow"
+                                        ? "text-bg-primary"
+                                        : "text-bg-light border text-dark";
 
-                                <div class="border rounded p-3">
+                                <article class="border rounded p-3">
 
                                     <div class="d-flex flex-wrap
-                                        justify-content-between
-                                        align-items-start
-                                        gap-2">
+                                                justify-content-between
+                                                align-items-start
+                                                gap-2">
 
-                                        <div>
+                                        <div class="d-flex flex-wrap gap-2">
+
                                             <span class="badge @retestBadgeClass">
                                                 @retestLabel
                                             </span>
+
+                                            <span class="badge @retestTypeBadgeClass">
+                                                @retestTypeLabel
+                                            </span>
+
+                                            @if (isLatestEvidence)
+                                            {
+                                                <span class="badge text-bg-dark">
+                                                    Latest Evidence
+                                                </span>
+                                            }
+
                                         </div>
 
+
                                         <span class="small text-muted">
+
                                             @retest.RetestedAt.ToString(
-                                                "yyyy-MM-dd HH:mm:ss")
+                                                "MMM d, yyyy HH:mm:ss")
+
                                             UTC
+
                                         </span>
 
                                     </div>
 
+
                                     <dl class="row mt-3 mb-0">
 
-                                        @if (retest.AuthenticatedAuditRunId.HasValue)
+                                        <dt class="col-sm-4">
+                                            Retest ID
+                                        </dt>
+
+                                        <dd class="col-sm-8">
+                                            #@retest.Id
+                                        </dd>
+
+
+                                        @if (retest
+                                            .AuthenticatedAuditRunId
+                                            .HasValue)
                                         {
                                             <dt class="col-sm-4">
                                                 Audit Run
@@ -672,13 +1108,18 @@
                                                 <a asp-controller="AuthenticatedAudits"
                                                    asp-action="Details"
                                                    asp-route-id="@retest.AuthenticatedAuditRunId.Value">
+
                                                     Run #@retest.AuthenticatedAuditRunId.Value
+
                                                 </a>
 
                                             </dd>
                                         }
 
-                                        @if (retest.OriginalAuthenticatedAuditFindingId.HasValue)
+
+                                        @if (retest
+                                            .OriginalAuthenticatedAuditFindingId
+                                            .HasValue)
                                         {
                                             <dt class="col-sm-4">
                                                 Original Finding
@@ -689,43 +1130,65 @@
                                             </dd>
                                         }
 
-                                        @if (retest.MatchedAuthenticatedAuditFindingId.HasValue)
+
+                                        <dt class="col-sm-4">
+                                            Matched Retest Finding
+                                        </dt>
+
+                                        <dd class="col-sm-8">
+
+                                            @if (retest
+                                                .MatchedAuthenticatedAuditFindingId
+                                                .HasValue)
+                                            {
+                                                <span>
+                                                    Finding #@retest.MatchedAuthenticatedAuditFindingId.Value
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">
+                                                    None
+                                                </span>
+                                            }
+
+                                        </dd>
+
+
+                                        @if (retest
+                                            .AuthenticatedAuditStepId
+                                            .HasValue)
                                         {
                                             <dt class="col-sm-4">
-                                                Matched Retest Finding
+                                                Retest Step ID
                                             </dt>
 
                                             <dd class="col-sm-8">
-                                                Finding #@retest.MatchedAuthenticatedAuditFindingId.Value
+                                                @retest.AuthenticatedAuditStepId.Value
                                             </dd>
                                         }
-                                        else
-                                        {
-                                            <dt class="col-sm-4">
-                                                Matched Retest Finding
-                                            </dt>
 
-                                            <dd class="col-sm-8 text-muted">
-                                                None
-                                            </dd>
-                                        }
 
                                         <dt class="col-sm-4">
                                             Match Method
                                         </dt>
 
                                         <dd class="col-sm-8">
+
                                             @(string.IsNullOrWhiteSpace(
                                                 retest.MatchMethod)
                                                 ? "Not available"
                                                 : retest.MatchMethod)
+
                                         </dd>
+
 
                                         <dt class="col-sm-4">
                                             Match Confidence
                                         </dt>
 
                                         <dd class="col-sm-8">
+
                                             @if (retest.MatchConfidence.HasValue)
                                             {
                                                 @retest.MatchConfidence.Value.ToString("P0")
@@ -736,62 +1199,146 @@
                                                     Not available
                                                 </span>
                                             }
+
                                         </dd>
 
-                                        @if (retest.AuthenticatedAuditStepId.HasValue)
-                                        {
-                                            <dt class="col-sm-4">
-                                                Retest Scan Step ID
-                                            </dt>
-
-                                            <dd class="col-sm-8">
-                                                @retest.AuthenticatedAuditStepId
-                                            </dd>
-                                        }
-
                                     </dl>
+
+
+                                    @if (retest.Result == "NotDetected")
+                                    {
+                                        <div class="alert alert-light
+                                                    border
+                                                    py-2
+                                                    mt-3
+                                                    mb-0">
+
+                                            @if (isLatestEvidence &&
+                                                 Model.Status == "Fixed")
+                                            {
+                                                <strong>
+                                                    Verification evidence:
+                                                </strong>
+
+                                                <span>
+
+                                                    This is the latest
+                                                    Not Detected retest and
+                                                    can currently support
+                                                    verification.
+
+                                                </span>
+                                            }
+                                            else if (!isLatestEvidence)
+                                            {
+                                                <strong>
+                                                    Historical evidence:
+                                                </strong>
+
+                                                <span>
+
+                                                    A newer retest exists,
+                                                    so this older result
+                                                    cannot support current
+                                                    verification.
+
+                                                </span>
+                                            }
+                                            else if (isLatestEvidence &&
+                                                     Model.Status == "Verified")
+                                            {
+                                                <strong>
+                                                    Verified evidence:
+                                                </strong>
+
+                                                <span>
+
+                                                    This remains the latest
+                                                    retest evidence supporting
+                                                    the current Verified state.
+
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span>
+
+                                                    This retest recorded the
+                                                    issue as Not Detected.
+
+                                                </span>
+                                            }
+
+                                        </div>
+                                    }
+
 
                                     @if (!string.IsNullOrWhiteSpace(
                                         retest.Notes))
                                     {
                                         <div class="mt-3">
-                                            <strong>Notes</strong>
+
+                                            <strong>
+                                                Notes
+                                            </strong>
 
                                             <div class="border rounded
-                                                bg-light
-                                                p-2
-                                                mt-1"
+                                                        bg-light
+                                                        p-2
+                                                        mt-1"
                                                  style="white-space: pre-line;">
                                                 @retest.Notes
                                             </div>
+
                                         </div>
                                     }
+
 
                                     @if (!string.IsNullOrWhiteSpace(
                                         retest.RetestedBy))
                                     {
                                         <div class="small text-muted mt-2">
+
                                             Retested by:
                                             @retest.RetestedBy
+
                                         </div>
                                     }
 
-                                </div>
+                                </article>
                             }
 
                         </div>
                     }
 
                 </div>
-            </div>
 
-            <div class="card shadow-sm">
+            </section>
 
-                <div class="card-header">
-                    <h2 class="h5 mb-0">
-                        Remediation History
-                    </h2>
+
+            <section aria-labelledby="remediation-history-heading"
+                     class="card shadow-sm">
+
+                <div class="card-header bg-transparent">
+
+                    <div class="d-flex flex-wrap
+                                justify-content-between
+                                align-items-center
+                                gap-2">
+
+                        <h2 id="remediation-history-heading"
+                            class="h5 mb-0">
+                            Remediation History
+                        </h2>
+
+                        <span class="badge text-bg-secondary">
+                            @Model.History.Count
+                        </span>
+
+                    </div>
+
                 </div>
+
 
                 <div class="card-body">
 
@@ -805,119 +1352,253 @@
                     {
                         <div class="d-flex flex-column gap-3">
 
-                            @foreach (var history in Model.History)
+                            @foreach (var history
+                                in Model.History)
                             {
                                 string previousStatusLabel =
                                     history.PreviousStatus switch
                                     {
-                                        "InProgress" => "In Progress",
-                                        "Fixed" => "Fixed – Awaiting Verification",
-                                        "WontFix" => "Won't Fix",
-                                        _ => history.PreviousStatus ?? string.Empty
+                                        "InProgress" =>
+                                            "In Progress",
+
+                                        "Fixed" =>
+                                            "Fixed – Awaiting Verification",
+
+                                        "WontFix" =>
+                                            "Won't Fix",
+
+                                        _ =>
+                                            history.PreviousStatus ??
+                                            string.Empty
                                     };
 
                                 string newStatusLabel =
                                     history.NewStatus switch
                                     {
-                                        "InProgress" => "In Progress",
-                                        "Fixed" => "Fixed – Awaiting Verification",
-                                        "WontFix" => "Won't Fix",
-                                        _ => history.NewStatus ?? string.Empty
+                                        "InProgress" =>
+                                            "In Progress",
+
+                                        "Fixed" =>
+                                            "Fixed – Awaiting Verification",
+
+                                        "WontFix" =>
+                                            "Won't Fix",
+
+                                        _ =>
+                                            history.NewStatus ??
+                                            string.Empty
                                     };
 
-                                <div class="border rounded p-3">
+                                string historyBadgeClass =
+                                    history.EventType switch
+                                    {
+                                        "Verified" =>
+                                            "text-bg-success",
+
+                                        "Reopened" =>
+                                            "text-bg-warning",
+
+                                        "RetestPassed" =>
+                                            "text-bg-success",
+
+                                        "RetestDetected" =>
+                                            "text-bg-danger",
+
+                                        "RetestFailed" =>
+                                            "text-bg-secondary",
+
+                                        "RetestInconclusive" =>
+                                            "text-bg-warning",
+
+                                        "Created" =>
+                                            "text-bg-primary",
+
+                                        _ =>
+                                            "text-bg-secondary"
+                                    };
+
+                                <article class="border rounded p-3">
 
                                     <div class="d-flex flex-wrap
-                                        justify-content-between
-                                        align-items-start
-                                        gap-2">
+                                                justify-content-between
+                                                align-items-start
+                                                gap-2">
 
-                                        <strong>
+                                        <span class="badge @historyBadgeClass">
                                             @history.EventType
-                                        </strong>
+                                        </span>
 
                                         <span class="small text-muted">
+
                                             @history.ChangedAt.ToString(
-                                                "yyyy-MM-dd HH:mm:ss")
+                                                "MMM d, yyyy HH:mm:ss")
+
                                             UTC
+
                                         </span>
+
                                     </div>
 
+
                                     @if (!string.IsNullOrWhiteSpace(
-                                        history.PreviousStatus) &&
-                                        !string.IsNullOrWhiteSpace(
+                                            history.PreviousStatus) &&
+                                         !string.IsNullOrWhiteSpace(
                                             history.NewStatus) &&
-                                        history.PreviousStatus != history.NewStatus)
+                                         history.PreviousStatus !=
+                                            history.NewStatus)
                                     {
-                                        <div class="mt-2">
-                                            <strong>Status:</strong>
+                                        <div class="mt-3">
+
+                                            <strong>
+                                                Status:
+                                            </strong>
 
                                             <span class="badge text-bg-secondary">
                                                 @previousStatusLabel
                                             </span>
 
-                                            <span class="mx-1">→</span>
+                                            <span class="mx-1">
+                                                →
+                                            </span>
 
                                             <span class="badge text-bg-primary">
                                                 @newStatusLabel
                                             </span>
+
                                         </div>
                                     }
 
-                                    @if (history.PreviousAssignee !=
-                                         history.NewAssignee)
+
+                                    @if (!string.Equals(
+                                        history.PreviousAssignee,
+                                        history.NewAssignee,
+                                        StringComparison.Ordinal))
                                     {
                                         <div class="mt-2">
-                                            <strong>Assignment:</strong>
+
+                                            <strong>
+                                                Assignment:
+                                            </strong>
 
                                             @(string.IsNullOrWhiteSpace(
                                                 history.PreviousAssignee)
                                                 ? "Unassigned"
                                                 : history.PreviousAssignee)
 
-                                            <span class="mx-1">→</span>
+                                            <span class="mx-1">
+                                                →
+                                            </span>
 
                                             @(string.IsNullOrWhiteSpace(
                                                 history.NewAssignee)
                                                 ? "Unassigned"
                                                 : history.NewAssignee)
+
                                         </div>
                                     }
+
 
                                     @if (!string.IsNullOrWhiteSpace(
                                         history.Notes))
                                     {
                                         <div class="mt-3">
-                                            <strong>Notes</strong>
+
+                                            <strong>
+                                                Notes
+                                            </strong>
 
                                             <div class="border rounded
-                                                bg-light
-                                                p-2
-                                                mt-1"
+                                                        bg-light
+                                                        p-2
+                                                        mt-1"
                                                  style="white-space: pre-line;">
                                                 @history.Notes
                                             </div>
+
                                         </div>
                                     }
+
 
                                     @if (!string.IsNullOrWhiteSpace(
                                         history.ChangedBy))
                                     {
                                         <div class="small text-muted mt-2">
+
                                             Changed by:
                                             @history.ChangedBy
+
                                         </div>
                                     }
 
-                                </div>
+                                </article>
                             }
 
                         </div>
                     }
 
                 </div>
-            </div>
+
+            </section>
 
         </div>
+
     </div>
+
 </div>
+
+
+@section Scripts
+{
+    <script>
+        document.addEventListener(
+            "DOMContentLoaded",
+            function () {
+
+                const retestForm =
+                    document.getElementById(
+                        "currentStateRetestForm");
+
+                const verifyForm =
+                    document.getElementById(
+                        "verifyRemediationForm");
+
+
+                if (retestForm) {
+
+                    retestForm.addEventListener(
+                        "submit",
+                        function (event) {
+
+                            const confirmed =
+                                window.confirm(
+                                    "Retest the page or workflow state " +
+                                    "currently open in the authenticated browser?"
+                                );
+
+                            if (!confirmed) {
+                                event.preventDefault();
+                            }
+                        });
+                }
+
+
+                if (verifyForm) {
+
+                    verifyForm.addEventListener(
+                        "submit",
+                        function (event) {
+
+                            const confirmed =
+                                window.confirm(
+                                    "Verify this remediation? " +
+                                    "This will change the item to Verified."
+                                );
+
+                            if (!confirmed) {
+                                event.preventDefault();
+                            }
+                        });
+                }
+            });
+    </script>
+}

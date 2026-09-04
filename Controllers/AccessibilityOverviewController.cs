@@ -8,7 +8,7 @@ namespace CityWebsiteAuditDashboard.Controllers;
 
 /// <summary>
 /// Builds the read-only, management-facing accessibility reporting dashboard
-/// from saved authenticated axe-core audit results.
+/// from saved authenticated axe-core audit results and remediation evidence.
 /// </summary>
 [ResponseCache(
     NoStore = true,
@@ -34,7 +34,6 @@ public sealed class AccessibilityOverviewController : Controller
         bool latestOnly = true,
         CancellationToken cancellationToken = default)
     {
-
         string? normalizedApplicationName =
             NormalizeOptionalValue(applicationName);
 
@@ -69,10 +68,11 @@ public sealed class AccessibilityOverviewController : Controller
         List<string> applicationOptions =
             await _dbContext.AuthenticatedAuditRuns
                 .AsNoTracking()
-                .Select(run => run.ApplicationName)
+                .Select(run =>
+                    run.ApplicationName)
                 .Distinct()
-                .OrderBy(applicationNameOption =>
-                    applicationNameOption)
+                .OrderBy(name =>
+                    name)
                 .ToListAsync(cancellationToken);
 
         List<AuthenticatedRunSnapshot> authenticatedRuns =
@@ -89,7 +89,8 @@ public sealed class AccessibilityOverviewController : Controller
 
         List<int> selectedRunIds =
             selectedAuthenticatedRuns
-                .Select(run => run.Id)
+                .Select(run =>
+                    run.Id)
                 .ToList();
 
         List<AuthenticatedStepSnapshot> authenticatedSteps =
@@ -99,12 +100,14 @@ public sealed class AccessibilityOverviewController : Controller
 
         List<AuthenticatedStepSnapshot> successfulAuthenticatedSteps =
             authenticatedSteps
-                .Where(step => step.ScanSucceeded)
+                .Where(step =>
+                    step.ScanSucceeded)
                 .ToList();
 
         List<int> successfulStepIds =
             successfulAuthenticatedSteps
-                .Select(step => step.Id)
+                .Select(step =>
+                    step.Id)
                 .ToList();
 
         List<AuthenticatedFindingSnapshot> authenticatedFindings =
@@ -131,53 +134,57 @@ public sealed class AccessibilityOverviewController : Controller
                 filteredFindings);
 
         AccessibilityIssueBreakdownViewModel issueBreakdown =
-            BuildIssueBreakdown(filteredFindings);
+            BuildIssueBreakdown(
+                filteredFindings);
 
         AccessibilityRemediationProgressViewModel remediationProgress =
             await LoadRemediationProgressAsync(
-            normalizedApplicationName,
-            normalizedStartDate,
-            endDateExclusive,
-            normalizedSeverity,
-            normalizedWcagLevel,
-            normalizedFindingType,
-            cancellationToken);
+                normalizedApplicationName,
+                normalizedStartDate,
+                endDateExclusive,
+                normalizedSeverity,
+                normalizedWcagLevel,
+                normalizedFindingType,
+                cancellationToken);
 
-        List<AuthenticatedRunSnapshot>
-            comparisonAuthenticatedRuns =
-                SelectLatestAndPreviousAuthenticatedRuns(
+        /*
+         * The ranking table needs both the latest and previous run
+         * for each application so management can see directional change.
+         */
+        List<AuthenticatedRunSnapshot> comparisonAuthenticatedRuns =
+            SelectLatestAndPreviousAuthenticatedRuns(
                 authenticatedRuns);
 
         List<int> comparisonRunIds =
             comparisonAuthenticatedRuns
-                .Select(run => run.Id)
+                .Select(run =>
+                    run.Id)
                 .ToList();
 
-        List<AuthenticatedStepSnapshot>
-            comparisonAuthenticatedSteps =
-                await LoadAuthenticatedStepsAsync(
-                    comparisonRunIds,
-                    cancellationToken);
+        List<AuthenticatedStepSnapshot> comparisonAuthenticatedSteps =
+            await LoadAuthenticatedStepsAsync(
+                comparisonRunIds,
+                cancellationToken);
 
         List<int> successfulComparisonStepIds =
             comparisonAuthenticatedSteps
-                .Where(step => step.ScanSucceeded)
-                .Select(step => step.Id)
+                .Where(step =>
+                    step.ScanSucceeded)
+                .Select(step =>
+                    step.Id)
                 .ToList();
 
-        List<AuthenticatedFindingSnapshot>
-            comparisonAuthenticatedFindings =
-                await LoadAuthenticatedFindingsAsync(
-                    successfulComparisonStepIds,
-                    cancellationToken);
+        List<AuthenticatedFindingSnapshot> comparisonAuthenticatedFindings =
+            await LoadAuthenticatedFindingsAsync(
+                successfulComparisonStepIds,
+                cancellationToken);
 
-        List<AuthenticatedFindingSnapshot>
-            filteredComparisonFindings =
-                ApplyFindingFilters(
-                    comparisonAuthenticatedFindings,
-                    normalizedSeverity,
-                    normalizedWcagLevel,
-                    normalizedFindingType);
+        List<AuthenticatedFindingSnapshot> filteredComparisonFindings =
+            ApplyFindingFilters(
+                comparisonAuthenticatedFindings,
+                normalizedSeverity,
+                normalizedWcagLevel,
+                normalizedFindingType);
 
         List<AccessibilityApplicationRankingViewModel>
             applicationRankings =
@@ -186,18 +193,16 @@ public sealed class AccessibilityOverviewController : Controller
                     comparisonAuthenticatedSteps,
                     filteredComparisonFindings);
 
-        List<AccessibilityTopFindingViewModel>
-            topFindings =
-                BuildTopFindings(
-                    selectedAuthenticatedRuns,
-                    successfulAuthenticatedSteps,
-                    filteredFindings);
+        List<AccessibilityTopFindingViewModel> topFindings =
+            BuildTopFindings(
+                selectedAuthenticatedRuns,
+                successfulAuthenticatedSteps,
+                filteredFindings);
 
-        List<AccessibilityTrendPointViewModel>
-            trendPoints =
-                BuildTrendPoints(
-                    successfulAuthenticatedSteps,
-                    filteredFindings);
+        List<AccessibilityTrendPointViewModel> trendPoints =
+            BuildTrendPoints(
+                successfulAuthenticatedSteps,
+                filteredFindings);
 
         AccessibilityOverviewViewModel model =
             new()
@@ -256,19 +261,20 @@ public sealed class AccessibilityOverviewController : Controller
     }
 
     private async Task<AccessibilityRemediationProgressViewModel>
-    LoadRemediationProgressAsync(
-        string? applicationName,
-        DateTime? startDate,
-        DateTime? endDateExclusive,
-        string? severity,
-        string? wcagLevel,
-        string? findingType,
-        CancellationToken cancellationToken)
+        LoadRemediationProgressAsync(
+            string? applicationName,
+            DateTime? startDate,
+            DateTime? endDateExclusive,
+            string? severity,
+            string? wcagLevel,
+            string? findingType,
+            CancellationToken cancellationToken)
     {
         List<AccessibilityRemediationItem> remediationItems =
             await _dbContext.AccessibilityRemediationItems
                 .AsNoTracking()
-                .Include(item => item.FindingOccurrences)
+                .Include(item =>
+                    item.FindingOccurrences)
                     .ThenInclude(occurrence =>
                         occurrence.AuthenticatedAuditFinding)
                         .ThenInclude(finding =>
@@ -280,20 +286,32 @@ public sealed class AccessibilityOverviewController : Controller
         List<AccessibilityRemediationItem> filteredItems =
             new();
 
-        foreach (AccessibilityRemediationItem item in remediationItems)
+        /*
+         * A remediation item is durable and can accumulate later
+         * finding occurrences.
+         *
+         * Reporting classification is based on its original occurrence.
+         */
+        foreach (AccessibilityRemediationItem item
+            in remediationItems)
         {
-            AccessibilityRemediationFindingOccurrence? occurrence =
-                item.FindingOccurrences
-                    .OrderBy(occurrence => occurrence.LinkedAt)
-                    .FirstOrDefault();
+            AccessibilityRemediationFindingOccurrence?
+                originalOccurrence =
+                    item.FindingOccurrences
+                        .OrderBy(occurrence =>
+                            occurrence.LinkedAt)
+                        .ThenBy(occurrence =>
+                            occurrence.Id)
+                        .FirstOrDefault();
 
-            if (occurrence is null)
+            if (originalOccurrence is null)
             {
                 continue;
             }
 
             AuthenticatedAuditFinding finding =
-                occurrence.AuthenticatedAuditFinding;
+                originalOccurrence
+                    .AuthenticatedAuditFinding;
 
             AuthenticatedAuditStep step =
                 finding.AuthenticatedAuditStep;
@@ -303,21 +321,23 @@ public sealed class AccessibilityOverviewController : Controller
 
             if (!string.IsNullOrWhiteSpace(applicationName) &&
                 !string.Equals(
-                    run.ApplicationName,
-                    applicationName,
+                    run.ApplicationName.Trim(),
+                    applicationName.Trim(),
                     StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
 
             if (startDate.HasValue &&
-                step.ScannedAt < startDate.Value)
+                step.ScannedAt <
+                startDate.Value)
             {
                 continue;
             }
 
             if (endDateExclusive.HasValue &&
-                step.ScannedAt >= endDateExclusive.Value)
+                step.ScannedAt >=
+                endDateExclusive.Value)
             {
                 continue;
             }
@@ -326,13 +346,14 @@ public sealed class AccessibilityOverviewController : Controller
             {
                 if (severity == "Unknown")
                 {
-                    if (IsKnownImpact(finding.Impact))
+                    if (IsKnownImpact(
+                        finding.Impact))
                     {
                         continue;
                     }
                 }
                 else if (!string.Equals(
-                    finding.Impact,
+                    finding.Impact?.Trim(),
                     severity,
                     StringComparison.OrdinalIgnoreCase))
                 {
@@ -375,117 +396,147 @@ public sealed class AccessibilityOverviewController : Controller
         }
 
         HashSet<int> filteredItemIds =
-                filteredItems
-                    .Select(item => item.Id)
-                    .ToHashSet();
+            filteredItems
+                .Select(item =>
+                    item.Id)
+                .ToHashSet();
 
-        List<AccessibilityRemediationHistory> remediationHistory =
-            await _dbContext.AccessibilityRemediationHistories
-                .AsNoTracking()
-                .Where(history =>
-                    filteredItemIds.Contains(
-                        history.AccessibilityRemediationItemId))
-                .ToListAsync(cancellationToken);
+        List<AccessibilityRemediationHistory> remediationHistory;
+
+        if (filteredItemIds.Count == 0)
+        {
+            remediationHistory =
+                new List<AccessibilityRemediationHistory>();
+        }
+        else
+        {
+            remediationHistory =
+                await _dbContext.AccessibilityRemediationHistories
+                    .AsNoTracking()
+                    .Where(history =>
+                        filteredItemIds.Contains(
+                            history.AccessibilityRemediationItemId))
+                    .ToListAsync(cancellationToken);
+        }
 
         List<AccessibilityRemediationTrendPointViewModel>
             remediationTrends =
-            remediationHistory
-            .Where(history =>
-                string.Equals(
-                    history.EventType,
-                    "Verified",
-                    StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(
-                    history.EventType,
-                    "Reopened",
-                    StringComparison.OrdinalIgnoreCase))
-            .GroupBy(history =>
-                history.ChangedAt.Date)
-            .Select(group =>
-                new AccessibilityRemediationTrendPointViewModel
-                {
-                    Date =
-                        group.Key,
+                remediationHistory
+                    .Where(history =>
+                        string.Equals(
+                            history.EventType,
+                            "Verified",
+                            StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(
+                            history.EventType,
+                            "Reopened",
+                            StringComparison.OrdinalIgnoreCase))
+                    .GroupBy(history =>
+                        history.ChangedAt.Date)
+                    .Select(group =>
+                        new AccessibilityRemediationTrendPointViewModel
+                        {
+                            Date =
+                                group.Key,
 
-                    Verified =
-                        group.Count(history =>
-                            string.Equals(
-                                history.EventType,
-                                "Verified",
-                                StringComparison.OrdinalIgnoreCase)),
+                            Verified =
+                                group.Count(history =>
+                                    string.Equals(
+                                        history.EventType,
+                                        "Verified",
+                                        StringComparison.OrdinalIgnoreCase)),
 
-                    Reopened =
-                        group.Count(history =>
-                            string.Equals(
-                                history.EventType,
-                                "Reopened",
-                                StringComparison.OrdinalIgnoreCase))
-                })
-            .OrderBy(point =>
-                point.Date)
-            .ToList();
+                            Reopened =
+                                group.Count(history =>
+                                    string.Equals(
+                                        history.EventType,
+                                        "Reopened",
+                                        StringComparison.OrdinalIgnoreCase))
+                        })
+                    .OrderBy(point =>
+                        point.Date)
+                    .ToList();
 
         List<AccessibilityApplicationRemediationProgressViewModel>
             applicationProgress =
-            filteredItems
-            .GroupBy(
-                item =>
-                {
-                    AccessibilityRemediationFindingOccurrence occurrence =
-                        item.FindingOccurrences
-                            .OrderBy(occurrence =>
-                                occurrence.LinkedAt)
-                            .First();
+                filteredItems
+                    .GroupBy(
+                        item =>
+                        {
+                            AccessibilityRemediationFindingOccurrence
+                                originalOccurrence =
+                                    item.FindingOccurrences
+                                        .OrderBy(occurrence =>
+                                            occurrence.LinkedAt)
+                                        .ThenBy(occurrence =>
+                                            occurrence.Id)
+                                        .First();
 
-                    return occurrence
-                        .AuthenticatedAuditFinding
-                        .AuthenticatedAuditStep
-                        .AuthenticatedAuditRun
-                        .ApplicationName
-                        .Trim();
-                },
-                StringComparer.OrdinalIgnoreCase)
-            .Select(group =>
-                new AccessibilityApplicationRemediationProgressViewModel
-                {
-                    ApplicationName =
-                        group.Key,
+                            return originalOccurrence
+                                .AuthenticatedAuditFinding
+                                .AuthenticatedAuditStep
+                                .AuthenticatedAuditRun
+                                .ApplicationName
+                                .Trim();
+                        },
+                        StringComparer.OrdinalIgnoreCase)
+                    .Select(group =>
+                        new AccessibilityApplicationRemediationProgressViewModel
+                        {
+                            ApplicationName =
+                                group.Key,
 
-                    TotalTracked =
-                        group.Count(),
+                            TotalTracked =
+                                group.Count(),
 
-                    Open =
-                        group.Count(item =>
-                            item.Status ==
-                            AccessibilityRemediationStatus.Open),
+                            Open =
+                                group.Count(item =>
+                                    item.Status ==
+                                    AccessibilityRemediationStatus.Open),
 
-                    InProgress =
-                        group.Count(item =>
-                            item.Status ==
-                            AccessibilityRemediationStatus.InProgress),
+                            InProgress =
+                                group.Count(item =>
+                                    item.Status ==
+                                    AccessibilityRemediationStatus.InProgress),
 
-                    AwaitingVerification =
-                        group.Count(item =>
-                            item.Status ==
-                            AccessibilityRemediationStatus.Fixed),
+                            AwaitingVerification =
+                                group.Count(item =>
+                                    item.Status ==
+                                    AccessibilityRemediationStatus.Fixed),
 
-                    Verified =
-                        group.Count(item =>
-                            item.Status ==
-                            AccessibilityRemediationStatus.Verified),
+                            Verified =
+                                group.Count(item =>
+                                    item.Status ==
+                                    AccessibilityRemediationStatus.Verified),
 
-                    WontFix =
-                        group.Count(item =>
-                            item.Status ==
-                            AccessibilityRemediationStatus.WontFix)
-                })
-            .OrderBy(application =>
-                application.VerifiedPercent)
-            .ThenByDescending(application =>
-                application.Remaining)
-            .ThenBy(application =>
-                application.ApplicationName)
-            .ToList();
+                            WontFix =
+                                group.Count(item =>
+                                    item.Status ==
+                                    AccessibilityRemediationStatus.WontFix)
+                        })
+                    .OrderBy(application =>
+                        application.VerifiedPercent)
+                    .ThenByDescending(application =>
+                        application.Remaining)
+                    .ThenBy(application =>
+                        application.ApplicationName)
+                    .ToList();
+
+        /*
+         * Formal workflow progress uses the same filtered remediation
+         * item set as the rest of this section.
+         *
+         * We intentionally do not filter formal retests by RetestedAt.
+         * The dashboard's date filter identifies the original audit
+         * findings in scope, while the remediation status represents
+         * their current lifecycle state.
+         */
+        AccessibilityFormalWorkflowProgressViewModel
+            formalWorkflowProgress =
+                await LoadFormalWorkflowProgressAsync(
+                    filteredItemIds,
+                    remediationHistory,
+                    cancellationToken);
 
         return new AccessibilityRemediationProgressViewModel
         {
@@ -517,11 +568,308 @@ public sealed class AccessibilityOverviewController : Controller
                     item.Status ==
                     AccessibilityRemediationStatus.WontFix),
 
+            FormalWorkflow =
+                formalWorkflowProgress,
+
             Applications =
                 applicationProgress,
 
             Trends =
                 remediationTrends
+        };
+    }
+
+    /// <summary>
+    /// Builds management-level formal workflow retest progress for the
+    /// remediation items currently in scope.
+    ///
+    /// Verification credit is only given when the formal workflow retest
+    /// remains the latest retest evidence for that remediation item.
+    /// </summary>
+    private async Task<AccessibilityFormalWorkflowProgressViewModel>
+        LoadFormalWorkflowProgressAsync(
+            IReadOnlyCollection<int> remediationItemIds,
+            IReadOnlyCollection<AccessibilityRemediationHistory>
+                remediationHistory,
+            CancellationToken cancellationToken)
+    {
+        if (remediationItemIds.Count == 0)
+        {
+            return new AccessibilityFormalWorkflowProgressViewModel();
+        }
+
+        List<int> itemIds =
+            remediationItemIds
+                .Distinct()
+                .ToList();
+
+        List<AccessibilityRemediationRetest> formalRetests =
+            await _dbContext.AccessibilityRemediationRetests
+                .AsNoTracking()
+                .Where(retest =>
+                    itemIds.Contains(
+                        retest.AccessibilityRemediationItemId) &&
+                    retest.RetestType == "FullWorkflow" &&
+                    retest.AuthenticatedAuditRunId.HasValue)
+                .Include(retest =>
+                    retest.AuthenticatedAuditRun)
+                .Include(retest =>
+                    retest.RemediationItem)
+                .ToListAsync(cancellationToken);
+
+        if (formalRetests.Count == 0)
+        {
+            return new AccessibilityFormalWorkflowProgressViewModel();
+        }
+
+        /*
+         * A formal workflow retest can only support current verification
+         * if it is still the newest retest evidence for that item.
+         *
+         * Current-state retests are deliberately included in this lookup.
+         */
+        List<LatestRetestSnapshot> retestEvidence =
+            await _dbContext.AccessibilityRemediationRetests
+                .AsNoTracking()
+                .Where(retest =>
+                    itemIds.Contains(
+                        retest.AccessibilityRemediationItemId))
+                .Select(retest =>
+                    new LatestRetestSnapshot
+                    {
+                        Id =
+                            retest.Id,
+
+                        AccessibilityRemediationItemId =
+                            retest.AccessibilityRemediationItemId,
+
+                        RetestedAt =
+                            retest.RetestedAt
+                    })
+                .ToListAsync(cancellationToken);
+
+        Dictionary<int, int> latestRetestIds =
+            retestEvidence
+                .GroupBy(retest =>
+                    retest.AccessibilityRemediationItemId)
+                .ToDictionary(
+                    group =>
+                        group.Key,
+
+                    group =>
+                        group
+                            .OrderByDescending(retest =>
+                                retest.RetestedAt)
+                            .ThenByDescending(retest =>
+                                retest.Id)
+                            .First()
+                            .Id);
+
+        List<(
+            AccessibilityApplicationFormalWorkflowProgressViewModel Progress,
+            DateTime RunStartedAt)> formalRunProgress =
+                new();
+
+        IEnumerable<IGrouping<int, AccessibilityRemediationRetest>>
+            runGroups =
+                formalRetests
+                    .GroupBy(retest =>
+                        retest.AuthenticatedAuditRunId!.Value);
+
+        foreach (IGrouping<int, AccessibilityRemediationRetest>
+            runGroup in runGroups)
+        {
+            AccessibilityRemediationRetest first =
+                runGroup.First();
+
+            AuthenticatedAuditRun? auditRun =
+                first.AuthenticatedAuditRun;
+
+            if (auditRun is null ||
+                string.IsNullOrWhiteSpace(
+                    auditRun.ApplicationName))
+            {
+                continue;
+            }
+
+            int totalTracked =
+                runGroup.Count();
+
+            int stillDetected =
+                runGroup.Count(retest =>
+                    retest.Result ==
+                    AccessibilityRemediationRetestResult.Detected);
+
+            int notDetected =
+                runGroup.Count(retest =>
+                    retest.Result ==
+                    AccessibilityRemediationRetestResult.NotDetected);
+
+            int inconclusive =
+                runGroup.Count(retest =>
+                    retest.Result ==
+                    AccessibilityRemediationRetestResult.Inconclusive);
+
+            int failed =
+                runGroup.Count(retest =>
+                    retest.Result ==
+                    AccessibilityRemediationRetestResult.Failed);
+
+            int verifiedFromThisRetest =
+                runGroup.Count(retest =>
+                    retest.Result ==
+                        AccessibilityRemediationRetestResult.NotDetected &&
+                    retest.RemediationItem.Status ==
+                        AccessibilityRemediationStatus.Verified &&
+                    latestRetestIds.TryGetValue(
+                        retest.AccessibilityRemediationItemId,
+                        out int latestRetestId) &&
+                    latestRetestId ==
+                        retest.Id);
+
+            int reopened =
+                runGroup.Count(retest =>
+                    remediationHistory.Any(history =>
+                        history.AccessibilityRemediationItemId ==
+                            retest.AccessibilityRemediationItemId &&
+                        string.Equals(
+                            history.EventType,
+                            "Reopened",
+                            StringComparison.OrdinalIgnoreCase) &&
+                        history.ChangedAt ==
+                            retest.RetestedAt));
+
+            string verificationState =
+                GetFormalVerificationState(
+                    notDetected,
+                    verifiedFromThisRetest);
+
+            DateTime recordedAt =
+                runGroup.Max(retest =>
+                    retest.RetestedAt);
+
+            AccessibilityApplicationFormalWorkflowProgressViewModel
+                progress =
+                    new()
+                    {
+                        ApplicationName =
+                            auditRun.ApplicationName.Trim(),
+
+                        RetestAuditRunId =
+                            runGroup.Key,
+
+                        RetestedAt =
+                            recordedAt,
+
+                        TotalTracked =
+                            totalTracked,
+
+                        StillDetected =
+                            stillDetected,
+
+                        NotDetected =
+                            notDetected,
+
+                        VerifiedFromThisRetest =
+                            verifiedFromThisRetest,
+
+                        Inconclusive =
+                            inconclusive,
+
+                        Failed =
+                            failed,
+
+                        Reopened =
+                            reopened,
+
+                        VerificationState =
+                            verificationState
+                    };
+
+            formalRunProgress.Add(
+                (
+                    progress,
+                    auditRun.StartedAt
+                ));
+        }
+
+        if (formalRunProgress.Count == 0)
+        {
+            return new AccessibilityFormalWorkflowProgressViewModel();
+        }
+
+        /*
+         * Management primarily needs the latest formal workflow status for
+         * each application, while TotalFormalRetestRuns preserves the full
+         * historical count.
+         *
+         * "Latest" is based on the authenticated audit run date, not the date
+         * somebody happened to click Apply Formal Workflow Retest.
+         */
+        List<(
+            AccessibilityApplicationFormalWorkflowProgressViewModel Progress,
+            DateTime RunStartedAt)> latestPerApplication =
+                formalRunProgress
+                    .GroupBy(
+                        item =>
+                            item.Progress.ApplicationName.Trim(),
+                        StringComparer.OrdinalIgnoreCase)
+                    .Select(group =>
+                        group
+                            .OrderByDescending(item =>
+                                item.RunStartedAt)
+                            .ThenByDescending(item =>
+                                item.Progress.RetestAuditRunId)
+                            .First())
+                    .ToList();
+
+        List<AccessibilityApplicationFormalWorkflowProgressViewModel>
+            applicationProgress =
+                latestPerApplication
+                    .Select(item =>
+                        item.Progress)
+                    .OrderBy(progress =>
+                        GetFormalVerificationStateRank(
+                            progress.VerificationState))
+                    .ThenByDescending(progress =>
+                        progress.StillDetected)
+                    .ThenByDescending(progress =>
+                        progress.Inconclusive +
+                        progress.Failed)
+                    .ThenBy(progress =>
+                        progress.ApplicationName)
+                    .ToList();
+
+        return new AccessibilityFormalWorkflowProgressViewModel
+        {
+            TotalFormalRetestRuns =
+                formalRunProgress.Count,
+
+            ApplicationsFormallyRetested =
+                applicationProgress.Count,
+
+            LatestApplied =
+                applicationProgress.Count(progress =>
+                    progress.VerificationState ==
+                    "Applied"),
+
+            LatestPartiallyVerified =
+                applicationProgress.Count(progress =>
+                    progress.VerificationState ==
+                    "Partially Verified"),
+
+            LatestFullyVerified =
+                applicationProgress.Count(progress =>
+                    progress.VerificationState ==
+                    "Fully Verified"),
+
+            LatestFormalRetestAt =
+                formalRunProgress
+                    .Max(item =>
+                        item.Progress.RetestedAt),
+
+            Applications =
+                applicationProgress
         };
     }
 
@@ -538,27 +886,34 @@ public sealed class AccessibilityOverviewController : Controller
 
         if (!string.IsNullOrWhiteSpace(applicationName))
         {
-            query = query.Where(run =>
-                run.ApplicationName == applicationName);
+            query =
+                query.Where(run =>
+                    run.ApplicationName ==
+                    applicationName);
         }
 
         if (startDate.HasValue)
         {
-            query = query.Where(run =>
-                run.StartedAt >= startDate.Value);
+            query =
+                query.Where(run =>
+                    run.StartedAt >=
+                    startDate.Value);
         }
 
         if (endDateExclusive.HasValue)
         {
-            query = query.Where(run =>
-                run.StartedAt < endDateExclusive.Value);
+            query =
+                query.Where(run =>
+                    run.StartedAt <
+                    endDateExclusive.Value);
         }
 
         return await query
             .Select(run =>
                 new AuthenticatedRunSnapshot
                 {
-                    Id = run.Id,
+                    Id =
+                        run.Id,
 
                     ApplicationName =
                         run.ApplicationName,
@@ -593,12 +948,14 @@ public sealed class AccessibilityOverviewController : Controller
             .Select(step =>
                 new AuthenticatedStepSnapshot
                 {
-                    Id = step.Id,
+                    Id =
+                        step.Id,
 
                     AuthenticatedAuditRunId =
                         step.AuthenticatedAuditRunId,
 
-                    ScannedAt = step.ScannedAt,
+                    ScannedAt =
+                        step.ScannedAt,
 
                     ViolationRuleCount =
                         step.ViolationRuleCount,
@@ -674,41 +1031,54 @@ public sealed class AccessibilityOverviewController : Controller
         if (!latestOnly)
         {
             return runs
-                .OrderByDescending(run => run.StartedAt)
-                .ThenByDescending(run => run.Id)
+                .OrderByDescending(run =>
+                    run.StartedAt)
+                .ThenByDescending(run =>
+                    run.Id)
                 .ToList();
         }
 
         return runs
             .GroupBy(
-                run => run.ApplicationName.Trim(),
+                run =>
+                    run.ApplicationName.Trim(),
                 StringComparer.OrdinalIgnoreCase)
             .Select(group =>
                 group
-                    .OrderByDescending(run => run.StartedAt)
-                    .ThenByDescending(run => run.Id)
+                    .OrderByDescending(run =>
+                        run.StartedAt)
+                    .ThenByDescending(run =>
+                        run.Id)
                     .First())
-            .OrderByDescending(run => run.StartedAt)
-            .ThenBy(run => run.ApplicationName)
+            .OrderByDescending(run =>
+                run.StartedAt)
+            .ThenBy(run =>
+                run.ApplicationName)
             .ToList();
     }
 
     private static List<AuthenticatedRunSnapshot>
-    SelectLatestAndPreviousAuthenticatedRuns(
-        IReadOnlyCollection<AuthenticatedRunSnapshot> runs)
+        SelectLatestAndPreviousAuthenticatedRuns(
+            IReadOnlyCollection<AuthenticatedRunSnapshot> runs)
     {
         return runs
             .GroupBy(
-                run => run.ApplicationName.Trim(),
+                run =>
+                    run.ApplicationName.Trim(),
                 StringComparer.OrdinalIgnoreCase)
             .SelectMany(group =>
                 group
-                    .OrderByDescending(run => run.StartedAt)
-                    .ThenByDescending(run => run.Id)
+                    .OrderByDescending(run =>
+                        run.StartedAt)
+                    .ThenByDescending(run =>
+                        run.Id)
                     .Take(2))
-            .OrderBy(run => run.ApplicationName)
-            .ThenByDescending(run => run.StartedAt)
-            .ThenByDescending(run => run.Id)
+            .OrderBy(run =>
+                run.ApplicationName)
+            .ThenByDescending(run =>
+                run.StartedAt)
+            .ThenByDescending(run =>
+                run.Id)
             .ToList();
     }
 
@@ -726,16 +1096,19 @@ public sealed class AccessibilityOverviewController : Controller
         {
             if (severity == "Unknown")
             {
-                query = query.Where(finding =>
-                    !IsKnownImpact(finding.Impact));
+                query =
+                    query.Where(finding =>
+                        !IsKnownImpact(
+                            finding.Impact));
             }
             else
             {
-                query = query.Where(finding =>
-                    string.Equals(
-                        finding.Impact,
-                        severity,
-                        StringComparison.OrdinalIgnoreCase));
+                query =
+                    query.Where(finding =>
+                        string.Equals(
+                            finding.Impact,
+                            severity,
+                            StringComparison.OrdinalIgnoreCase));
             }
         }
 
@@ -743,40 +1116,43 @@ public sealed class AccessibilityOverviewController : Controller
         {
             if (wcagLevel == "Unmapped")
             {
-                query = query.Where(finding =>
-                    !IsWcagLevel(
-                        finding.WcagLevel,
-                        "A") &&
-                    !IsWcagLevel(
-                        finding.WcagLevel,
-                        "AA"));
+                query =
+                    query.Where(finding =>
+                        !IsWcagLevel(
+                            finding.WcagLevel,
+                            "A") &&
+                        !IsWcagLevel(
+                            finding.WcagLevel,
+                            "AA"));
             }
             else
             {
-                query = query.Where(finding =>
-                    IsWcagLevel(
-                        finding.WcagLevel,
-                        wcagLevel));
+                query =
+                    query.Where(finding =>
+                        IsWcagLevel(
+                            finding.WcagLevel,
+                            wcagLevel));
             }
         }
 
         if (!string.IsNullOrWhiteSpace(findingType))
         {
-            query = query.Where(finding =>
-                string.Equals(
-                    finding.FindingType,
-                    findingType,
-                    StringComparison.OrdinalIgnoreCase));
+            query =
+                query.Where(finding =>
+                    string.Equals(
+                        finding.FindingType,
+                        findingType,
+                        StringComparison.OrdinalIgnoreCase));
         }
 
         return query.ToList();
     }
 
     private static List<AccessibilityApplicationRankingViewModel>
-    BuildApplicationRankings(
-        IReadOnlyCollection<AuthenticatedRunSnapshot> runs,
-        IReadOnlyCollection<AuthenticatedStepSnapshot> steps,
-        IReadOnlyCollection<AuthenticatedFindingSnapshot> findings)
+        BuildApplicationRankings(
+            IReadOnlyCollection<AuthenticatedRunSnapshot> runs,
+            IReadOnlyCollection<AuthenticatedStepSnapshot> steps,
+            IReadOnlyCollection<AuthenticatedFindingSnapshot> findings)
     {
         List<AccessibilityApplicationRankingViewModel> rankings =
             new();
@@ -784,16 +1160,20 @@ public sealed class AccessibilityOverviewController : Controller
         IEnumerable<IGrouping<string, AuthenticatedRunSnapshot>>
             applicationGroups =
                 runs.GroupBy(
-                    run => run.ApplicationName.Trim(),
+                    run =>
+                        run.ApplicationName.Trim(),
                     StringComparer.OrdinalIgnoreCase);
 
-        foreach (IGrouping<string, AuthenticatedRunSnapshot>
-            applicationGroup in applicationGroups)
+        foreach (
+            IGrouping<string, AuthenticatedRunSnapshot> applicationGroup
+            in applicationGroups)
         {
             List<AuthenticatedRunSnapshot> orderedRuns =
                 applicationGroup
-                    .OrderByDescending(run => run.StartedAt)
-                    .ThenByDescending(run => run.Id)
+                    .OrderByDescending(run =>
+                        run.StartedAt)
+                    .ThenByDescending(run =>
+                        run.Id)
                     .ToList();
 
             AuthenticatedRunSnapshot latestRun =
@@ -813,7 +1193,8 @@ public sealed class AccessibilityOverviewController : Controller
 
             HashSet<int> latestStepIds =
                 latestRunSteps
-                    .Select(step => step.Id)
+                    .Select(step =>
+                        step.Id)
                     .ToHashSet();
 
             List<AuthenticatedFindingSnapshot> latestRunFindings =
@@ -823,14 +1204,16 @@ public sealed class AccessibilityOverviewController : Controller
                             finding.AuthenticatedAuditStepId))
                     .ToList();
 
-            List<AuthenticatedFindingSnapshot>
-                latestViolationFindings =
-                    latestRunFindings
-                        .Where(IsViolation)
-                        .ToList();
+            List<AuthenticatedFindingSnapshot> latestViolationFindings =
+                latestRunFindings
+                    .Where(IsViolation)
+                    .ToList();
 
-            int? previousFindingCount = null;
-            int? previousStateCount = null;
+            int? previousFindingCount =
+                null;
+
+            int? previousStateCount =
+                null;
 
             if (previousRun is not null)
             {
@@ -843,7 +1226,8 @@ public sealed class AccessibilityOverviewController : Controller
 
                 HashSet<int> previousStepIds =
                     previousRunSteps
-                        .Select(step => step.Id)
+                        .Select(step =>
+                            step.Id)
                         .ToHashSet();
 
                 previousFindingCount =
@@ -893,7 +1277,8 @@ public sealed class AccessibilityOverviewController : Controller
                                 "Serious")),
 
                     FixFirstFindingCount =
-                        latestRunFindings.Count(IsFixFirst),
+                        latestRunFindings.Count(
+                            IsFixFirst),
 
                     NeedsReviewFindingCount =
                         latestRunFindings.Count(finding =>
@@ -936,16 +1321,18 @@ public sealed class AccessibilityOverviewController : Controller
     }
 
     private static List<AccessibilityTopFindingViewModel>
-    BuildTopFindings(
-        IReadOnlyCollection<AuthenticatedRunSnapshot> runs,
-        IReadOnlyCollection<AuthenticatedStepSnapshot> steps,
-        IReadOnlyCollection<AuthenticatedFindingSnapshot> findings)
+        BuildTopFindings(
+            IReadOnlyCollection<AuthenticatedRunSnapshot> runs,
+            IReadOnlyCollection<AuthenticatedStepSnapshot> steps,
+            IReadOnlyCollection<AuthenticatedFindingSnapshot> findings)
     {
         Dictionary<int, AuthenticatedRunSnapshot> runsById =
-            runs.ToDictionary(run => run.Id);
+            runs.ToDictionary(run =>
+                run.Id);
 
         Dictionary<int, AuthenticatedStepSnapshot> stepsById =
-            steps.ToDictionary(step => step.Id);
+            steps.ToDictionary(step =>
+                step.Id);
 
         IEnumerable<IGrouping<string, AuthenticatedFindingSnapshot>>
             findingGroups =
@@ -955,41 +1342,51 @@ public sealed class AccessibilityOverviewController : Controller
                             finding.RuleId))
                     .GroupBy(finding =>
                         string.Concat(
-                            finding.RuleId.Trim().ToLowerInvariant(),
+                            finding.RuleId
+                                .Trim()
+                                .ToLowerInvariant(),
                             "|",
-                            finding.FindingType.Trim().ToLowerInvariant()));
+                            finding.FindingType
+                                .Trim()
+                                .ToLowerInvariant()));
 
         List<(
             AccessibilityTopFindingViewModel Finding,
             int Priority)> rankedFindings =
                 new();
 
-        foreach (IGrouping<string, AuthenticatedFindingSnapshot>
-            findingGroup in findingGroups)
+        foreach (
+            IGrouping<string, AuthenticatedFindingSnapshot> findingGroup
+            in findingGroups)
         {
             List<(
                 AuthenticatedFindingSnapshot Finding,
                 AuthenticatedRunSnapshot Run)> occurrences =
                     new();
 
-            foreach (AuthenticatedFindingSnapshot finding
+            foreach (
+                AuthenticatedFindingSnapshot finding
                 in findingGroup)
             {
                 if (!stepsById.TryGetValue(
-                        finding.AuthenticatedAuditStepId,
-                        out AuthenticatedStepSnapshot? step))
+                    finding.AuthenticatedAuditStepId,
+                    out AuthenticatedStepSnapshot? step))
                 {
                     continue;
                 }
 
                 if (!runsById.TryGetValue(
-                        step.AuthenticatedAuditRunId,
-                        out AuthenticatedRunSnapshot? run))
+                    step.AuthenticatedAuditRunId,
+                    out AuthenticatedRunSnapshot? run))
                 {
                     continue;
                 }
 
-                occurrences.Add((finding, run));
+                occurrences.Add(
+                    (
+                        finding,
+                        run
+                    ));
             }
 
             if (occurrences.Count == 0)
@@ -1047,7 +1444,9 @@ public sealed class AccessibilityOverviewController : Controller
                     ApplicationCount =
                         occurrences
                             .Select(occurrence =>
-                                occurrence.Run.ApplicationName.Trim())
+                                occurrence.Run
+                                    .ApplicationName
+                                    .Trim())
                             .Distinct(
                                 StringComparer.OrdinalIgnoreCase)
                             .Count(),
@@ -1101,7 +1500,9 @@ public sealed class AccessibilityOverviewController : Controller
         AuthenticatedFindingSnapshot finding)
     {
         int severityRank =
-            finding.Impact?.Trim().ToLowerInvariant() switch
+            finding.Impact?
+                .Trim()
+                .ToLowerInvariant() switch
             {
                 "critical" => 0,
                 "serious" => 3,
@@ -1111,38 +1512,45 @@ public sealed class AccessibilityOverviewController : Controller
             };
 
         int wcagRank =
-            finding.WcagLevel?.Trim().ToUpperInvariant() switch
+            finding.WcagLevel?
+                .Trim()
+                .ToUpperInvariant() switch
             {
                 "A" => 1,
                 "AA" => 2,
                 _ => 3
             };
 
-        return severityRank + wcagRank;
+        return severityRank +
+               wcagRank;
     }
 
     private static List<AccessibilityTrendPointViewModel>
-    BuildTrendPoints(
-        IReadOnlyCollection<AuthenticatedStepSnapshot> steps,
-        IReadOnlyCollection<AuthenticatedFindingSnapshot> findings)
+        BuildTrendPoints(
+            IReadOnlyCollection<AuthenticatedStepSnapshot> steps,
+            IReadOnlyCollection<AuthenticatedFindingSnapshot> findings)
     {
         Dictionary<int, DateTime> stepDatesById =
             steps.ToDictionary(
-                step => step.Id,
-                step => step.ScannedAt.Date);
+                step =>
+                    step.Id,
+                step =>
+                    step.ScannedAt.Date);
 
         List<DateTime> reportingDates =
             steps
                 .Select(step =>
                     step.ScannedAt.Date)
                 .Distinct()
-                .OrderBy(date => date)
+                .OrderBy(date =>
+                    date)
                 .ToList();
 
         List<AccessibilityTrendPointViewModel> trends =
             new();
 
-        foreach (DateTime reportingDate in reportingDates)
+        foreach (DateTime reportingDate
+            in reportingDates)
         {
             List<AuthenticatedFindingSnapshot> findingsForDate =
                 findings
@@ -1150,7 +1558,8 @@ public sealed class AccessibilityOverviewController : Controller
                         stepDatesById.TryGetValue(
                             finding.AuthenticatedAuditStepId,
                             out DateTime findingDate) &&
-                        findingDate == reportingDate)
+                        findingDate ==
+                        reportingDate)
                     .ToList();
 
             trends.Add(
@@ -1165,10 +1574,12 @@ public sealed class AccessibilityOverviewController : Controller
                             reportingDate),
 
                     AuthenticatedFindings =
-                        findingsForDate.Count(IsViolation),
+                        findingsForDate.Count(
+                            IsViolation),
 
                     FixFirstFindings =
-                        findingsForDate.Count(IsFixFirst)
+                        findingsForDate.Count(
+                            IsFixFirst)
                 });
         }
 
@@ -1176,10 +1587,10 @@ public sealed class AccessibilityOverviewController : Controller
     }
 
     private static AccessibilityOverviewSummaryViewModel
-    BuildSummary(
-        IReadOnlyCollection<AuthenticatedRunSnapshot> runs,
-        IReadOnlyCollection<AuthenticatedStepSnapshot> steps,
-        IReadOnlyCollection<AuthenticatedFindingSnapshot> findings)
+        BuildSummary(
+            IReadOnlyCollection<AuthenticatedRunSnapshot> runs,
+            IReadOnlyCollection<AuthenticatedStepSnapshot> steps,
+            IReadOnlyCollection<AuthenticatedFindingSnapshot> findings)
     {
         List<AuthenticatedFindingSnapshot> violationFindings =
             findings
@@ -1207,28 +1618,38 @@ public sealed class AccessibilityOverviewController : Controller
                     finding.AffectedElementCount),
 
             FixFirstFindings =
-                findings.Count(IsFixFirst),
+                findings.Count(
+                    IsFixFirst),
+
+            /*
+             * This overview intentionally reports authenticated axe-core
+             * workflow results. Public WAVE scan counts are not mixed into
+             * this management metric.
+             */
+            PublicPagesWithFindings =
+                0,
 
             AuthenticatedStatesWithFindings =
                 findings
                     .Select(finding =>
                         finding.AuthenticatedAuditStepId)
                     .Distinct()
-                    .Count(),
+                    .Count()
         };
     }
 
     private static AccessibilityHealthViewModel
-    BuildHealth(
-        IReadOnlyCollection<AuthenticatedStepSnapshot> steps,
-        IReadOnlyCollection<AuthenticatedFindingSnapshot> findings)
+        BuildHealth(
+            IReadOnlyCollection<AuthenticatedStepSnapshot> steps,
+            IReadOnlyCollection<AuthenticatedFindingSnapshot> findings)
     {
         int passedRuleResults =
             steps.Sum(step =>
                 step.PassedRuleCount);
 
         int violationRuleResults =
-            findings.Count(IsViolation);
+            findings.Count(
+                IsViolation);
 
         int needsReviewRuleResults =
             findings.Count(finding =>
@@ -1245,7 +1666,8 @@ public sealed class AccessibilityOverviewController : Controller
         double automatedCheckPassRate =
             totalRuleResults == 0
                 ? 0
-                : passedRuleResults * 100.0 /
+                : passedRuleResults *
+                  100.0 /
                   totalRuleResults;
 
         return new AccessibilityHealthViewModel
@@ -1358,6 +1780,44 @@ public sealed class AccessibilityOverviewController : Controller
         };
     }
 
+    private static string GetFormalVerificationState(
+        int notDetected,
+        int verifiedFromThisRetest)
+    {
+        if (notDetected == 0 ||
+            verifiedFromThisRetest == 0)
+        {
+            return "Applied";
+        }
+
+        if (verifiedFromThisRetest <
+            notDetected)
+        {
+            return "Partially Verified";
+        }
+
+        return "Fully Verified";
+    }
+
+    private static int GetFormalVerificationStateRank(
+        string verificationState)
+    {
+        return verificationState switch
+        {
+            "Applied" =>
+                0,
+
+            "Partially Verified" =>
+                1,
+
+            "Fully Verified" =>
+                2,
+
+            _ =>
+                3
+        };
+    }
+
     private static bool IsViolation(
         AuthenticatedFindingSnapshot finding)
     {
@@ -1370,6 +1830,11 @@ public sealed class AccessibilityOverviewController : Controller
     private static bool IsFixFirst(
         AuthenticatedFindingSnapshot finding)
     {
+        if (!IsViolation(finding))
+        {
+            return false;
+        }
+
         bool isCriticalOrSerious =
             IsImpact(
                 finding.Impact,
@@ -1393,10 +1858,19 @@ public sealed class AccessibilityOverviewController : Controller
     private static bool IsKnownImpact(
         string? impact)
     {
-        return IsImpact(impact, "Critical") ||
-               IsImpact(impact, "Serious") ||
-               IsImpact(impact, "Moderate") ||
-               IsImpact(impact, "Minor");
+        return
+            IsImpact(
+                impact,
+                "Critical") ||
+            IsImpact(
+                impact,
+                "Serious") ||
+            IsImpact(
+                impact,
+                "Moderate") ||
+            IsImpact(
+                impact,
+                "Minor");
     }
 
     private static bool IsImpact(
@@ -1428,12 +1902,23 @@ public sealed class AccessibilityOverviewController : Controller
 
         return normalizedValue switch
         {
-            "critical" => "Critical",
-            "serious" => "Serious",
-            "moderate" => "Moderate",
-            "minor" => "Minor",
-            "unknown" => "Unknown",
-            _ => null
+            "critical" =>
+                "Critical",
+
+            "serious" =>
+                "Serious",
+
+            "moderate" =>
+                "Moderate",
+
+            "minor" =>
+                "Minor",
+
+            "unknown" =>
+                "Unknown",
+
+            _ =>
+                null
         };
     }
 
@@ -1446,10 +1931,17 @@ public sealed class AccessibilityOverviewController : Controller
 
         return normalizedValue switch
         {
-            "A" => "A",
-            "AA" => "AA",
-            "UNMAPPED" => "Unmapped",
-            _ => null
+            "A" =>
+                "A",
+
+            "AA" =>
+                "AA",
+
+            "UNMAPPED" =>
+                "Unmapped",
+
+            _ =>
+                null
         };
     }
 
@@ -1462,10 +1954,17 @@ public sealed class AccessibilityOverviewController : Controller
 
         return normalizedValue switch
         {
-            "violation" => "Violation",
-            "needsreview" => "NeedsReview",
-            "needs review" => "NeedsReview",
-            _ => null
+            "violation" =>
+                "Violation",
+
+            "needsreview" =>
+                "NeedsReview",
+
+            "needs review" =>
+                "NeedsReview",
+
+            _ =>
+                null
         };
     }
 
@@ -1475,6 +1974,15 @@ public sealed class AccessibilityOverviewController : Controller
         return string.IsNullOrWhiteSpace(value)
             ? null
             : value.Trim();
+    }
+
+    private sealed class LatestRetestSnapshot
+    {
+        public int Id { get; init; }
+
+        public int AccessibilityRemediationItemId { get; init; }
+
+        public DateTime RetestedAt { get; init; }
     }
 
     private sealed class AuthenticatedRunSnapshot
@@ -1520,7 +2028,7 @@ public sealed class AccessibilityOverviewController : Controller
             = string.Empty;
 
         public string RuleId { get; init; }
-        = string.Empty;
+            = string.Empty;
 
         public string? Impact { get; init; }
 
