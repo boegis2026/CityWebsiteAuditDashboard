@@ -104,6 +104,19 @@
 
 
 <!-- =========================================================
+     Validation
+     ========================================================= -->
+
+@if (!ViewData.ModelState.IsValid)
+{
+    <div asp-validation-summary="ModelOnly"
+         class="alert alert-danger"
+         role="alert">
+    </div>
+}
+
+
+<!-- =========================================================
      History summary
      ========================================================= -->
 
@@ -118,8 +131,22 @@
         </h2>
 
         <p class="text-muted mb-0">
-            Summary of authenticated audit runs currently saved in
-            the dashboard.
+
+            @if (Model.HasActiveFilters)
+            {
+                <span>
+                    Summary of the audit runs matching the current
+                    history filters.
+                </span>
+            }
+            else
+            {
+                <span>
+                    Summary of authenticated audit runs currently
+                    saved in the dashboard.
+                </span>
+            }
+
         </p>
 
     </div>
@@ -131,7 +158,7 @@
                 row-cols-xl-4
                 g-3">
 
-        <!-- Total Runs -->
+        <!-- Visible runs -->
 
         <div class="col">
 
@@ -140,7 +167,7 @@
                 <div class="card-body">
 
                     <div class="dashboard-card-label">
-                        Total Audit Runs
+                        Audit Runs
                     </div>
 
                     <div class="dashboard-card-value">
@@ -148,7 +175,20 @@
                     </div>
 
                     <div class="small text-muted">
-                        Saved authenticated audits
+
+                        @if (Model.HasActiveFilters)
+                        {
+                            <span>
+                                of @Model.TotalAvailableRuns saved audits
+                            </span>
+                        }
+                        else
+                        {
+                            <span>
+                                Saved authenticated audits
+                            </span>
+                        }
+
                     </div>
 
                 </div>
@@ -266,6 +306,261 @@
 
 
 <!-- =========================================================
+     History filters
+     ========================================================= -->
+
+<section aria-labelledby="history-filters-heading"
+         class="card shadow-sm mb-4">
+
+    <div class="card-header">
+
+        <div class="d-flex
+                    flex-wrap
+                    justify-content-between
+                    align-items-center
+                    gap-2">
+
+            <div>
+
+                <h2 id="history-filters-heading"
+                    class="h5 mb-1">
+                    Audit History Filters
+                </h2>
+
+                <p class="small text-muted mb-0">
+                    Narrow saved audits by application, status, or
+                    audit start date.
+                </p>
+
+            </div>
+
+
+            @if (Model.HasActiveFilters)
+            {
+                <span class="badge
+                             text-bg-primary
+                             px-3
+                             py-2">
+                    Filters Applied
+                </span>
+            }
+
+        </div>
+
+    </div>
+
+
+    <div class="card-body">
+
+        <form method="get"
+              asp-controller="AuthenticatedAudits"
+              asp-action="History">
+
+            <div class="row g-3">
+
+                <!-- Application -->
+
+                <div class="col-12 col-md-6 col-xl-3">
+
+                    <label for="applicationFilter"
+                           class="form-label fw-semibold">
+                        Application
+                    </label>
+
+                    <select id="applicationFilter"
+                            name="applicationFilter"
+                            class="form-select">
+
+                        <option value="">
+                            All applications
+                        </option>
+
+
+                        @foreach (string application
+                            in Model.ApplicationOptions)
+                        {
+                            if (string.Equals(
+                                Model.ApplicationFilter,
+                                application,
+                                StringComparison.OrdinalIgnoreCase))
+                            {
+                                <option value="@application"
+                                        selected>
+                                    @application
+                                </option>
+                            }
+                            else
+                            {
+                                <option value="@application">
+                                    @application
+                                </option>
+                            }
+                        }
+
+                    </select>
+
+                </div>
+
+
+                <!-- Status -->
+
+                <div class="col-12 col-md-6 col-xl-3">
+
+                    <label for="statusFilter"
+                           class="form-label fw-semibold">
+                        Status
+                    </label>
+
+                    <select id="statusFilter"
+                            name="statusFilter"
+                            class="form-select">
+
+                        <option value="">
+                            All statuses
+                        </option>
+
+
+                        @foreach (string status
+                            in Model.StatusOptions)
+                        {
+                            if (string.Equals(
+                                Model.StatusFilter,
+                                status,
+                                StringComparison.OrdinalIgnoreCase))
+                            {
+                                <option value="@status"
+                                        selected>
+                                    @status
+                                </option>
+                            }
+                            else
+                            {
+                                <option value="@status">
+                                    @status
+                                </option>
+                            }
+                        }
+
+                    </select>
+
+                </div>
+
+
+                <!-- From -->
+
+                <div class="col-12 col-md-6 col-xl-3">
+
+                    <label for="startDate"
+                           class="form-label fw-semibold">
+                        From
+                    </label>
+
+                    <input id="startDate"
+                           name="startDate"
+                           type="date"
+                           value="@(Model.StartDate?.ToString("yyyy-MM-dd"))"
+                           class="form-control" />
+
+                    <div class="form-text">
+                        Audit start date
+                    </div>
+
+                </div>
+
+
+                <!-- To -->
+
+                <div class="col-12 col-md-6 col-xl-3">
+
+                    <label for="endDate"
+                           class="form-label fw-semibold">
+                        To
+                    </label>
+
+                    <input id="endDate"
+                           name="endDate"
+                           type="date"
+                           value="@(Model.EndDate?.ToString("yyyy-MM-dd"))"
+                           class="form-control" />
+
+                    <div class="form-text">
+                        Includes the selected day
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="d-flex
+                        flex-wrap
+                        justify-content-between
+                        align-items-center
+                        gap-3
+                        mt-4">
+
+                <div class="small text-muted">
+
+                    @if (Model.HasActiveFilters)
+                    {
+                        <span>
+                            Showing
+                            <strong class="text-body">
+                                @Model.Runs.Count
+                            </strong>
+                            of
+                            <strong class="text-body">
+                                @Model.TotalAvailableRuns
+                            </strong>
+                            audit runs.
+                        </span>
+                    }
+                    else
+                    {
+                        <span>
+                            @Model.TotalAvailableRuns
+                            audit
+                            @(Model.TotalAvailableRuns == 1
+                                ? "run"
+                                : "runs")
+                            available.
+                        </span>
+                    }
+
+                </div>
+
+
+                <div class="d-flex
+                            flex-wrap
+                            gap-2">
+
+                    <button type="submit"
+                            class="btn btn-primary">
+                        Apply Filters
+                    </button>
+
+
+                    @if (Model.HasActiveFilters)
+                    {
+                        <a asp-controller="AuthenticatedAudits"
+                           asp-action="History"
+                           class="btn btn-outline-secondary">
+                            Clear Filters
+                        </a>
+                    }
+
+                </div>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</section>
+
+
+<!-- =========================================================
      Saved reports
      ========================================================= -->
 
@@ -293,16 +588,29 @@
         </div>
 
 
-        @if (Model.Runs.Count > 0)
+        @if (Model.TotalAvailableRuns > 0)
         {
             <span class="badge
                          text-bg-light
                          border
+                         text-dark
                          px-3
                          py-2">
 
-                @Model.Runs.Count
-                report@(Model.Runs.Count == 1 ? "" : "s")
+                @if (Model.HasActiveFilters)
+                {
+                    <span>
+                        @Model.Runs.Count of
+                        @Model.TotalAvailableRuns reports
+                    </span>
+                }
+                else
+                {
+                    <span>
+                        @Model.Runs.Count
+                        report@(Model.Runs.Count == 1 ? "" : "s")
+                    </span>
+                }
 
             </span>
         }
@@ -318,19 +626,39 @@
                         text-center
                         py-5">
 
-                <h3 class="h5">
-                    No Audit Reports Yet
-                </h3>
+                @if (Model.TotalAvailableRuns == 0)
+                {
+                    <h3 class="h5">
+                        No Audit Reports Yet
+                    </h3>
 
-                <p class="text-muted mb-3">
-                    Completed authenticated audits will appear here.
-                </p>
+                    <p class="text-muted mb-3">
+                        Completed authenticated audits will appear here.
+                    </p>
 
-                <a asp-controller="AuthenticatedAudits"
-                   asp-action="Index"
-                   class="btn btn-primary">
-                    Start Authenticated Audit
-                </a>
+                    <a asp-controller="AuthenticatedAudits"
+                       asp-action="Index"
+                       class="btn btn-primary">
+                        Start Authenticated Audit
+                    </a>
+                }
+                else
+                {
+                    <h3 class="h5">
+                        No Audits Match These Filters
+                    </h3>
+
+                    <p class="text-muted mb-3">
+                        Change or clear the current filters to view
+                        other saved audit reports.
+                    </p>
+
+                    <a asp-controller="AuthenticatedAudits"
+                       asp-action="History"
+                       class="btn btn-outline-primary">
+                        Clear Filters
+                    </a>
+                }
 
             </div>
 
@@ -391,22 +719,28 @@
 
                         @foreach (var run in Model.Runs)
                         {
+                            string normalizedStatus =
+                                run.Status?.Trim() ??
+                                string.Empty;
+
+
                             string statusBadgeClass =
-                                run.Status switch
+                                normalizedStatus.ToLowerInvariant()
+                                switch
                                 {
-                                    "Completed" =>
+                                    "completed" =>
                                         "text-bg-success",
 
-                                    "Running" =>
+                                    "running" =>
                                         "text-bg-primary",
 
-                                    "Failed" =>
+                                    "failed" =>
                                         "text-bg-danger",
 
-                                    "Cancelled" =>
+                                    "cancelled" =>
                                         "text-bg-warning",
 
-                                    "Interrupted" =>
+                                    "interrupted" =>
                                         "text-bg-warning",
 
                                     _ =>
@@ -415,21 +749,22 @@
 
 
                             string statusBorderClass =
-                                run.Status switch
+                                normalizedStatus.ToLowerInvariant()
+                                switch
                                 {
-                                    "Completed" =>
+                                    "completed" =>
                                         "border-success",
 
-                                    "Running" =>
+                                    "running" =>
                                         "border-primary",
 
-                                    "Failed" =>
+                                    "failed" =>
                                         "border-danger",
 
-                                    "Cancelled" =>
+                                    "cancelled" =>
                                         "border-warning",
 
-                                    "Interrupted" =>
+                                    "interrupted" =>
                                         "border-warning",
 
                                     _ =>
@@ -441,9 +776,7 @@
                                        @statusBorderClass
                                        border-3">
 
-                                <!-- =================================
-                                     Audit identity
-                                     ================================= -->
+                                <!-- Audit identity -->
 
                                 <td style="min-width: 270px;">
 
@@ -498,9 +831,7 @@
                                 </td>
 
 
-                                <!-- =================================
-                                     Status
-                                     ================================= -->
+                                <!-- Status -->
 
                                 <td>
 
@@ -512,9 +843,7 @@
                                 </td>
 
 
-                                <!-- =================================
-                                     Date
-                                     ================================= -->
+                                <!-- Date -->
 
                                 <td class="text-nowrap">
 
@@ -560,9 +889,7 @@
                                 </td>
 
 
-                                <!-- =================================
-                                     Workflow coverage
-                                     ================================= -->
+                                <!-- Workflow coverage -->
 
                                 <td style="min-width: 190px;">
 
@@ -575,7 +902,9 @@
                                         </span>
 
                                         <span class="small text-muted">
-                                            states
+                                            state@(run.StepCount == 1
+                                                ? ""
+                                                : "s")
                                         </span>
 
                                     </div>
@@ -621,9 +950,7 @@
                                 </td>
 
 
-                                <!-- =================================
-                                     Technical details
-                                     ================================= -->
+                                <!-- Technical details -->
 
                                 <td style="min-width: 140px;">
 
@@ -651,9 +978,7 @@
                                 </td>
 
 
-                                <!-- =================================
-                                     Actions
-                                     ================================= -->
+                                <!-- Actions -->
 
                                 <td class="text-end"
                                     style="min-width: 185px;">
@@ -682,7 +1007,10 @@
                                         </a>
 
 
-                                        @if (run.Status == "Completed")
+                                        @if (string.Equals(
+                                            run.Status,
+                                            "Completed",
+                                            StringComparison.OrdinalIgnoreCase))
                                         {
                                             <a asp-controller="AccessibilityWorkflowRetests"
                                                asp-action="Index"

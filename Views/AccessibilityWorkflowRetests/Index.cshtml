@@ -18,7 +18,7 @@
                 align-items-start
                 gap-3">
 
-        <div style="max-width: 760px;">
+        <div style="max-width: 780px;">
 
             <div class="small
                         fw-bold
@@ -34,9 +34,9 @@
             </h1>
 
             <p class="text-muted mb-0">
-                Compare tracked accessibility findings against a later
-                authenticated workflow audit and record formal retest
-                results.
+                Compare accessibility findings from an earlier
+                authenticated audit against a later audit of the same
+                application. Workflow state counts do not have to match.
             </p>
 
         </div>
@@ -119,9 +119,8 @@
         </h2>
 
         <p class="small text-muted mb-0">
-            Choose the original audit containing tracked findings,
-            then compare it with a later completed audit of the same
-            application.
+            Choose a baseline audit, then compare it with a newer
+            completed audit of the same application.
         </p>
 
     </div>
@@ -192,8 +191,8 @@
                         </select>
 
                         <div class="form-text">
-                            Select the audit where remediation tracking
-                            began.
+                            This audit becomes the baseline for the
+                            comparison.
                         </div>
 
                     </div>
@@ -216,7 +215,7 @@
 
                         <label for="retestAuditRunId"
                                class="form-label fw-semibold">
-                            Retest Audit
+                            Later Audit
                         </label>
 
                         <select id="retestAuditRunId"
@@ -238,7 +237,7 @@
                             else
                             {
                                 <option value="">
-                                    Select retest audit...
+                                    Select later audit...
                                 </option>
                             }
 
@@ -272,8 +271,9 @@
                         </select>
 
                         <div class="form-text">
-                            Only newer completed audits of the same
-                            application are available.
+                            State counts may be different. Matching is
+                            based on the saved page and workflow-state
+                            evidence.
                         </div>
 
                     </div>
@@ -301,7 +301,7 @@
                     else
                     {
                         <span>
-                            Load Compatible Retests
+                            Load Compatible Audits
                         </span>
                     }
 
@@ -337,7 +337,7 @@
 
             <p class="text-muted mb-0">
                 Run another authenticated audit for this application
-                after remediation work is ready to be retested.
+                before creating a comparison.
             </p>
 
         </div>
@@ -371,7 +371,7 @@
                 </h2>
 
                 <p class="text-muted mb-0">
-                    Saved workflow retests associated with Original
+                    Saved remediation retests associated with Original
                     Run #@Model.OriginalAuditRunId.Value.
                 </p>
 
@@ -479,8 +479,6 @@
 
                             <tr>
 
-                                <!-- Retest -->
-
                                 <td>
 
                                     <div class="fw-semibold">
@@ -493,8 +491,6 @@
 
                                 </td>
 
-
-                                <!-- Date -->
 
                                 <td class="text-nowrap">
 
@@ -512,14 +508,10 @@
                                 </td>
 
 
-                                <!-- Tracked -->
-
                                 <td class="text-end fw-semibold">
                                     @history.TotalTracked
                                 </td>
 
-
-                                <!-- Still detected -->
 
                                 <td class="text-end">
 
@@ -540,8 +532,6 @@
                                 </td>
 
 
-                                <!-- Not detected -->
-
                                 <td class="text-end">
 
                                     @if (history.NotDetected > 0)
@@ -561,8 +551,6 @@
                                 </td>
 
 
-                                <!-- Reopened -->
-
                                 <td class="text-end">
 
                                     @if (history.Reopened > 0)
@@ -581,8 +569,6 @@
 
                                 </td>
 
-
-                                <!-- Verification -->
 
                                 <td>
 
@@ -609,8 +595,6 @@
                                 </td>
 
 
-                                <!-- Other -->
-
                                 <td>
 
                                     @if (history.Inconclusive == 0 &&
@@ -626,9 +610,9 @@
                                         {
                                             <div class="small">
 
-                                                <span class="fw-semibold">
+                                                <strong>
                                                     @history.Inconclusive
-                                                </span>
+                                                </strong>
 
                                                 inconclusive
 
@@ -640,9 +624,9 @@
                                         {
                                             <div class="small">
 
-                                                <span class="fw-semibold">
+                                                <strong>
                                                     @history.Failed
-                                                </span>
+                                                </strong>
 
                                                 failed
 
@@ -652,8 +636,6 @@
 
                                 </td>
 
-
-                                <!-- Action -->
 
                                 <td class="text-end">
 
@@ -696,10 +678,11 @@
 
     string comparisonHeadline;
 
-    if (comparison.TotalTracked == 0)
+    if (comparison.TotalCompared == 0)
     {
         comparisonHeadline =
-            "No tracked findings are available for comparison.";
+            "The original audit does not contain saved accessibility " +
+            "findings to compare.";
     }
     else if (comparison.StillDetected == 0 &&
              comparison.Inconclusive == 0 &&
@@ -707,8 +690,8 @@
     {
         comparisonHeadline =
             $"{comparison.NotDetected} of " +
-            $"{comparison.TotalTracked} tracked findings were " +
-            "not detected in the selected retest.";
+            $"{comparison.TotalCompared} findings were not detected " +
+            "in their matched later workflow states.";
     }
     else
     {
@@ -722,10 +705,6 @@
 
     <section aria-labelledby="comparison-results-heading"
              class="mb-4">
-
-        <!-- =================================================
-             Comparison heading
-             ================================================= -->
 
         <div class="d-flex
                     flex-wrap
@@ -759,7 +738,7 @@
                         →
                     </span>
 
-                    Retest Run
+                    Later Run
                     #@comparison.RetestAuditRunId
 
                 </div>
@@ -786,7 +765,7 @@
                    class="btn
                           btn-sm
                           btn-outline-primary">
-                    Retest Audit
+                    Later Audit
                 </a>
 
             </div>
@@ -795,7 +774,127 @@
 
 
         <!-- =================================================
-             Plain-language result
+             Workflow-state coverage
+             ================================================= -->
+
+        <div class="card shadow-sm mb-3">
+
+            <div class="card-header">
+
+                <div class="d-flex
+                            flex-wrap
+                            justify-content-between
+                            align-items-center
+                            gap-2">
+
+                    <h3 class="h5 mb-0">
+                        Workflow State Coverage
+                    </h3>
+
+
+                    @if (comparison.StateCountDiffers)
+                    {
+                        <span class="badge
+                                     text-bg-primary">
+                            State Count Changed
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="badge
+                                     text-bg-success">
+                            Same State Count
+                        </span>
+                    }
+
+                </div>
+
+            </div>
+
+
+            <div class="card-body">
+
+                <div class="row
+                            g-3
+                            align-items-center">
+
+                    <div class="col-12 col-md">
+
+                        <div class="border
+                                    rounded
+                                    p-3">
+
+                            <div class="dashboard-card-label">
+                                Original Workflow
+                            </div>
+
+                            <div class="fs-4 fw-bold">
+                                @comparison.OriginalStateCount
+                                state@(comparison.OriginalStateCount == 1
+                                    ? ""
+                                    : "s")
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="col-auto
+                                d-none
+                                d-md-block
+                                text-muted
+                                fs-4"
+                         aria-hidden="true">
+                        →
+                    </div>
+
+
+                    <div class="col-12 col-md">
+
+                        <div class="border
+                                    rounded
+                                    p-3">
+
+                            <div class="dashboard-card-label">
+                                Later Workflow
+                            </div>
+
+                            <div class="fs-4 fw-bold">
+                                @comparison.RetestStateCount
+                                state@(comparison.RetestStateCount == 1
+                                    ? ""
+                                    : "s")
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                @if (comparison.StateCountDiffers)
+                {
+                    <div class="small
+                                text-muted
+                                mt-3">
+
+                        The workflows contain different numbers of
+                        rendered states. Comparison still continues by
+                        matching each original state to the strongest
+                        corresponding state in the later audit.
+
+                    </div>
+                }
+
+            </div>
+
+        </div>
+
+
+        <!-- =================================================
+             Summary
              ================================================= -->
 
         <div class="card shadow-sm mb-3">
@@ -816,31 +915,33 @@
 
 
         <!-- =================================================
-             Result metrics
+             Metrics
              ================================================= -->
 
         <div class="row
-                    row-cols-1
-                    row-cols-sm-2
-                    row-cols-xl-5
+                    row-cols-2
+                    row-cols-md-3
+                    row-cols-xl-6
                     g-3">
 
             <div class="col">
 
-                <article class="card shadow-sm h-100">
+                <article class="card
+                                shadow-sm
+                                h-100">
 
                     <div class="card-body">
 
                         <div class="dashboard-card-label">
-                            Tracked
+                            Compared
                         </div>
 
                         <div class="dashboard-card-value">
-                            @comparison.TotalTracked
+                            @comparison.TotalCompared
                         </div>
 
                         <div class="small text-muted">
-                            Findings compared
+                            Original findings
                         </div>
 
                     </div>
@@ -871,7 +972,7 @@
                         </div>
 
                         <div class="small text-muted">
-                            Finding remains present
+                            Remains present
                         </div>
 
                     </div>
@@ -902,7 +1003,7 @@
                         </div>
 
                         <div class="small text-muted">
-                            Finding absent from matched state
+                            Absent from matched state
                         </div>
 
                     </div>
@@ -932,7 +1033,7 @@
                         </div>
 
                         <div class="small text-muted">
-                            Could not determine result
+                            Match uncertain
                         </div>
 
                     </div>
@@ -944,12 +1045,14 @@
 
             <div class="col">
 
-                <article class="card shadow-sm h-100">
+                <article class="card
+                                shadow-sm
+                                h-100">
 
                     <div class="card-body">
 
                         <div class="dashboard-card-label">
-                            Scan Failed
+                            Failed
                         </div>
 
                         <div class="dashboard-card-value">
@@ -957,7 +1060,35 @@
                         </div>
 
                         <div class="small text-muted">
-                            Comparison unavailable
+                            Scan unavailable
+                        </div>
+
+                    </div>
+
+                </article>
+
+            </div>
+
+
+            <div class="col">
+
+                <article class="card
+                                shadow-sm
+                                h-100">
+
+                    <div class="card-body">
+
+                        <div class="dashboard-card-label">
+                            Remediation
+                        </div>
+
+                        <div class="dashboard-card-value">
+                            @comparison.TotalTracked
+                        </div>
+
+                        <div class="small text-muted">
+                            tracked ·
+                            @comparison.UntrackedFindingCount untracked
                         </div>
 
                     </div>
@@ -972,7 +1103,7 @@
 
 
     <!-- =====================================================
-         Preview state
+         Preview status
          ===================================================== -->
 
     <div class="card shadow-sm mb-4">
@@ -988,12 +1119,13 @@
                 <div>
 
                     <div class="fw-semibold">
-                        Comparison Preview
+                        Audit Comparison
                     </div>
 
                     <div class="small text-muted">
-                        Review the results below before recording this
-                        comparison as formal retest evidence.
+                        All saved accessibility findings from the
+                        original audit are included whether or not they
+                        are currently in the Remediation Tracker.
                     </div>
 
                 </div>
@@ -1013,9 +1145,10 @@
                     <span class="badge
                                  text-bg-light
                                  border
+                                 text-dark
                                  px-3
                                  py-2">
-                        Preview Only
+                        Comparison Preview
                     </span>
                 }
 
@@ -1027,24 +1160,49 @@
 
 
     <!-- =====================================================
-         Apply formal retest
+         Formal remediation retest
          ===================================================== -->
 
     @if (comparison.TotalTracked == 0)
     {
-        <div class="card shadow-sm mb-4">
+        <div class="card
+                    border-primary
+                    shadow-sm
+                    mb-4">
 
             <div class="card-body">
 
-                <h3 class="h5 mb-1">
-                    No Tracked Findings
-                </h3>
+                <div class="d-flex
+                            flex-wrap
+                            justify-content-between
+                            align-items-start
+                            gap-3">
 
-                <p class="text-muted mb-0">
-                    Start remediation tracking from findings in the
-                    original audit before applying a formal workflow
-                    retest.
-                </p>
+                    <div>
+
+                        <h3 class="h5 mb-1">
+                            Audit Comparison Complete
+                        </h3>
+
+                        <p class="text-muted mb-0">
+                            The audits can be reviewed below, but none
+                            of the original findings are currently
+                            connected to remediation work. A formal
+                            remediation retest is only recorded for
+                            tracked items.
+                        </p>
+
+                    </div>
+
+
+                    <a asp-controller="AuthenticatedAudits"
+                       asp-action="Details"
+                       asp-route-id="@comparison.OriginalAuditRunId"
+                       class="btn btn-outline-primary">
+                        Review Original Audit
+                    </a>
+
+                </div>
 
             </div>
 
@@ -1066,14 +1224,41 @@
                 </h3>
 
                 <p class="small text-muted mb-0">
-                    Save this comparison as historical remediation
-                    retest evidence.
+                    Save retest evidence for the
+                    @comparison.TotalTracked tracked remediation
+                    item@(comparison.TotalTracked == 1 ? "" : "s")
+                    included in this comparison.
                 </p>
 
             </div>
 
 
             <div class="card-body">
+
+                @if (comparison.UntrackedFindingCount > 0)
+                {
+                    <div class="alert
+                                alert-info
+                                mb-4">
+
+                        <strong>
+                            @comparison.UntrackedFindingCount
+                            comparison
+                            finding@(comparison.UntrackedFindingCount == 1
+                                ? " is"
+                                : "s are")
+                            not tracked.
+                        </strong>
+
+                        <div class="mt-1">
+                            Those findings remain visible in the
+                            read-only comparison but will not be written
+                            as formal remediation retest records.
+                        </div>
+
+                    </div>
+                }
+
 
                 <div class="alert
                             alert-warning
@@ -1084,9 +1269,9 @@
                     </strong>
 
                     <div class="mt-2">
-                        A formal retest record will be saved for each
-                        tracked remediation item in this comparison.
-                        Findings detected again may return to
+                        A formal retest will be saved for the tracked
+                        remediation items. Findings detected again may
+                        return to
                         <strong>In Progress</strong>.
                     </div>
 
@@ -1123,11 +1308,6 @@
                                   maxlength="4000"
                                   class="form-control"
                                   placeholder="Optional notes about this workflow retest..."></textarea>
-
-                        <div class="form-text">
-                            Notes are stored with the formal retest
-                            record.
-                        </div>
 
                     </div>
 
@@ -1170,9 +1350,8 @@
 
                 <p class="text-muted mb-0">
                     Retest Run #@comparison.RetestAuditRunId has
-                    already been recorded as formal evidence for these
-                    tracked remediation items. The comparison remains
-                    available below for review.
+                    already been recorded as formal evidence for the
+                    tracked remediation items in this comparison.
                 </p>
 
             </div>
@@ -1182,10 +1361,10 @@
 
 
     <!-- =====================================================
-         Finding-by-finding comparison
+         Finding comparison
          ===================================================== -->
 
-    <section aria-labelledby="tracked-comparison-heading"
+    <section aria-labelledby="finding-comparison-heading"
              class="mb-4">
 
         <div class="d-flex
@@ -1197,13 +1376,13 @@
 
             <div>
 
-                <h2 id="tracked-comparison-heading"
+                <h2 id="finding-comparison-heading"
                     class="h3 mb-1">
                     Finding Comparison
                 </h2>
 
                 <p class="text-muted mb-0">
-                    Each tracked finding compared against its best
+                    Each original finding compared against its strongest
                     matching state in the later workflow audit.
                 </p>
 
@@ -1215,6 +1394,7 @@
                 <span class="badge
                              text-bg-light
                              border
+                             text-dark
                              px-3
                              py-2">
 
@@ -1235,8 +1415,13 @@
             {
                 <div class="card-body">
 
+                    <h3 class="h6 mb-1">
+                        No Accessibility Findings to Compare
+                    </h3>
+
                     <p class="text-muted mb-0">
-                        No tracked finding comparisons are available.
+                        The selected original audit does not contain
+                        saved violation or manual-review findings.
                     </p>
 
                 </div>
@@ -1251,8 +1436,8 @@
                                   mb-0">
 
                         <caption class="visually-hidden">
-                            Comparison of tracked remediation findings
-                            against the selected workflow retest
+                            Accessibility finding comparison between
+                            the original and later workflow audits
                         </caption>
 
 
@@ -1269,7 +1454,7 @@
                                 </th>
 
                                 <th scope="col">
-                                    Matched Retest State
+                                    Matched Later State
                                 </th>
 
                                 <th scope="col">
@@ -1365,8 +1550,11 @@
                                             .WontFix =>
                                                 "Won't Fix",
 
+                                        null =>
+                                                "Not Tracked",
+
                                         _ =>
-                                            item.CurrentStatus.ToString()
+                                                "Tracked"
                                     };
 
 
@@ -1389,8 +1577,15 @@
                                             .Verified =>
                                                 "text-bg-success",
 
+                                        AccessibilityRemediationStatus
+                                            .WontFix =>
+                                                "text-bg-secondary",
+
+                                        null =>
+                                                "text-bg-light border text-dark",
+
                                         _ =>
-                                            "text-bg-secondary"
+                                                "text-bg-secondary"
                                     };
 
 
@@ -1398,7 +1593,7 @@
 
                                     <!-- Finding -->
 
-                                    <td style="min-width: 210px;">
+                                    <td style="min-width: 220px;">
 
                                         <div class="fw-semibold">
                                             @item.RuleId
@@ -1436,20 +1631,31 @@
                                         }
 
 
-                                        <div class="small mt-1">
+                                        <div class="mt-2">
 
-                                            <span class="text-muted">
-                                                Remediation
-                                            </span>
-
-                                            #@item.RemediationItemId
+                                            @if (item.IsTracked)
+                                            {
+                                                <span class="badge
+                                                             text-bg-primary">
+                                                    Tracked
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge
+                                                             text-bg-light
+                                                             border
+                                                             text-dark">
+                                                    Not Tracked
+                                                </span>
+                                            }
 
                                         </div>
 
                                     </td>
 
 
-                                    <!-- Original -->
+                                    <!-- Original state -->
 
                                     <td style="min-width: 200px;">
 
@@ -1484,9 +1690,9 @@
                                     </td>
 
 
-                                    <!-- Retest -->
+                                    <!-- Later state -->
 
-                                    <td style="min-width: 210px;">
+                                    <td style="min-width: 215px;">
 
                                         @if (item.RetestStepNumber.HasValue)
                                         {
@@ -1540,10 +1746,18 @@
                                         }
                                         else
                                         {
-                                            <span class="text-muted">
-                                                No sufficiently matching
-                                                state
+                                            <span class="badge
+                                                         text-bg-warning">
+                                                State Not Matched
                                             </span>
+
+                                            <div class="small
+                                                        text-muted
+                                                        mt-2">
+                                                No sufficiently similar
+                                                state was found in the
+                                                later workflow.
+                                            </div>
                                         }
 
                                     </td>
@@ -1551,7 +1765,7 @@
 
                                     <!-- Result -->
 
-                                    <td style="min-width: 165px;">
+                                    <td style="min-width: 170px;">
 
                                         <span class="badge
                                                      @resultBadgeClass">
@@ -1562,11 +1776,18 @@
                                         @if (!string.IsNullOrWhiteSpace(
                                             item.Message))
                                         {
-                                            <div class="small
-                                                        text-muted
-                                                        mt-2">
-                                                @item.Message
-                                            </div>
+                                            <details class="small mt-2">
+
+                                                <summary>
+                                                    Result Details
+                                                </summary>
+
+                                                <div class="text-muted
+                                                            mt-2">
+                                                    @item.Message
+                                                </div>
+
+                                            </details>
                                         }
 
                                     </td>
@@ -1574,7 +1795,7 @@
 
                                     <!-- Match -->
 
-                                    <td style="min-width: 135px;">
+                                    <td style="min-width: 145px;">
 
                                         @if (item.MatchConfidence > 0m)
                                         {
@@ -1593,10 +1814,37 @@
                                         @if (!string.IsNullOrWhiteSpace(
                                             item.MatchMethod))
                                         {
-                                            <div class="small
-                                                        text-muted">
-                                                @item.MatchMethod
-                                            </div>
+                                            <details class="small mt-1">
+
+                                                <summary>
+                                                    Technical
+                                                </summary>
+
+                                                <div class="text-muted
+                                                            mt-1">
+                                                    @item.MatchMethod
+                                                </div>
+
+
+                                                <div class="text-muted
+                                                            mt-1">
+                                                    Original Finding
+                                                    #@item.OriginalAuthenticatedAuditFindingId
+                                                </div>
+
+
+                                                @if (item
+                                                    .MatchedAuthenticatedAuditFindingId
+                                                    .HasValue)
+                                                {
+                                                    <div class="text-muted
+                                                                mt-1">
+                                                        Later Finding
+                                                        #@item.MatchedAuthenticatedAuditFindingId.Value
+                                                    </div>
+                                                }
+
+                                            </details>
                                         }
 
                                     </td>
@@ -1604,7 +1852,7 @@
 
                                     <!-- Remediation -->
 
-                                    <td style="min-width: 180px;">
+                                    <td style="min-width: 185px;">
 
                                         <div class="mb-2">
 
@@ -1616,14 +1864,26 @@
                                         </div>
 
 
-                                        <a asp-controller="AccessibilityRemediations"
-                                           asp-action="Details"
-                                           asp-route-id="@item.RemediationItemId"
-                                           class="btn
-                                                  btn-sm
-                                                  btn-outline-primary">
-                                            View Remediation
-                                        </a>
+                                        @if (item.IsTracked &&
+                                             item.RemediationItemId.HasValue)
+                                        {
+                                            <a asp-controller="AccessibilityRemediations"
+                                               asp-action="Details"
+                                               asp-route-id="@item.RemediationItemId.Value"
+                                               class="btn
+                                                      btn-sm
+                                                      btn-outline-primary">
+                                                View Remediation
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <div class="small text-muted">
+                                                This finding has not
+                                                been added to the
+                                                Remediation Tracker.
+                                            </div>
+                                        }
 
                                     </td>
 
@@ -1658,6 +1918,7 @@
                     return;
                 }
 
+
                 form.addEventListener(
                     "submit",
                     function (event) {
@@ -1665,10 +1926,11 @@
                         const confirmed =
                             window.confirm(
                                 "Record this comparison as a formal workflow retest? " +
-                                "This will save retest evidence and may move " +
-                                "remediation items back to In Progress if they " +
-                                "are detected again."
+                                "This will save retest evidence for tracked " +
+                                "remediation items and may move detected items " +
+                                "back to In Progress."
                             );
+
 
                         if (!confirmed) {
                             event.preventDefault();

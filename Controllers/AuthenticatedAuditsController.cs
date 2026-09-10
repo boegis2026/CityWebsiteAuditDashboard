@@ -130,53 +130,239 @@ public sealed class AuthenticatedAuditsController : Controller
 
     [HttpGet]
     public async Task<IActionResult> History(
+    string? applicationFilter,
+    string? statusFilter,
+    DateTime? startDate,
+    DateTime? endDate,
     CancellationToken cancellationToken)
     {
         /*
-         * This is a read only dashboard query, so change tracking is disabled.
-         * The summary is projected directly in SQL rather than loading every
-         * AuthenticatedAuditStep entity into memory.
+         * Audit History is read-only.
+         *
+         * Filter values are applied only to the history query and do not
+         * affect any authenticated browser session or scanner behavior.
+         */
+
+        applicationFilter =
+            string.IsNullOrWhiteSpace(applicationFilter)
+                ? null
+                : applicationFilter.Trim();
+
+        statusFilter =
+            string.IsNullOrWhiteSpace(statusFilter)
+                ? null
+                : statusFilter.Trim();
+
+
+        IQueryable<AuthenticatedAuditRun> baseQuery =
+            _dbContext.AuthenticatedAuditRuns
+                .AsNoTracking();
+
+
+        /*
+         * Build filter choices from all saved audit runs rather than from
+         * the already-filtered result set.
+         */
+        List<string> applicationOptions =
+            await baseQuery
+                .Where(run =>
+                    run.ApplicationName != null &&
+                    run.ApplicationName != "")
+                .Select(run =>
+                    run.ApplicationName)
+                .Distinct()
+                .OrderBy(applicationName =>
+                    applicationName)
+                .ToListAsync(
+                    cancellationToken);
+
+
+        List<string> statusOptions =
+            await baseQuery
+                .Where(run =>
+                    run.Status != null &&
+                    run.Status != "")
+                .Select(run =>
+                    run.Status)
+                .Distinct()
+                .OrderBy(status =>
+                    status)
+                .ToListAsync(
+                    cancellationToken);
+
+
+        int totalAvailableRuns =
+            await baseQuery.CountAsync(
+                cancellationToken);
+
+
+        /*
+         * Validate the requested date range.
+         *
+         * Dates correspond to the audit StartedAt value displayed on the
+         * history page.
+         */
+        if (startDate.HasValue &&
+            endDate.HasValue &&
+            endDate.Value.Date <
+            startDate.Value.Date)
+        {
+            ModelState.AddModelError(
+                string.Empty,
+                "The To date must be on or after the From date.");
+        }
+
+
+        IQueryable<AuthenticatedAuditRun> filteredQuery =
+            baseQuery;
+
+
+        if (!string.IsNullOrWhiteSpace(
+            applicationFilter))
+        {
+            filteredQuery =
+                filteredQuery.Where(run =>
+                    run.ApplicationName ==
+                    applicationFilter);
+        }
+
+
+        if (!string.IsNullOrWhiteSpace(
+            statusFilter))
+        {
+            filteredQuery =
+                filteredQuery.Where(run =>
+                    run.Status ==
+                    statusFilter);
+        }
+
+
+        if (startDate.HasValue)
+        {
+            DateTime startBoundary =
+                startDate.Value.Date;
+
+            filteredQuery =
+                filteredQuery.Where(run =>
+                    run.StartedAt >=
+                    startBoundary);
+        }
+
+
+        /*
+         * Treat the To date as inclusive.
+         *
+         * Example:
+         *     To = September 9
+         *
+         * includes everything before:
+         *     September 10 at 12:00 AM.
+         */
+        if (endDate.HasValue &&
+            (!startDate.HasValue ||
+             endDate.Value.Date >=
+             startDate.Value.Date))
+        {
+            DateTime endBoundaryExclusive =
+                endDate.Value.Date.AddDays(1);
+
+            filteredQuery =
+                filteredQuery.Where(run =>
+                    run.StartedAt <
+                    endBoundaryExclusive);
+        }
+
+
+        /*
+         * Project only the data required by the history page.
          */
         List<AuthenticatedAuditRunSummaryViewModel> runs =
-            await _dbContext.AuthenticatedAuditRuns
-                .AsNoTracking()
-                .OrderByDescending(run => run.StartedAt)
-                .Select(run => new AuthenticatedAuditRunSummaryViewModel
-                {
-                    Id = run.Id,
-                    ApplicationName = run.ApplicationName,
-                    StartingUrl = run.StartingUrl,
-                    AccessibilityEngine = run.AccessibilityEngine,
-                    StartedAt = run.StartedAt,
-                    CompletedAt = run.CompletedAt,
-                    Status = run.Status,
+            await filteredQuery
+                .OrderByDescending(run =>
+                    run.StartedAt)
+                .ThenByDescending(run =>
+                    run.Id)
+                .Select(run =>
+                    new AuthenticatedAuditRunSummaryViewModel
+                    {
+                        Id =
+                            run.Id,
 
-                    StepCount = run.Steps.Count,
+                        ApplicationName =
+                            run.ApplicationName,
 
-                    SuccessfulStepCount =
-                        run.Steps.Count(step => step.ScanSucceeded),
+                        StartingUrl =
+                            run.StartingUrl,
 
-                    FailedStepCount =
-                        run.Steps.Count(step => !step.ScanSucceeded),
+                        AccessibilityEngine =
+                            run.AccessibilityEngine,
 
-                    /*
-                     * A run may have no final marker when the browser crashed,
-                     * the application stopped unexpectedly, or no step was
-                     * scanned before the session ended.
-                     */
-                    FinalStepNumber = run.Steps
-                        .Where(step => step.WasFinalStep)
-                        .Select(step => (int?)step.StepNumber)
-                        .FirstOrDefault(),
+                        StartedAt =
+                            run.StartedAt,
 
-                    ErrorMessage = run.ErrorMessage
-                })
-                .ToListAsync(cancellationToken);
+                        CompletedAt =
+                            run.CompletedAt,
+
+                        Status =
+                            run.Status,
+
+                        StepCount =
+                            run.Steps.Count,
+
+                        SuccessfulStepCount =
+                            run.Steps.Count(step =>
+                                step.ScanSucceeded),
+
+                        FailedStepCount =
+                            run.Steps.Count(step =>
+                                !step.ScanSucceeded),
+
+                        /*
+                         * A run may have no final marker when the browser
+                         * crashed, the application stopped unexpectedly,
+                         * or no state was scanned before the session ended.
+                         */
+                        FinalStepNumber =
+                            run.Steps
+                                .Where(step =>
+                                    step.WasFinalStep)
+                                .Select(step =>
+                                    (int?)step.StepNumber)
+                                .FirstOrDefault(),
+
+                        ErrorMessage =
+                            run.ErrorMessage
+                    })
+                .ToListAsync(
+                    cancellationToken);
+
 
         return View(
             new AuthenticatedAuditHistoryViewModel
             {
-                Runs = runs
+                Runs =
+                    runs,
+
+                ApplicationFilter =
+                    applicationFilter,
+
+                StatusFilter =
+                    statusFilter,
+
+                StartDate =
+                    startDate?.Date,
+
+                EndDate =
+                    endDate?.Date,
+
+                ApplicationOptions =
+                    applicationOptions,
+
+                StatusOptions =
+                    statusOptions,
+
+                TotalAvailableRuns =
+                    totalAvailableRuns
             });
     }
 

@@ -15,15 +15,13 @@ public sealed class AccessibilityRemediationMatcher
         _dbContext = dbContext;
     }
 
+
     /// <summary>
     /// Finds the most likely matching rendered workflow state in a later
     /// authenticated audit run.
     ///
-    /// For a normal single-state retest, originalAuthenticatedAuditFindingId
-    /// may be null and the remediation item's earliest occurrence is used.
-    ///
-    /// For a formal full-workflow retest, the exact finding from the selected
-    /// original audit run should be supplied.
+    /// Existing remediation-based entry point used by current-state and
+    /// formal remediation retesting.
     /// </summary>
     public async Task<AccessibilityRemediationStateMatch?>
         FindBestMatchingStepAsync(
@@ -32,26 +30,29 @@ public sealed class AccessibilityRemediationMatcher
             CancellationToken cancellationToken = default,
             int? originalAuthenticatedAuditFindingId = null)
     {
-        AccessibilityRemediationFindingOccurrence? originalOccurrence =
-            await _dbContext.AccessibilityRemediationFindingOccurrences
-                .AsNoTracking()
-                .Where(occurrence =>
-                    occurrence.AccessibilityRemediationItemId ==
-                        remediationItemId &&
-                    (!originalAuthenticatedAuditFindingId.HasValue ||
-                     occurrence.AuthenticatedAuditFindingId ==
-                        originalAuthenticatedAuditFindingId.Value))
-                .OrderBy(occurrence =>
-                    occurrence.LinkedAt)
-                .ThenBy(occurrence =>
-                    occurrence.Id)
-                .Include(occurrence =>
-                    occurrence.AuthenticatedAuditFinding)
-                    .ThenInclude(finding =>
-                        finding.AuthenticatedAuditStep)
-                        .ThenInclude(step =>
-                            step.AuthenticatedAuditRun)
-                .FirstOrDefaultAsync(cancellationToken);
+        AccessibilityRemediationFindingOccurrence?
+            originalOccurrence =
+                await _dbContext
+                    .AccessibilityRemediationFindingOccurrences
+                    .AsNoTracking()
+                    .Where(occurrence =>
+                        occurrence.AccessibilityRemediationItemId ==
+                            remediationItemId &&
+                        (!originalAuthenticatedAuditFindingId.HasValue ||
+                         occurrence.AuthenticatedAuditFindingId ==
+                            originalAuthenticatedAuditFindingId.Value))
+                    .OrderBy(occurrence =>
+                        occurrence.LinkedAt)
+                    .ThenBy(occurrence =>
+                        occurrence.Id)
+                    .Include(occurrence =>
+                        occurrence.AuthenticatedAuditFinding)
+                        .ThenInclude(finding =>
+                            finding.AuthenticatedAuditStep)
+                            .ThenInclude(step =>
+                                step.AuthenticatedAuditRun)
+                    .FirstOrDefaultAsync(
+                        cancellationToken);
 
         if (originalOccurrence is null)
         {
@@ -63,6 +64,218 @@ public sealed class AccessibilityRemediationMatcher
                 .AuthenticatedAuditFinding
                 .AuthenticatedAuditStep;
 
+        return await FindBestMatchingStepForLoadedStepAsync(
+            originalStep,
+            authenticatedAuditRunId,
+            cancellationToken);
+    }
+
+
+    /// <summary>
+    /// Finds the best matching workflow state for an original saved
+    /// accessibility finding without requiring that finding to already
+    /// belong to a remediation item.
+    ///
+    /// This is used by audit-to-audit comparison previews.
+    /// </summary>
+    public async Task<AccessibilityRemediationStateMatch?>
+        FindBestMatchingStepForFindingAsync(
+            int originalAuthenticatedAuditFindingId,
+            int authenticatedAuditRunId,
+            CancellationToken cancellationToken = default)
+    {
+        AuthenticatedAuditFinding? originalFinding =
+            await _dbContext.AuthenticatedAuditFindings
+                .AsNoTracking()
+                .Include(finding =>
+                    finding.AuthenticatedAuditStep)
+                    .ThenInclude(step =>
+                        step.AuthenticatedAuditRun)
+                .FirstOrDefaultAsync(
+                    finding =>
+                        finding.Id ==
+                            originalAuthenticatedAuditFindingId,
+                    cancellationToken);
+
+        if (originalFinding is null)
+        {
+            return null;
+        }
+
+        return await FindBestMatchingStepForLoadedStepAsync(
+            originalFinding.AuthenticatedAuditStep,
+            authenticatedAuditRunId,
+            cancellationToken);
+    }
+
+
+    /// <summary>
+    /// Finds the best matching state for an original workflow state
+    /// without requiring any accessibility finding or remediation item.
+    ///
+    /// This allows workflow comparisons when the number or ordering of
+    /// states changes between audit runs.
+    /// </summary>
+    public async Task<AccessibilityRemediationStateMatch?>
+        FindBestMatchingStepForStepAsync(
+            int originalAuthenticatedAuditStepId,
+            int authenticatedAuditRunId,
+            CancellationToken cancellationToken = default)
+    {
+        AuthenticatedAuditStep? originalStep =
+            await _dbContext.AuthenticatedAuditSteps
+                .AsNoTracking()
+                .Include(step =>
+                    step.AuthenticatedAuditRun)
+                .FirstOrDefaultAsync(
+                    step =>
+                        step.Id ==
+                            originalAuthenticatedAuditStepId,
+                    cancellationToken);
+
+        if (originalStep is null)
+        {
+            return null;
+        }
+
+        return await FindBestMatchingStepForLoadedStepAsync(
+            originalStep,
+            authenticatedAuditRunId,
+            cancellationToken);
+    }
+
+
+    /// <summary>
+    /// Existing remediation-based finding comparison.
+    /// </summary>
+    public async Task<AccessibilityRemediationMatchResult>
+        MatchAsync(
+            int remediationItemId,
+            int authenticatedAuditStepId,
+            CancellationToken cancellationToken = default,
+            int? originalAuthenticatedAuditFindingId = null)
+    {
+        AccessibilityRemediationFindingOccurrence?
+            originalOccurrence =
+                await _dbContext
+                    .AccessibilityRemediationFindingOccurrences
+                    .AsNoTracking()
+                    .Where(occurrence =>
+                        occurrence.AccessibilityRemediationItemId ==
+                            remediationItemId &&
+                        (!originalAuthenticatedAuditFindingId.HasValue ||
+                         occurrence.AuthenticatedAuditFindingId ==
+                            originalAuthenticatedAuditFindingId.Value))
+                    .OrderBy(occurrence =>
+                        occurrence.LinkedAt)
+                    .ThenBy(occurrence =>
+                        occurrence.Id)
+                    .Include(occurrence =>
+                        occurrence.AuthenticatedAuditFinding)
+                        .ThenInclude(finding =>
+                            finding.Nodes)
+                    .Include(occurrence =>
+                        occurrence.AuthenticatedAuditFinding)
+                        .ThenInclude(finding =>
+                            finding.AuthenticatedAuditStep)
+                            .ThenInclude(step =>
+                                step.AuthenticatedAuditRun)
+                    .FirstOrDefaultAsync(
+                        cancellationToken);
+
+        if (originalOccurrence is null)
+        {
+            return AccessibilityRemediationMatchResult
+                .Inconclusive(
+                    "OriginalFindingMissing",
+                    "The original tracked finding could not be loaded.");
+        }
+
+        AuthenticatedAuditStep? retestStep =
+            await LoadRetestStepAsync(
+                authenticatedAuditStepId,
+                cancellationToken);
+
+        if (retestStep is null)
+        {
+            throw new InvalidOperationException(
+                "The authenticated audit step used for the " +
+                "retest could not be found.");
+        }
+
+        return CompareLoadedFinding(
+            originalOccurrence
+                .AuthenticatedAuditFinding,
+            retestStep);
+    }
+
+
+    /// <summary>
+    /// Compares one saved original audit finding against a later
+    /// authenticated workflow state without requiring remediation
+    /// tracking.
+    ///
+    /// This is the audit-comparison equivalent of MatchAsync.
+    /// </summary>
+    public async Task<AccessibilityRemediationMatchResult>
+        MatchFindingAsync(
+            int originalAuthenticatedAuditFindingId,
+            int authenticatedAuditStepId,
+            CancellationToken cancellationToken = default)
+    {
+        AuthenticatedAuditFinding? originalFinding =
+            await _dbContext.AuthenticatedAuditFindings
+                .AsNoTracking()
+                .Include(finding =>
+                    finding.Nodes)
+                .Include(finding =>
+                    finding.AuthenticatedAuditStep)
+                    .ThenInclude(step =>
+                        step.AuthenticatedAuditRun)
+                .FirstOrDefaultAsync(
+                    finding =>
+                        finding.Id ==
+                            originalAuthenticatedAuditFindingId,
+                    cancellationToken);
+
+        if (originalFinding is null)
+        {
+            return AccessibilityRemediationMatchResult
+                .Inconclusive(
+                    "OriginalFindingMissing",
+                    "The original audit finding could not be loaded.");
+        }
+
+        AuthenticatedAuditStep? retestStep =
+            await LoadRetestStepAsync(
+                authenticatedAuditStepId,
+                cancellationToken);
+
+        if (retestStep is null)
+        {
+            throw new InvalidOperationException(
+                "The authenticated audit step used for the " +
+                "comparison could not be found.");
+        }
+
+        return CompareLoadedFinding(
+            originalFinding,
+            retestStep);
+    }
+
+
+    /// <summary>
+    /// Loads candidate states from the later audit and chooses the state
+    /// that most closely represents the original rendered state.
+    ///
+    /// State count and step number do not have to match.
+    /// </summary>
+    private async Task<AccessibilityRemediationStateMatch?>
+        FindBestMatchingStepForLoadedStepAsync(
+            AuthenticatedAuditStep originalStep,
+            int authenticatedAuditRunId,
+            CancellationToken cancellationToken)
+    {
         List<AuthenticatedAuditStep> candidateSteps =
             await _dbContext.AuthenticatedAuditSteps
                 .AsNoTracking()
@@ -71,14 +284,16 @@ public sealed class AccessibilityRemediationMatcher
                         authenticatedAuditRunId)
                 .Include(step =>
                     step.AuthenticatedAuditRun)
-                .ToListAsync(cancellationToken);
+                .ToListAsync(
+                    cancellationToken);
 
         var bestMatch =
             candidateSteps
                 .Select(step =>
                     new
                     {
-                        Step = step,
+                        Step =
+                            step,
 
                         Confidence =
                             GetStateConfidence(
@@ -91,9 +306,23 @@ public sealed class AccessibilityRemediationMatcher
                     candidate.Confidence)
 
                 /*
-                 * Step number is only a tie-breaker.
-                 * It is not treated as the workflow-state identity because
-                 * workflows can gain or lose intermediate states between runs.
+                 * Step number is deliberately only a tie-breaker.
+                 *
+                 * Example:
+                 *
+                 * Original audit:
+                 *     Step 1
+                 *     Step 2
+                 *     Step 3
+                 *
+                 * Later audit:
+                 *     Step 1
+                 *     NEW Step 2
+                 *     old Step 2 now becomes Step 3
+                 *     old Step 3 now becomes Step 4
+                 *
+                 * URL / heading / title / DOM evidence determines the
+                 * state identity. The numeric position does not.
                  */
                 .ThenBy(candidate =>
                     Math.Abs(
@@ -127,78 +356,51 @@ public sealed class AccessibilityRemediationMatcher
         };
     }
 
+
     /// <summary>
-    /// Compares one tracked accessibility finding against a newly scanned
-    /// authenticated workflow state.
-    ///
-    /// NotDetected is returned only when the rendered state is matched with
-    /// sufficient confidence and the tracked rule is absent.
+    /// Loads one later workflow state together with the findings and
+    /// affected elements needed for finding-level comparison.
     /// </summary>
-    public async Task<AccessibilityRemediationMatchResult>
-        MatchAsync(
-            int remediationItemId,
+    private async Task<AuthenticatedAuditStep?>
+        LoadRetestStepAsync(
             int authenticatedAuditStepId,
-            CancellationToken cancellationToken = default,
-            int? originalAuthenticatedAuditFindingId = null)
+            CancellationToken cancellationToken)
     {
-        AccessibilityRemediationFindingOccurrence? originalOccurrence =
-            await _dbContext.AccessibilityRemediationFindingOccurrences
-                .AsNoTracking()
-                .Where(occurrence =>
-                    occurrence.AccessibilityRemediationItemId ==
-                        remediationItemId &&
-                    (!originalAuthenticatedAuditFindingId.HasValue ||
-                     occurrence.AuthenticatedAuditFindingId ==
-                        originalAuthenticatedAuditFindingId.Value))
-                .OrderBy(occurrence =>
-                    occurrence.LinkedAt)
-                .ThenBy(occurrence =>
-                    occurrence.Id)
-                .Include(occurrence =>
-                    occurrence.AuthenticatedAuditFinding)
-                    .ThenInclude(finding =>
-                        finding.Nodes)
-                .Include(occurrence =>
-                    occurrence.AuthenticatedAuditFinding)
-                    .ThenInclude(finding =>
-                        finding.AuthenticatedAuditStep)
-                        .ThenInclude(step =>
-                            step.AuthenticatedAuditRun)
-                .FirstOrDefaultAsync(cancellationToken);
+        return await _dbContext.AuthenticatedAuditSteps
+            .AsNoTracking()
+            .Include(step =>
+                step.AuthenticatedAuditRun)
+            .Include(step =>
+                step.Findings)
+                .ThenInclude(finding =>
+                    finding.Nodes)
+            .FirstOrDefaultAsync(
+                step =>
+                    step.Id ==
+                        authenticatedAuditStepId,
+                cancellationToken);
+    }
 
-        if (originalOccurrence is null)
-        {
-            return AccessibilityRemediationMatchResult.Inconclusive(
-                "OriginalFindingMissing",
-                "The original tracked finding could not be loaded.");
-        }
 
-        AuthenticatedAuditStep? retestStep =
-            await _dbContext.AuthenticatedAuditSteps
-                .AsNoTracking()
-                .Include(step =>
-                    step.AuthenticatedAuditRun)
-                .Include(step =>
-                    step.Findings)
-                    .ThenInclude(finding =>
-                        finding.Nodes)
-                .FirstOrDefaultAsync(
-                    step =>
-                        step.Id == authenticatedAuditStepId,
-                    cancellationToken);
-
-        if (retestStep is null)
-        {
-            throw new InvalidOperationException(
-                "The authenticated audit step used for the retest could not be found.");
-        }
-
+    /// <summary>
+    /// Performs the actual finding-level comparison once the original
+    /// finding and later state have been loaded.
+    ///
+    /// Both remediation-based retesting and ordinary audit comparison use
+    /// this exact logic so the two features cannot disagree.
+    /// </summary>
+    private static AccessibilityRemediationMatchResult
+        CompareLoadedFinding(
+            AuthenticatedAuditFinding originalFinding,
+            AuthenticatedAuditStep retestStep)
+    {
         if (!retestStep.ScanSucceeded)
         {
             return new AccessibilityRemediationMatchResult
             {
                 Result =
-                    AccessibilityRemediationRetestResult.Failed,
+                    AccessibilityRemediationRetestResult
+                        .Failed,
 
                 MatchMethod =
                     "ScanFailed",
@@ -209,29 +411,33 @@ public sealed class AccessibilityRemediationMatcher
                 Message =
                     string.IsNullOrWhiteSpace(
                         retestStep.ErrorMessage)
-                            ? "The accessibility retest scan did not complete successfully."
-                            : "The accessibility retest scan failed: " +
-                              retestStep.ErrorMessage
+                        ? "The accessibility retest scan did not " +
+                          "complete successfully."
+                        : "The accessibility retest scan failed: " +
+                          retestStep.ErrorMessage
             };
         }
 
-        AuthenticatedAuditFinding originalFinding =
-            originalOccurrence.AuthenticatedAuditFinding;
 
         AuthenticatedAuditStep originalStep =
             originalFinding.AuthenticatedAuditStep;
+
 
         decimal stateConfidence =
             GetStateConfidence(
                 originalStep,
                 retestStep);
 
+
         if (stateConfidence == 0m)
         {
-            return AccessibilityRemediationMatchResult.Inconclusive(
-                "StateMismatch",
-                "The scanned page or workflow state does not appear to match the original finding.");
+            return AccessibilityRemediationMatchResult
+                .Inconclusive(
+                    "StateMismatch",
+                    "The scanned page or workflow state does not " +
+                    "appear to match the original finding.");
         }
+
 
         AuthenticatedAuditFinding? matchingRule =
             retestStep.Findings
@@ -245,25 +451,31 @@ public sealed class AccessibilityRemediationMatcher
                         originalFinding.FindingType,
                         StringComparison.OrdinalIgnoreCase));
 
+
         /*
-         * Rule is absent.
+         * The rule is absent.
          *
-         * Do not call this NotDetected unless the underlying workflow state
-         * itself matched with sufficient confidence.
+         * Do not call this NotDetected unless the underlying workflow
+         * state matched with sufficient confidence.
          */
         if (matchingRule is null)
         {
             if (stateConfidence < 0.80m)
             {
-                return AccessibilityRemediationMatchResult.Inconclusive(
-                    "WeakStateMatch",
-                    "The rule was not detected, but the scanned state could not be matched confidently enough to treat that as a retest pass.");
+                return AccessibilityRemediationMatchResult
+                    .Inconclusive(
+                        "WeakStateMatch",
+                        "The rule was not detected, but the scanned " +
+                        "state could not be matched confidently " +
+                        "enough to treat that as a retest pass.");
             }
+
 
             return new AccessibilityRemediationMatchResult
             {
                 Result =
-                    AccessibilityRemediationRetestResult.NotDetected,
+                    AccessibilityRemediationRetestResult
+                        .NotDetected,
 
                 MatchMethod =
                     "RuleNotDetected",
@@ -272,42 +484,52 @@ public sealed class AccessibilityRemediationMatcher
                     stateConfidence,
 
                 Message =
-                    "The tracked accessibility rule was not detected in the retested state."
+                    "The accessibility rule was not detected in the " +
+                    "matched later workflow state."
             };
         }
 
+
         /*
          * Strongest finding-level match:
-         * same axe rule and one of the same affected targets.
+         * same rule and one of the same affected targets.
          */
         HashSet<string> originalTargets =
             originalFinding.Nodes
                 .Select(node =>
-                    NormalizeTarget(node.Target))
+                    NormalizeTarget(
+                        node.Target))
                 .Where(target =>
-                    !string.IsNullOrWhiteSpace(target))
+                    !string.IsNullOrWhiteSpace(
+                        target))
                 .ToHashSet(
                     StringComparer.Ordinal);
+
 
         HashSet<string> retestTargets =
             matchingRule.Nodes
                 .Select(node =>
-                    NormalizeTarget(node.Target))
+                    NormalizeTarget(
+                        node.Target))
                 .Where(target =>
-                    !string.IsNullOrWhiteSpace(target))
+                    !string.IsNullOrWhiteSpace(
+                        target))
                 .ToHashSet(
                     StringComparer.Ordinal);
+
 
         bool targetMatched =
             originalTargets.Overlaps(
                 retestTargets);
+
 
         if (targetMatched)
         {
             return new AccessibilityRemediationMatchResult
             {
                 Result =
-                    AccessibilityRemediationRetestResult.Detected,
+                    AccessibilityRemediationRetestResult
+                        .Detected,
 
                 MatchedAuthenticatedAuditFindingId =
                     matchingRule.Id,
@@ -321,42 +543,52 @@ public sealed class AccessibilityRemediationMatcher
                         stateConfidence),
 
                 Message =
-                    "The same rule was detected again on at least one of the original affected targets."
+                    "The same rule was detected again on at least " +
+                    "one of the original affected targets."
             };
         }
 
+
         /*
          * Second-strongest finding-level match:
-         * same axe rule and equivalent saved element HTML.
+         * same rule and equivalent saved element HTML.
          */
         HashSet<string> originalHtml =
             originalFinding.Nodes
                 .Select(node =>
-                    NormalizeHtml(node.Html))
+                    NormalizeHtml(
+                        node.Html))
                 .Where(html =>
-                    !string.IsNullOrWhiteSpace(html))
+                    !string.IsNullOrWhiteSpace(
+                        html))
                 .ToHashSet(
                     StringComparer.Ordinal);
+
 
         HashSet<string> retestHtml =
             matchingRule.Nodes
                 .Select(node =>
-                    NormalizeHtml(node.Html))
+                    NormalizeHtml(
+                        node.Html))
                 .Where(html =>
-                    !string.IsNullOrWhiteSpace(html))
+                    !string.IsNullOrWhiteSpace(
+                        html))
                 .ToHashSet(
                     StringComparer.Ordinal);
+
 
         bool htmlMatched =
             originalHtml.Overlaps(
                 retestHtml);
+
 
         if (htmlMatched)
         {
             return new AccessibilityRemediationMatchResult
             {
                 Result =
-                    AccessibilityRemediationRetestResult.Detected,
+                    AccessibilityRemediationRetestResult
+                        .Detected,
 
                 MatchedAuthenticatedAuditFindingId =
                     matchingRule.Id,
@@ -370,23 +602,24 @@ public sealed class AccessibilityRemediationMatcher
                         stateConfidence),
 
                 Message =
-                    "The same accessibility rule and affected HTML were detected again."
+                    "The same accessibility rule and affected HTML " +
+                    "were detected again."
             };
         }
 
+
         /*
-         * A remediation item represents one rule-level finding for one
-         * rendered workflow state.
+         * Same strongly matched state and same accessibility rule.
          *
-         * If the state matched strongly and the same rule remains, the issue
-         * is still considered detected even if the exact affected node changed.
+         * The exact affected node may legitimately have moved or changed.
          */
         if (stateConfidence >= 0.80m)
         {
             return new AccessibilityRemediationMatchResult
             {
                 Result =
-                    AccessibilityRemediationRetestResult.Detected,
+                    AccessibilityRemediationRetestResult
+                        .Detected,
 
                 MatchedAuthenticatedAuditFindingId =
                     matchingRule.Id,
@@ -400,18 +633,23 @@ public sealed class AccessibilityRemediationMatcher
                         stateConfidence),
 
                 Message =
-                    "The same accessibility rule is still present, although the exact affected element changed."
+                    "The same accessibility rule is still present, " +
+                    "although the exact affected element changed."
             };
         }
 
-        return AccessibilityRemediationMatchResult.Inconclusive(
-            "WeakRuleMatch",
-            "The rule was detected, but the rendered state and affected elements could not be matched confidently.");
+
+        return AccessibilityRemediationMatchResult
+            .Inconclusive(
+                "WeakRuleMatch",
+                "The rule was detected, but the rendered state and " +
+                "affected elements could not be matched confidently.");
     }
 
+
     /// <summary>
-    /// Scores how confidently two authenticated audit steps represent the same
-    /// rendered page or workflow state.
+    /// Scores how confidently two authenticated audit steps represent
+    /// the same rendered page or workflow state.
     /// </summary>
     private static decimal GetStateConfidence(
         AuthenticatedAuditStep originalStep,
@@ -427,6 +665,7 @@ public sealed class AccessibilityRemediationMatcher
                 .AuthenticatedAuditRun
                 .ApplicationName;
 
+
         if (!string.Equals(
             originalApplication.Trim(),
             retestApplication.Trim(),
@@ -435,10 +674,12 @@ public sealed class AccessibilityRemediationMatcher
             return 0m;
         }
 
+
         /*
-         * Exact DOM fingerprint is the strongest state evidence.
-         * It is not required because a legitimate accessibility fix may
-         * intentionally change the DOM.
+         * Exact DOM fingerprint is strongest.
+         *
+         * It is intentionally not required because a real fix can
+         * legitimately change the DOM.
          */
         if (!string.IsNullOrWhiteSpace(
                 originalStep.DomFingerprint) &&
@@ -450,16 +691,21 @@ public sealed class AccessibilityRemediationMatcher
             return 1.0000m;
         }
 
+
         bool sameUrl =
             string.Equals(
-                NormalizeUrl(originalStep.Url),
-                NormalizeUrl(retestStep.Url),
+                NormalizeUrl(
+                    originalStep.Url),
+                NormalizeUrl(
+                    retestStep.Url),
                 StringComparison.OrdinalIgnoreCase);
+
 
         if (!sameUrl)
         {
             return 0m;
         }
+
 
         if (!string.IsNullOrWhiteSpace(
                 originalStep.Heading) &&
@@ -471,6 +717,7 @@ public sealed class AccessibilityRemediationMatcher
             return 0.9000m;
         }
 
+
         if (!string.IsNullOrWhiteSpace(
                 originalStep.PageTitle) &&
             string.Equals(
@@ -481,20 +728,24 @@ public sealed class AccessibilityRemediationMatcher
             return 0.8500m;
         }
 
+
         /*
-         * Same application + same normalized URL is useful evidence,
-         * but not enough by itself to declare a missing rule fixed.
+         * Same application + normalized URL is useful state evidence,
+         * but not strong enough by itself to declare a missing rule fixed.
          */
         return 0.7000m;
     }
 
+
     private static string NormalizeUrl(
         string url)
     {
-        if (string.IsNullOrWhiteSpace(url))
+        if (string.IsNullOrWhiteSpace(
+            url))
         {
             return string.Empty;
         }
+
 
         if (!Uri.TryCreate(
             url,
@@ -504,16 +755,20 @@ public sealed class AccessibilityRemediationMatcher
             return url.Trim();
         }
 
+
         string authority =
             parsedUrl.GetLeftPart(
                 UriPartial.Authority);
+
 
         string path =
             parsedUrl.AbsolutePath
                 .TrimEnd('/');
 
+
         return authority + path;
     }
+
 
     private static string NormalizeTarget(
         string? target)
@@ -522,13 +777,16 @@ public sealed class AccessibilityRemediationMatcher
                string.Empty;
     }
 
+
     private static string NormalizeHtml(
         string? html)
     {
-        if (string.IsNullOrWhiteSpace(html))
+        if (string.IsNullOrWhiteSpace(
+            html))
         {
             return string.Empty;
         }
+
 
         return Regex.Replace(
             html.Trim(),
@@ -537,27 +795,54 @@ public sealed class AccessibilityRemediationMatcher
     }
 }
 
+
 public sealed class AccessibilityRemediationMatchResult
 {
-    public AccessibilityRemediationRetestResult Result { get; init; }
+    public AccessibilityRemediationRetestResult Result
+    {
+        get;
+        init;
+    }
 
-    public int? MatchedAuthenticatedAuditFindingId { get; init; }
 
-    public string MatchMethod { get; init; }
-        = string.Empty;
+    public int? MatchedAuthenticatedAuditFindingId
+    {
+        get;
+        init;
+    }
 
-    public decimal MatchConfidence { get; init; }
 
-    public string? Message { get; init; }
+    public string MatchMethod
+    {
+        get;
+        init;
+    } = string.Empty;
 
-    public static AccessibilityRemediationMatchResult Inconclusive(
-        string matchMethod,
-        string message)
+
+    public decimal MatchConfidence
+    {
+        get;
+        init;
+    }
+
+
+    public string? Message
+    {
+        get;
+        init;
+    }
+
+
+    public static AccessibilityRemediationMatchResult
+        Inconclusive(
+            string matchMethod,
+            string message)
     {
         return new AccessibilityRemediationMatchResult
         {
             Result =
-                AccessibilityRemediationRetestResult.Inconclusive,
+                AccessibilityRemediationRetestResult
+                    .Inconclusive,
 
             MatchMethod =
                 matchMethod,
@@ -571,16 +856,40 @@ public sealed class AccessibilityRemediationMatchResult
     }
 }
 
+
 public sealed class AccessibilityRemediationStateMatch
 {
-    public int AuthenticatedAuditStepId { get; init; }
+    public int AuthenticatedAuditStepId
+    {
+        get;
+        init;
+    }
 
-    public int StepNumber { get; init; }
 
-    public string? StepName { get; init; }
+    public int StepNumber
+    {
+        get;
+        init;
+    }
 
-    public string Url { get; init; }
-        = string.Empty;
 
-    public decimal StateConfidence { get; init; }
+    public string? StepName
+    {
+        get;
+        init;
+    }
+
+
+    public string Url
+    {
+        get;
+        init;
+    } = string.Empty;
+
+
+    public decimal StateConfidence
+    {
+        get;
+        init;
+    }
 }
