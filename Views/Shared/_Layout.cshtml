@@ -1,82 +1,408 @@
-﻿<!DOCTYPE html>
+﻿@{
+    string currentController =
+        ViewContext.RouteData.Values["controller"]?.ToString()
+        ?? string.Empty;
+
+    string currentAction =
+        ViewContext.RouteData.Values["action"]?.ToString()
+        ?? string.Empty;
+
+    bool isAccessibilityOverview =
+        string.Equals(
+            currentController,
+            "AccessibilityOverview",
+            StringComparison.OrdinalIgnoreCase);
+
+    bool isBatchAnalysis =
+        string.Equals(
+            currentController,
+            "WebsiteScans",
+            StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(
+            currentAction,
+            "Batch",
+            StringComparison.OrdinalIgnoreCase);
+
+    bool isWebsiteAudits =
+        string.Equals(
+            currentController,
+            "WebsiteScans",
+            StringComparison.OrdinalIgnoreCase) &&
+        !isBatchAnalysis;
+
+    bool isAuditHistory =
+        string.Equals(
+            currentController,
+            "AuthenticatedAudits",
+            StringComparison.OrdinalIgnoreCase) &&
+        (
+            string.Equals(
+                currentAction,
+                "History",
+                StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(
+                currentAction,
+                "Details",
+                StringComparison.OrdinalIgnoreCase)
+        );
+
+    bool isAuthenticatedAudit =
+        string.Equals(
+            currentController,
+            "AuthenticatedAudits",
+            StringComparison.OrdinalIgnoreCase) &&
+        !isAuditHistory;
+
+    bool isRemediationTracker =
+        string.Equals(
+            currentController,
+            "AccessibilityRemediations",
+            StringComparison.OrdinalIgnoreCase);
+
+    bool isWorkflowRetests =
+        string.Equals(
+            currentController,
+            "AccessibilityWorkflowRetests",
+            StringComparison.OrdinalIgnoreCase);
+}
+
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - City Website Audit Dashboard</title>
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0" />
+
+    <title>
+        @ViewData["Title"] - City Website Audit Dashboard
+    </title>
+
     <script type="importmap"></script>
-    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
-    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/CityWebsiteAuditDashboard.styles.css" asp-append-version="true" />
+
+    <link rel="stylesheet"
+          href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+
+    <link rel="stylesheet"
+          href="~/css/site.css"
+          asp-append-version="true" />
+
+    <link rel="stylesheet"
+          href="~/CityWebsiteAuditDashboard.styles.css"
+          asp-append-version="true" />
 </head>
+
 <body>
-    <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
-            <div class="container-fluid">
-                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">CityWebsiteAuditDashboard</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                        aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark"
-                               asp-controller="WebsiteScans"
-                               asp-action="Index">
-                                Website Audits
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark"
-                               asp-controller="WebsiteScans"
-                               asp-action="Batch">
-                                Batch Analysis
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark"
-                               asp-controller="AccessibilityOverview"
-                               asp-action="Index">
-                                Accessibility Overview
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark"
-                               asp-controller="AccessibilityRemediations"
-                               asp-action="Index">
-                                Remediation Tracker
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark"
-                               asp-controller="AuthenticatedAudits"
-                               asp-action="Index">
-                                Authenticated Audit
-                            </a>
-                        </li>
-                    </ul>
+
+    <!--
+        Mobile header.
+
+        On desktop the permanent left sidebar provides navigation.
+        On smaller screens this button opens the same sidebar as an
+        accessible Bootstrap off-canvas navigation panel.
+    -->
+    <header class="app-mobile-header d-lg-none">
+
+        <div class="d-flex
+                    align-items-center
+                    justify-content-between
+                    gap-3">
+
+            <div>
+                <div class="app-mobile-brand">
+                    City Website Audit Dashboard
+                </div>
+
+                <div class="app-mobile-subtitle">
+                    Bureau of Engineering
                 </div>
             </div>
-        </nav>
+
+            <button class="btn app-menu-button"
+                    type="button"
+                    data-bs-toggle="offcanvas"
+                    data-bs-target="#appSidebar"
+                    aria-controls="appSidebar"
+                    aria-label="Open navigation menu">
+
+                <span class="app-menu-icon"
+                      aria-hidden="true">
+                    ☰
+                </span>
+
+                <span class="visually-hidden">
+                    Menu
+                </span>
+
+            </button>
+
+        </div>
+
     </header>
-    <div class="container">
-        <main role="main" class="pb-3">
-            @RenderBody()
-        </main>
+
+
+    <div class="app-shell">
+
+        <!--
+            Primary application navigation.
+
+            Bootstrap's responsive offcanvas behavior makes this a
+            permanent sidebar on larger screens and a collapsible menu
+            on smaller screens.
+        -->
+        <aside class="offcanvas-lg
+                      offcanvas-start
+                      app-sidebar"
+               tabindex="-1"
+               id="appSidebar"
+               aria-labelledby="appSidebarLabel">
+
+            <div class="offcanvas-header app-sidebar-mobile-heading">
+
+                <div>
+                    <div id="appSidebarLabel"
+                         class="fw-semibold">
+                        City Website Audit Dashboard
+                    </div>
+
+                    <div class="small text-white-50">
+                        Bureau of Engineering
+                    </div>
+                </div>
+
+                <button type="button"
+                        class="btn-close btn-close-white"
+                        data-bs-dismiss="offcanvas"
+                        data-bs-target="#appSidebar"
+                        aria-label="Close navigation">
+                </button>
+
+            </div>
+
+
+            <div class="offcanvas-body app-sidebar-body">
+
+                <div class="app-sidebar-brand d-none d-lg-block">
+
+                    <a asp-controller="AccessibilityOverview"
+                       asp-action="Index"
+                       class="app-brand-link">
+
+                        <span class="app-brand-city">
+                            City of Los Angeles
+                        </span>
+
+                        <span class="app-brand-title">
+                            Website Audit Dashboard
+                        </span>
+
+                        <span class="app-brand-division">
+                            Bureau of Engineering
+                        </span>
+
+                    </a>
+
+                </div>
+
+
+                <nav aria-label="Primary navigation"
+                     class="app-navigation">
+
+                    <div class="app-nav-section">
+
+                        <div class="app-nav-section-label">
+                            Overview
+                        </div>
+
+                        <a asp-controller="AccessibilityOverview"
+                           asp-action="Index"
+                           class="app-nav-link @(isAccessibilityOverview ? "active" : string.Empty)"
+                           aria-current="@(isAccessibilityOverview ? "page" : null)">
+
+                            <span class="app-nav-indicator"
+                                  aria-hidden="true">
+                            </span>
+
+                            <span>
+                                Accessibility Overview
+                            </span>
+
+                        </a>
+
+                    </div>
+
+
+                    <div class="app-nav-section">
+
+                        <div class="app-nav-section-label">
+                            Auditing
+                        </div>
+
+                        <a asp-controller="WebsiteScans"
+                           asp-action="Index"
+                           class="app-nav-link @(isWebsiteAudits ? "active" : string.Empty)"
+                           aria-current="@(isWebsiteAudits ? "page" : null)">
+
+                            <span class="app-nav-indicator"
+                                  aria-hidden="true">
+                            </span>
+
+                            <span>
+                                Website Audits
+                            </span>
+
+                        </a>
+
+
+                        <a asp-controller="WebsiteScans"
+                           asp-action="Batch"
+                           class="app-nav-link @(isBatchAnalysis ? "active" : string.Empty)"
+                           aria-current="@(isBatchAnalysis ? "page" : null)">
+
+                            <span class="app-nav-indicator"
+                                  aria-hidden="true">
+                            </span>
+
+                            <span>
+                                Batch Analysis
+                            </span>
+
+                        </a>
+
+
+                        <a asp-controller="AuthenticatedAudits"
+                           asp-action="Index"
+                           class="app-nav-link @(isAuthenticatedAudit ? "active" : string.Empty)"
+                           aria-current="@(isAuthenticatedAudit ? "page" : null)">
+
+                            <span class="app-nav-indicator"
+                                  aria-hidden="true">
+                            </span>
+
+                            <span>
+                                Authenticated Audit
+                            </span>
+
+                        </a>
+
+
+                        <a asp-controller="AuthenticatedAudits"
+                           asp-action="History"
+                           class="app-nav-link @(isAuditHistory ? "active" : string.Empty)"
+                           aria-current="@(isAuditHistory ? "page" : null)">
+
+                            <span class="app-nav-indicator"
+                                  aria-hidden="true">
+                            </span>
+
+                            <span>
+                                Audit History
+                            </span>
+
+                        </a>
+
+                    </div>
+
+
+                    <div class="app-nav-section">
+
+                        <div class="app-nav-section-label">
+                            Accessibility Management
+                        </div>
+
+                        <a asp-controller="AccessibilityRemediations"
+                           asp-action="Index"
+                           class="app-nav-link @(isRemediationTracker ? "active" : string.Empty)"
+                           aria-current="@(isRemediationTracker ? "page" : null)">
+
+                            <span class="app-nav-indicator"
+                                  aria-hidden="true">
+                            </span>
+
+                            <span>
+                                Remediation Tracker
+                            </span>
+
+                        </a>
+
+
+                        <a asp-controller="AccessibilityWorkflowRetests"
+                           asp-action="Index"
+                           class="app-nav-link @(isWorkflowRetests ? "active" : string.Empty)"
+                           aria-current="@(isWorkflowRetests ? "page" : null)">
+
+                            <span class="app-nav-indicator"
+                                  aria-hidden="true">
+                            </span>
+
+                            <span>
+                                Workflow Retests
+                            </span>
+
+                        </a>
+
+                    </div>
+
+                </nav>
+
+
+                <div class="app-sidebar-footer">
+
+                    <div class="small">
+                        Accessibility Management
+                    </div>
+
+                    <div class="small text-white-50">
+                        Internal dashboard
+                    </div>
+
+                </div>
+
+            </div>
+
+        </aside>
+
+
+        <div class="app-workspace">
+
+            <main role="main"
+                  class="app-main">
+
+                <div class="app-content">
+                    @RenderBody()
+                </div>
+
+            </main>
+
+
+            <footer class="app-footer">
+
+                <div>
+                    City Website Audit Dashboard
+                </div>
+
+                <div class="app-footer-secondary">
+                    City of Los Angeles · Bureau of Engineering
+                </div>
+
+            </footer>
+
+        </div>
+
     </div>
 
-    <footer class="border-top footer text-muted">
-        <div class="container">
-            &copy; 2026 - City Website Audit Dashboard
-        </div>
-    </footer>
+
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
+
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="~/js/site.js" asp-append-version="true"></script>
-    @await RenderSectionAsync("Scripts", required: false)
+
+    <script src="~/js/site.js"
+            asp-append-version="true">
+    </script>
+
+    @await RenderSectionAsync(
+        "Scripts",
+        required: false)
+
 </body>
 </html>

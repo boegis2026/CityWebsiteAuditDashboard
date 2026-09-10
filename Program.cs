@@ -80,8 +80,7 @@ app.MapStaticAssets();
 
 app.MapControllerRoute(
     name: "default",
-    pattern: "{controller=WebsiteScans}/{action=Index}/{id?}")
+    pattern: "{controller=AccessibilityOverview}/{action=Index}/{id?}")
     .WithStaticAssets();
-
 
 app.Run();

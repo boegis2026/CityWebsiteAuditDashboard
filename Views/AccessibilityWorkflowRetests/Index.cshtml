@@ -2,42 +2,53 @@
 @model CityWebsiteAuditDashboard.ViewModels.AccessibilityWorkflowRetestViewModel
 
 @{
-    ViewData["Title"] = "Workflow Retest Comparison";
+    ViewData["Title"] = "Workflow Retests";
 }
 
 
-<div class="mb-4">
+<!-- =========================================================
+     Page heading
+     ========================================================= -->
 
-    <div class="d-flex flex-wrap
+<header class="mb-4">
+
+    <div class="d-flex
+                flex-wrap
                 justify-content-between
                 align-items-start
                 gap-3">
 
-        <div>
+        <div style="max-width: 760px;">
 
-            <h1 class="display-6 fw-bold mb-1">
-                Workflow Retest Comparison
+            <div class="small
+                        fw-bold
+                        text-uppercase
+                        text-muted
+                        mb-2"
+                 style="letter-spacing: 0.06em;">
+                Accessibility Management
+            </div>
+
+            <h1 class="h2 mb-2">
+                Workflow Retests
             </h1>
 
-            <p class="lead mb-0">
-                Compare tracked accessibility findings from an original
-                authenticated audit against a later full workflow audit.
+            <p class="text-muted mb-0">
+                Compare tracked accessibility findings against a later
+                authenticated workflow audit and record formal retest
+                results.
             </p>
 
         </div>
 
 
-        <div class="d-flex flex-wrap gap-2">
-
-            <a asp-controller="AccessibilityOverview"
-               asp-action="Index"
-               class="btn btn-outline-secondary">
-                Accessibility Overview
-            </a>
+        <div class="d-flex
+                    flex-wrap
+                    gap-2">
 
             <a asp-controller="AccessibilityRemediations"
                asp-action="Index"
-               class="btn btn-outline-secondary">
+               class="btn btn-primary">
                 Remediation Tracker
             </a>
 
@@ -47,21 +58,29 @@
                 Audit History
             </a>
 
+            <a asp-controller="AccessibilityOverview"
+               asp-action="Index"
+               class="btn btn-outline-secondary">
+                Accessibility Overview
+            </a>
+
         </div>
 
     </div>
 
-</div>
+</header>
 
+
+<!-- =========================================================
+     Status messages
+     ========================================================= -->
 
 @if (TempData["WorkflowRetestSuccess"]
     is string workflowRetestSuccess)
 {
     <div class="alert alert-success"
          role="status">
-
         @workflowRetestSuccess
-
     </div>
 }
 
@@ -71,9 +90,7 @@
 {
     <div class="alert alert-danger"
          role="alert">
-
         @workflowRetestError
-
     </div>
 }
 
@@ -87,140 +104,178 @@
 }
 
 
+<!-- =========================================================
+     Audit selection
+     ========================================================= -->
+
 <section aria-labelledby="audit-selection-heading"
          class="card shadow-sm mb-4">
 
-    <div class="card-body">
+    <div class="card-header">
 
         <h2 id="audit-selection-heading"
-            class="h4 mb-1">
-            Select Audit Runs
+            class="h5 mb-1">
+            Select Workflow Audits
         </h2>
 
-        <p class="text-muted mb-3">
-            Choose the original audit that contains the tracked findings,
-            then choose a newer completed audit of the same application.
+        <p class="small text-muted mb-0">
+            Choose the original audit containing tracked findings,
+            then compare it with a later completed audit of the same
+            application.
         </p>
 
+    </div>
+
+
+    <div class="card-body">
 
         <form method="get"
               asp-controller="AccessibilityWorkflowRetests"
               asp-action="Index">
 
-            <div class="row g-3">
+            <div class="row g-4">
+
+                <!-- Original audit -->
 
                 <div class="col-12 col-lg-6">
 
-                    <label for="originalAuditRunId"
-                           class="form-label fw-semibold">
-                        Original Audit
-                    </label>
+                    <div class="border
+                                rounded
+                                p-3
+                                h-100">
 
-                    <select id="originalAuditRunId"
-                            name="originalAuditRunId"
-                            class="form-select"
-                            required>
+                        <div class="dashboard-card-label">
+                            Step 1
+                        </div>
 
-                        <option value="">
-                            Select original audit...
-                        </option>
+                        <label for="originalAuditRunId"
+                               class="form-label fw-semibold">
+                            Original Audit
+                        </label>
 
-                        @foreach (var run
-                            in Model.AuditRuns)
-                        {
-                            string originalRunLabel =
-                                $"{run.ApplicationName} — " +
-                                $"Run #{run.Id} — " +
-                                $"{run.StartedAt:MMM d, yyyy HH:mm} UTC — " +
-                                $"{run.StepCount} states — " +
-                                $"{run.Status}";
+                        <select id="originalAuditRunId"
+                                name="originalAuditRunId"
+                                class="form-select"
+                                required>
 
-                            if (Model.OriginalAuditRunId ==
-                                run.Id)
+                            <option value="">
+                                Select original audit...
+                            </option>
+
+
+                            @foreach (var run
+                                in Model.AuditRuns)
                             {
-                                <option value="@run.Id"
-                                        selected>
-                                    @originalRunLabel
-                                </option>
-                            }
-                            else
-                            {
-                                <option value="@run.Id">
-                                    @originalRunLabel
-                                </option>
-                            }
-                        }
+                                string originalRunLabel =
+                                    $"{run.ApplicationName} — " +
+                                    $"Run #{run.Id} — " +
+                                    $"{run.StartedAt:MMM d, yyyy HH:mm} UTC — " +
+                                    $"{run.StepCount} states";
 
-                    </select>
 
-                    <div class="form-text">
-                        This is the audit where remediation tracking began.
+                                if (Model.OriginalAuditRunId ==
+                                    run.Id)
+                                {
+                                    <option value="@run.Id"
+                                            selected>
+                                        @originalRunLabel
+                                    </option>
+                                }
+                                else
+                                {
+                                    <option value="@run.Id">
+                                        @originalRunLabel
+                                    </option>
+                                }
+                            }
+
+                        </select>
+
+                        <div class="form-text">
+                            Select the audit where remediation tracking
+                            began.
+                        </div>
+
                     </div>
 
                 </div>
 
 
+                <!-- Retest audit -->
+
                 <div class="col-12 col-lg-6">
 
-                    <label for="retestAuditRunId"
-                           class="form-label fw-semibold">
-                        Full Workflow Retest Audit
-                    </label>
+                    <div class="border
+                                rounded
+                                p-3
+                                h-100">
 
-                    <select id="retestAuditRunId"
-                            name="retestAuditRunId"
-                            class="form-select">
+                        <div class="dashboard-card-label">
+                            Step 2
+                        </div>
 
-                        @if (!Model.OriginalAuditRunId.HasValue)
-                        {
-                            <option value="">
-                                Select an original audit first...
-                            </option>
-                        }
-                        else if (Model.EligibleRetestRuns.Count == 0)
-                        {
-                            <option value="">
-                                No compatible later audits found
-                            </option>
-                        }
-                        else
-                        {
-                            <option value="">
-                                Select retest audit...
-                            </option>
-                        }
+                        <label for="retestAuditRunId"
+                               class="form-label fw-semibold">
+                            Retest Audit
+                        </label>
 
-                        @foreach (var run
-                            in Model.EligibleRetestRuns)
-                        {
-                            string retestRunLabel =
-                                $"{run.ApplicationName} — " +
-                                $"Run #{run.Id} — " +
-                                $"{run.StartedAt:MMM d, yyyy HH:mm} UTC — " +
-                                $"{run.StepCount} states — " +
-                                $"{run.Status}";
+                        <select id="retestAuditRunId"
+                                name="retestAuditRunId"
+                                class="form-select">
 
-                            if (Model.RetestAuditRunId ==
-                                run.Id)
+                            @if (!Model.OriginalAuditRunId.HasValue)
                             {
-                                <option value="@run.Id"
-                                        selected>
-                                    @retestRunLabel
+                                <option value="">
+                                    Select an original audit first...
+                                </option>
+                            }
+                            else if (Model.EligibleRetestRuns.Count == 0)
+                            {
+                                <option value="">
+                                    No compatible later audits found
                                 </option>
                             }
                             else
                             {
-                                <option value="@run.Id">
-                                    @retestRunLabel
+                                <option value="">
+                                    Select retest audit...
                                 </option>
                             }
-                        }
 
-                    </select>
 
-                    <div class="form-text">
-                        Only newer completed audits of the same application
-                        are available.
+                            @foreach (var run
+                                in Model.EligibleRetestRuns)
+                            {
+                                string retestRunLabel =
+                                    $"{run.ApplicationName} — " +
+                                    $"Run #{run.Id} — " +
+                                    $"{run.StartedAt:MMM d, yyyy HH:mm} UTC — " +
+                                    $"{run.StepCount} states";
+
+
+                                if (Model.RetestAuditRunId ==
+                                    run.Id)
+                                {
+                                    <option value="@run.Id"
+                                            selected>
+                                        @retestRunLabel
+                                    </option>
+                                }
+                                else
+                                {
+                                    <option value="@run.Id">
+                                        @retestRunLabel
+                                    </option>
+                                }
+                            }
+
+                        </select>
+
+                        <div class="form-text">
+                            Only newer completed audits of the same
+                            application are available.
+                        </div>
+
                     </div>
 
                 </div>
@@ -228,7 +283,10 @@
             </div>
 
 
-            <div class="d-flex flex-wrap gap-2 mt-4">
+            <div class="d-flex
+                        flex-wrap
+                        gap-2
+                        mt-4">
 
                 <button type="submit"
                         class="btn btn-primary">
@@ -269,332 +327,37 @@
      Model.EligibleRetestRuns.Count == 0 &&
      Model.RetestAuditRunId is null)
 {
-    <div class="alert alert-light border mb-4"
-         role="note">
+    <div class="card shadow-sm mb-4">
 
-        <strong>
-            No later completed workflow audit is available yet.
-        </strong>
+        <div class="card-body">
 
-        Run another authenticated audit for the same application after
-        remediation work is ready to be retested.
+            <h2 class="h5 mb-1">
+                No Later Workflow Audit Available
+            </h2>
+
+            <p class="text-muted mb-0">
+                Run another authenticated audit for this application
+                after remediation work is ready to be retested.
+            </p>
+
+        </div>
 
     </div>
 }
 
 
+<!-- =========================================================
+     Previous formal retests
+     ========================================================= -->
+
 @if (Model.OriginalAuditRunId.HasValue &&
      Model.FormalWorkflowRetests.Count > 0)
 {
     <section aria-labelledby="previous-formal-retests-heading"
-             class="card shadow-sm mb-4">
-
-        <div class="card-header bg-transparent">
-
-            <div class="d-flex flex-wrap
-                        justify-content-between
-                        align-items-start
-                        gap-2">
-
-                <div>
-
-                    <h2 id="previous-formal-retests-heading"
-                        class="h4 mb-1">
-                        Previous Formal Workflow Retests
-                    </h2>
-
-                    <p class="small text-muted mb-0">
-                        Saved full-workflow retests tied to findings from
-                        Original Run #@Model.OriginalAuditRunId.Value.
-                    </p>
-
-                </div>
-
-                <span class="badge text-bg-light border">
-                    @Model.FormalWorkflowRetests.Count recorded
-                </span>
-
-            </div>
-
-        </div>
-
-
-        <div class="table-responsive">
-
-            <table class="table table-hover
-                          align-middle mb-0">
-
-                <caption class="visually-hidden">
-                    Previous formal workflow accessibility retests
-                </caption>
-
-                <thead>
-
-                    <tr>
-
-                        <th scope="col">
-                            Retest Audit
-                        </th>
-
-                        <th scope="col">
-                            Recorded
-                        </th>
-
-                        <th scope="col"
-                            class="text-end">
-                            Tracked
-                        </th>
-
-                        <th scope="col"
-                            class="text-end">
-                            Still Detected
-                        </th>
-
-                        <th scope="col"
-                            class="text-end">
-                            Reopened
-                        </th>
-
-                        <th scope="col"
-                            class="text-end">
-                            Not Detected
-                        </th>
-
-                        <th scope="col">
-                            Verification
-                        </th>
-
-                        <th scope="col"
-                            class="text-end">
-                            Inconclusive
-                        </th>
-
-                        <th scope="col"
-                            class="text-end">
-                            Failed
-                        </th>
-
-                        <th scope="col">
-                            Details
-                        </th>
-
-                    </tr>
-
-                </thead>
-
-
-                <tbody>
-
-                    @foreach (var history
-                        in Model.FormalWorkflowRetests)
-                    {
-                        string verificationBadgeClass =
-                            history.VerificationState switch
-                            {
-                                "Fully Verified" =>
-                                    "text-bg-success",
-
-                                "Partially Verified" =>
-                                    "text-bg-warning",
-
-                                _ =>
-                                    "text-bg-secondary"
-                            };
-
-                        <tr>
-
-                            <td>
-
-                                <a asp-controller="AuthenticatedAudits"
-                                   asp-action="Details"
-                                   asp-route-id="@history.RetestAuditRunId"
-                                   class="fw-semibold">
-
-                                    Run #@history.RetestAuditRunId
-
-                                </a>
-
-                                <div class="small text-muted">
-                                    @history.ApplicationName
-                                </div>
-
-                            </td>
-
-
-                            <td>
-
-                                @history.RetestedAt.ToString(
-                                    "MMM d, yyyy HH:mm")
-
-                                <div class="small text-muted">
-                                    UTC
-                                </div>
-
-                            </td>
-
-
-                            <td class="text-end fw-semibold">
-                                @history.TotalTracked
-                            </td>
-
-
-                            <td class="text-end">
-
-                                @if (history.StillDetected > 0)
-                                {
-                                    <span class="badge text-bg-danger">
-                                        @history.StillDetected
-                                    </span>
-                                }
-                                else
-                                {
-                                    <span class="text-muted">
-                                        0
-                                    </span>
-                                }
-
-                            </td>
-
-
-                            <td class="text-end">
-
-                                @if (history.Reopened > 0)
-                                {
-                                    <span class="badge text-bg-warning">
-                                        @history.Reopened
-                                    </span>
-                                }
-                                else
-                                {
-                                    <span class="text-muted">
-                                        0
-                                    </span>
-                                }
-
-                            </td>
-
-
-                            <td class="text-end">
-
-                                @if (history.NotDetected > 0)
-                                {
-                                    <span class="badge text-bg-success">
-                                        @history.NotDetected
-                                    </span>
-                                }
-                                else
-                                {
-                                    <span class="text-muted">
-                                        0
-                                    </span>
-                                }
-
-                            </td>
-
-
-                            <td>
-
-                                <span class="badge @verificationBadgeClass">
-                                    @history.VerificationState
-                                </span>
-
-                                @if (history.NotDetected > 0)
-                                {
-                                    <div class="small text-muted mt-1">
-
-                                        @history.VerifiedFromThisRetest
-                                        /
-                                        @history.NotDetected
-                                        verified
-
-                                    </div>
-                                }
-
-                            </td>
-
-
-                            <td class="text-end">
-
-                                @if (history.Inconclusive > 0)
-                                {
-                                    <span class="badge text-bg-warning">
-                                        @history.Inconclusive
-                                    </span>
-                                }
-                                else
-                                {
-                                    <span class="text-muted">
-                                        0
-                                    </span>
-                                }
-
-                            </td>
-
-
-                            <td class="text-end">
-
-                                @if (history.Failed > 0)
-                                {
-                                    <span class="badge text-bg-secondary">
-                                        @history.Failed
-                                    </span>
-                                }
-                                else
-                                {
-                                    <span class="text-muted">
-                                        0
-                                    </span>
-                                }
-
-                            </td>
-
-
-                            <td>
-
-                                <a asp-controller="AccessibilityWorkflowRetests"
-                                   asp-action="Details"
-                                   asp-route-originalAuditRunId="@Model.OriginalAuditRunId.Value"
-                                   asp-route-retestAuditRunId="@history.RetestAuditRunId"
-                                   class="btn btn-sm btn-outline-primary">
-                                    Review
-                                </a>
-
-                            </td>
-
-                        </tr>
-                    }
-
-                </tbody>
-
-            </table>
-
-        </div>
-
-
-        <div class="card-footer bg-transparent">
-
-            <p class="small text-muted mb-0">
-                Verification status reflects current remediation state
-                and whether this formal retest is still the latest retest
-                evidence for the applicable issues.
-            </p>
-
-        </div>
-
-    </section>
-}
-
-
-@if (Model.Comparison is not null)
-{
-    var comparison =
-        Model.Comparison;
-
-
-    <section aria-labelledby="comparison-results-heading"
              class="mb-4">
 
-        <div class="d-flex flex-wrap
+        <div class="d-flex
+                    flex-wrap
                     justify-content-between
                     align-items-end
                     gap-2
@@ -602,23 +365,399 @@
 
             <div>
 
+                <h2 id="previous-formal-retests-heading"
+                    class="h3 mb-1">
+                    Formal Retest History
+                </h2>
+
+                <p class="text-muted mb-0">
+                    Saved workflow retests associated with Original
+                    Run #@Model.OriginalAuditRunId.Value.
+                </p>
+
+            </div>
+
+
+            <span class="badge
+                         text-bg-light
+                         border
+                         px-3
+                         py-2">
+
+                @Model.FormalWorkflowRetests.Count
+                recorded
+
+            </span>
+
+        </div>
+
+
+        <div class="card shadow-sm">
+
+            <div class="table-responsive">
+
+                <table class="table
+                              table-hover
+                              align-middle
+                              mb-0">
+
+                    <caption class="visually-hidden">
+                        Saved formal accessibility workflow retests
+                    </caption>
+
+
+                    <thead>
+
+                        <tr>
+
+                            <th scope="col">
+                                Retest
+                            </th>
+
+                            <th scope="col">
+                                Date
+                            </th>
+
+                            <th scope="col"
+                                class="text-end">
+                                Tracked
+                            </th>
+
+                            <th scope="col"
+                                class="text-end">
+                                Still Detected
+                            </th>
+
+                            <th scope="col"
+                                class="text-end">
+                                Not Detected
+                            </th>
+
+                            <th scope="col"
+                                class="text-end">
+                                Reopened
+                            </th>
+
+                            <th scope="col">
+                                Verification
+                            </th>
+
+                            <th scope="col">
+                                Other Results
+                            </th>
+
+                            <th scope="col">
+                                <span class="visually-hidden">
+                                    Actions
+                                </span>
+                            </th>
+
+                        </tr>
+
+                    </thead>
+
+
+                    <tbody>
+
+                        @foreach (var history
+                            in Model.FormalWorkflowRetests)
+                        {
+                            string verificationBadgeClass =
+                                history.VerificationState
+                                switch
+                                {
+                                    "Fully Verified" =>
+                                        "text-bg-success",
+
+                                    "Partially Verified" =>
+                                        "text-bg-warning",
+
+                                    _ =>
+                                        "text-bg-secondary"
+                                };
+
+
+                            <tr>
+
+                                <!-- Retest -->
+
+                                <td>
+
+                                    <div class="fw-semibold">
+                                        Run #@history.RetestAuditRunId
+                                    </div>
+
+                                    <div class="small text-muted">
+                                        @history.ApplicationName
+                                    </div>
+
+                                </td>
+
+
+                                <!-- Date -->
+
+                                <td class="text-nowrap">
+
+                                    @history.RetestedAt.ToString(
+                                        "MMM d, yyyy")
+
+                                    <div class="small text-muted">
+
+                                        @history.RetestedAt.ToString(
+                                            "HH:mm")
+                                        UTC
+
+                                    </div>
+
+                                </td>
+
+
+                                <!-- Tracked -->
+
+                                <td class="text-end fw-semibold">
+                                    @history.TotalTracked
+                                </td>
+
+
+                                <!-- Still detected -->
+
+                                <td class="text-end">
+
+                                    @if (history.StillDetected > 0)
+                                    {
+                                        <span class="badge
+                                                     text-bg-danger">
+                                            @history.StillDetected
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">
+                                            0
+                                        </span>
+                                    }
+
+                                </td>
+
+
+                                <!-- Not detected -->
+
+                                <td class="text-end">
+
+                                    @if (history.NotDetected > 0)
+                                    {
+                                        <span class="badge
+                                                     text-bg-success">
+                                            @history.NotDetected
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">
+                                            0
+                                        </span>
+                                    }
+
+                                </td>
+
+
+                                <!-- Reopened -->
+
+                                <td class="text-end">
+
+                                    @if (history.Reopened > 0)
+                                    {
+                                        <span class="badge
+                                                     text-bg-warning">
+                                            @history.Reopened
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">
+                                            0
+                                        </span>
+                                    }
+
+                                </td>
+
+
+                                <!-- Verification -->
+
+                                <td>
+
+                                    <span class="badge
+                                                 @verificationBadgeClass">
+                                        @history.VerificationState
+                                    </span>
+
+
+                                    @if (history.NotDetected > 0)
+                                    {
+                                        <div class="small
+                                                    text-muted
+                                                    mt-1">
+
+                                            @history.VerifiedFromThisRetest
+                                            /
+                                            @history.NotDetected
+                                            verified
+
+                                        </div>
+                                    }
+
+                                </td>
+
+
+                                <!-- Other -->
+
+                                <td>
+
+                                    @if (history.Inconclusive == 0 &&
+                                         history.Failed == 0)
+                                    {
+                                        <span class="text-muted">
+                                            —
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        @if (history.Inconclusive > 0)
+                                        {
+                                            <div class="small">
+
+                                                <span class="fw-semibold">
+                                                    @history.Inconclusive
+                                                </span>
+
+                                                inconclusive
+
+                                            </div>
+                                        }
+
+
+                                        @if (history.Failed > 0)
+                                        {
+                                            <div class="small">
+
+                                                <span class="fw-semibold">
+                                                    @history.Failed
+                                                </span>
+
+                                                failed
+
+                                            </div>
+                                        }
+                                    }
+
+                                </td>
+
+
+                                <!-- Action -->
+
+                                <td class="text-end">
+
+                                    <a asp-controller="AccessibilityWorkflowRetests"
+                                       asp-action="Details"
+                                       asp-route-originalAuditRunId="@Model.OriginalAuditRunId.Value"
+                                       asp-route-retestAuditRunId="@history.RetestAuditRunId"
+                                       class="btn
+                                              btn-sm
+                                              btn-outline-primary">
+                                        Review
+                                    </a>
+
+                                </td>
+
+                            </tr>
+                        }
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </section>
+}
+
+
+<!-- =========================================================
+     Current comparison
+     ========================================================= -->
+
+@if (Model.Comparison is not null)
+{
+    var comparison =
+        Model.Comparison;
+
+
+    string comparisonHeadline;
+
+    if (comparison.TotalTracked == 0)
+    {
+        comparisonHeadline =
+            "No tracked findings are available for comparison.";
+    }
+    else if (comparison.StillDetected == 0 &&
+             comparison.Inconclusive == 0 &&
+             comparison.Failed == 0)
+    {
+        comparisonHeadline =
+            $"{comparison.NotDetected} of " +
+            $"{comparison.TotalTracked} tracked findings were " +
+            "not detected in the selected retest.";
+    }
+    else
+    {
+        comparisonHeadline =
+            $"{comparison.StillDetected} still detected, " +
+            $"{comparison.NotDetected} not detected, " +
+            $"{comparison.Inconclusive} inconclusive, and " +
+            $"{comparison.Failed} failed.";
+    }
+
+
+    <section aria-labelledby="comparison-results-heading"
+             class="mb-4">
+
+        <!-- =================================================
+             Comparison heading
+             ================================================= -->
+
+        <div class="d-flex
+                    flex-wrap
+                    justify-content-between
+                    align-items-end
+                    gap-3
+                    mb-3">
+
+            <div>
+
+                <div class="small
+                            fw-bold
+                            text-uppercase
+                            text-muted
+                            mb-2"
+                     style="letter-spacing: 0.05em;">
+                    Current Comparison
+                </div>
+
                 <h2 id="comparison-results-heading"
                     class="h3 mb-1">
-                    Comparison Results
+                    @comparison.ApplicationName
                 </h2>
 
                 <div class="text-muted">
 
-                    @comparison.ApplicationName
-
-                    <span aria-hidden="true">
-                        ·
-                    </span>
-
                     Original Run
                     #@comparison.OriginalAuditRunId
 
-                    vs.
+                    <span aria-hidden="true">
+                        →
+                    </span>
 
                     Retest Run
                     #@comparison.RetestAuditRunId
@@ -628,19 +767,25 @@
             </div>
 
 
-            <div class="d-flex flex-wrap gap-2">
+            <div class="d-flex
+                        flex-wrap
+                        gap-2">
 
                 <a asp-controller="AuthenticatedAudits"
                    asp-action="Details"
                    asp-route-id="@comparison.OriginalAuditRunId"
-                   class="btn btn-sm btn-outline-secondary">
+                   class="btn
+                          btn-sm
+                          btn-outline-secondary">
                     Original Audit
                 </a>
 
                 <a asp-controller="AuthenticatedAudits"
                    asp-action="Details"
                    asp-route-id="@comparison.RetestAuditRunId"
-                   class="btn btn-sm btn-outline-primary">
+                   class="btn
+                          btn-sm
+                          btn-outline-primary">
                     Retest Audit
                 </a>
 
@@ -649,22 +794,55 @@
         </div>
 
 
-        <div class="row g-3">
+        <!-- =================================================
+             Plain-language result
+             ================================================= -->
 
-            <div class="col-6 col-md-4 col-xl">
+        <div class="card shadow-sm mb-3">
+
+            <div class="card-body">
+
+                <div class="dashboard-card-label">
+                    Comparison Summary
+                </div>
+
+                <div class="fs-5 fw-semibold">
+                    @comparisonHeadline
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- =================================================
+             Result metrics
+             ================================================= -->
+
+        <div class="row
+                    row-cols-1
+                    row-cols-sm-2
+                    row-cols-xl-5
+                    g-3">
+
+            <div class="col">
 
                 <article class="card shadow-sm h-100">
 
                     <div class="card-body">
 
-                        <div class="text-muted small">
+                        <div class="dashboard-card-label">
                             Tracked
                         </div>
 
-                        <div class="fs-2 fw-bold">
+                        <div class="dashboard-card-value">
                             @comparison.TotalTracked
                         </div>
 
+                        <div class="small text-muted">
+                            Findings compared
+                        </div>
+
                     </div>
 
                 </article>
@@ -672,20 +850,30 @@
             </div>
 
 
-            <div class="col-6 col-md-4 col-xl">
+            <div class="col">
 
-                <article class="card shadow-sm h-100">
+                <article class="card
+                                shadow-sm
+                                h-100
+                                border-start
+                                border-danger
+                                border-4">
 
                     <div class="card-body">
 
-                        <div class="text-muted small">
+                        <div class="dashboard-card-label">
                             Still Detected
                         </div>
 
-                        <div class="fs-2 fw-bold text-danger">
+                        <div class="dashboard-card-value
+                                    text-danger">
                             @comparison.StillDetected
                         </div>
 
+                        <div class="small text-muted">
+                            Finding remains present
+                        </div>
+
                     </div>
 
                 </article>
@@ -693,20 +881,30 @@
             </div>
 
 
-            <div class="col-6 col-md-4 col-xl">
+            <div class="col">
 
-                <article class="card shadow-sm h-100">
+                <article class="card
+                                shadow-sm
+                                h-100
+                                border-start
+                                border-success
+                                border-4">
 
                     <div class="card-body">
 
-                        <div class="text-muted small">
+                        <div class="dashboard-card-label">
                             Not Detected
                         </div>
 
-                        <div class="fs-2 fw-bold text-success">
+                        <div class="dashboard-card-value
+                                    text-success">
                             @comparison.NotDetected
                         </div>
 
+                        <div class="small text-muted">
+                            Finding absent from matched state
+                        </div>
+
                     </div>
 
                 </article>
@@ -714,18 +912,27 @@
             </div>
 
 
-            <div class="col-6 col-md-4 col-xl">
+            <div class="col">
 
-                <article class="card shadow-sm h-100">
+                <article class="card
+                                shadow-sm
+                                h-100
+                                border-start
+                                border-warning
+                                border-4">
 
                     <div class="card-body">
 
-                        <div class="text-muted small">
+                        <div class="dashboard-card-label">
                             Inconclusive
                         </div>
 
-                        <div class="fs-2 fw-bold text-warning">
+                        <div class="dashboard-card-value">
                             @comparison.Inconclusive
+                        </div>
+
+                        <div class="small text-muted">
+                            Could not determine result
                         </div>
 
                     </div>
@@ -735,18 +942,22 @@
             </div>
 
 
-            <div class="col-6 col-md-4 col-xl">
+            <div class="col">
 
                 <article class="card shadow-sm h-100">
 
                     <div class="card-body">
 
-                        <div class="text-muted small">
+                        <div class="dashboard-card-label">
                             Scan Failed
                         </div>
 
-                        <div class="fs-2 fw-bold">
+                        <div class="dashboard-card-value">
                             @comparison.Failed
+                        </div>
+
+                        <div class="small text-muted">
+                            Comparison unavailable
                         </div>
 
                     </div>
@@ -760,50 +971,103 @@
     </section>
 
 
-    <div class="alert alert-info mb-4"
-         role="note">
+    <!-- =====================================================
+         Preview state
+         ===================================================== -->
 
-        <strong>
-            Preview only:
-        </strong>
+    <div class="card shadow-sm mb-4">
 
-        This comparison does not change remediation status or save
-        formal retest evidence until
-        <strong>Apply as Formal Workflow Retest</strong>
-        is selected.
+        <div class="card-body py-3">
+
+            <div class="d-flex
+                        flex-wrap
+                        justify-content-between
+                        align-items-center
+                        gap-3">
+
+                <div>
+
+                    <div class="fw-semibold">
+                        Comparison Preview
+                    </div>
+
+                    <div class="small text-muted">
+                        Review the results below before recording this
+                        comparison as formal retest evidence.
+                    </div>
+
+                </div>
+
+
+                @if (comparison.FormalRetestAlreadyApplied)
+                {
+                    <span class="badge
+                                 text-bg-success
+                                 px-3
+                                 py-2">
+                        Formal Retest Recorded
+                    </span>
+                }
+                else
+                {
+                    <span class="badge
+                                 text-bg-light
+                                 border
+                                 px-3
+                                 py-2">
+                        Preview Only
+                    </span>
+                }
+
+            </div>
+
+        </div>
 
     </div>
 
 
+    <!-- =====================================================
+         Apply formal retest
+         ===================================================== -->
+
     @if (comparison.TotalTracked == 0)
     {
-        <div class="alert alert-secondary mb-4"
-             role="status">
+        <div class="card shadow-sm mb-4">
 
-            <strong>
-                No tracked remediation items were found for the
-                original audit.
-            </strong>
+            <div class="card-body">
 
-            Start remediation tracking from findings in the original
-            authenticated audit before applying a formal workflow retest.
+                <h3 class="h5 mb-1">
+                    No Tracked Findings
+                </h3>
+
+                <p class="text-muted mb-0">
+                    Start remediation tracking from findings in the
+                    original audit before applying a formal workflow
+                    retest.
+                </p>
+
+            </div>
 
         </div>
     }
     else if (!comparison.FormalRetestAlreadyApplied)
     {
         <section aria-labelledby="apply-formal-retest-heading"
-                 class="card border-warning shadow-sm mb-4">
+                 class="card
+                        border-warning
+                        shadow-sm
+                        mb-4">
 
-            <div class="card-header bg-transparent">
+            <div class="card-header">
 
-                <h2 id="apply-formal-retest-heading"
+                <h3 id="apply-formal-retest-heading"
                     class="h5 mb-1">
-                    Apply Formal Workflow Retest
-                </h2>
+                    Record Formal Workflow Retest
+                </h3>
 
                 <p class="small text-muted mb-0">
-                    Save this preview as remediation retest evidence.
+                    Save this comparison as historical remediation
+                    retest evidence.
                 </p>
 
             </div>
@@ -811,40 +1075,19 @@
 
             <div class="card-body">
 
-                <div class="alert alert-warning"
-                     role="alert">
+                <div class="alert
+                            alert-warning
+                            mb-4">
 
                     <strong>
-                        This action writes historical retest records.
+                        This action updates remediation records.
                     </strong>
 
                     <div class="mt-2">
-                        One formal retest record will be saved for every
+                        A formal retest record will be saved for each
                         tracked remediation item in this comparison.
-                    </div>
-
-                    <div class="mt-2">
-
-                        Issues that are
-
-                        <strong>
-                            Still Detected
-                        </strong>
-
-                        can be reopened to
-
-                        <strong>
-                            In Progress
-                        </strong>.
-
-                        Issues that are
-
-                        <strong>
-                            Not Detected
-                        </strong>
-
-                        are not automatically verified.
-
+                        Findings detected again may return to
+                        <strong>In Progress</strong>.
                     </div>
 
                 </div>
@@ -856,6 +1099,7 @@
                       id="applyWorkflowRetestForm">
 
                     @Html.AntiForgeryToken()
+
 
                     <input type="hidden"
                            name="originalAuditRunId"
@@ -878,10 +1122,11 @@
                                   rows="3"
                                   maxlength="4000"
                                   class="form-control"
-                                  placeholder="Optional notes about this full workflow retest..."></textarea>
+                                  placeholder="Optional notes about this workflow retest..."></textarea>
 
                         <div class="form-text">
-                            Notes are stored with the saved retest evidence.
+                            Notes are stored with the formal retest
+                            record.
                         </div>
 
                     </div>
@@ -889,7 +1134,7 @@
 
                     <button type="submit"
                             class="btn btn-warning">
-                        Apply as Formal Workflow Retest
+                        Record Formal Retest
                     </button>
 
                 </form>
@@ -900,363 +1145,497 @@
     }
     else
     {
-        <div class="alert alert-success mb-4"
-             role="status">
+        <div class="card
+                    border-success
+                    shadow-sm
+                    mb-4">
 
-            <strong>
-                Formal retest already recorded.
-            </strong>
+            <div class="card-body">
 
-            <div class="mt-1">
-                Retest Run #@comparison.RetestAuditRunId has already
-                been applied as formal retest evidence for these
-                tracked remediation items.
-            </div>
+                <div class="d-flex
+                            flex-wrap
+                            align-items-center
+                            gap-2
+                            mb-2">
 
-            <div class="mt-2">
-                The comparison remains available below for review,
-                but it cannot be applied again.
+                    <span class="badge text-bg-success">
+                        Recorded
+                    </span>
+
+                    <h3 class="h5 mb-0">
+                        Formal Retest Already Saved
+                    </h3>
+
+                </div>
+
+                <p class="text-muted mb-0">
+                    Retest Run #@comparison.RetestAuditRunId has
+                    already been recorded as formal evidence for these
+                    tracked remediation items. The comparison remains
+                    available below for review.
+                </p>
+
             </div>
 
         </div>
     }
 
 
+    <!-- =====================================================
+         Finding-by-finding comparison
+         ===================================================== -->
+
     <section aria-labelledby="tracked-comparison-heading"
-             class="card shadow-sm">
+             class="mb-4">
 
-        <div class="card-header bg-transparent">
+        <div class="d-flex
+                    flex-wrap
+                    justify-content-between
+                    align-items-end
+                    gap-2
+                    mb-3">
 
-            <h2 id="tracked-comparison-heading"
-                class="h4 mb-1">
-                Tracked Finding Comparison
-            </h2>
+            <div>
 
-            <p class="small text-muted mb-0">
-                Each remediation item is compared with the best matching
-                state in the later workflow audit.
-            </p>
+                <h2 id="tracked-comparison-heading"
+                    class="h3 mb-1">
+                    Finding Comparison
+                </h2>
+
+                <p class="text-muted mb-0">
+                    Each tracked finding compared against its best
+                    matching state in the later workflow audit.
+                </p>
+
+            </div>
+
+
+            @if (comparison.Items.Count > 0)
+            {
+                <span class="badge
+                             text-bg-light
+                             border
+                             px-3
+                             py-2">
+
+                    @comparison.Items.Count
+                    finding@(comparison.Items.Count == 1
+                        ? ""
+                        : "s")
+
+                </span>
+            }
 
         </div>
 
 
-        @if (comparison.Items.Count == 0)
-        {
-            <div class="card-body">
+        <div class="card shadow-sm">
 
-                <p class="text-muted mb-0">
-                    No tracked finding comparisons are available.
-                </p>
+            @if (comparison.Items.Count == 0)
+            {
+                <div class="card-body">
 
-            </div>
-        }
-        else
-        {
-            <div class="table-responsive">
+                    <p class="text-muted mb-0">
+                        No tracked finding comparisons are available.
+                    </p>
 
-                <table class="table table-hover
-                              align-middle mb-0">
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
 
-                    <caption class="visually-hidden">
-                        Comparison of tracked remediation findings against
-                        the selected workflow retest audit
-                    </caption>
+                    <table class="table
+                                  table-hover
+                                  align-middle
+                                  mb-0">
 
-                    <thead>
-
-                        <tr>
-
-                            <th scope="col">
-                                Finding
-                            </th>
-
-                            <th scope="col">
-                                Original State
-                            </th>
-
-                            <th scope="col">
-                                Matched Retest State
-                            </th>
-
-                            <th scope="col">
-                                Result
-                            </th>
-
-                            <th scope="col">
-                                Match Evidence
-                            </th>
-
-                            <th scope="col">
-                                Remediation
-                            </th>
-
-                        </tr>
-
-                    </thead>
+                        <caption class="visually-hidden">
+                            Comparison of tracked remediation findings
+                            against the selected workflow retest
+                        </caption>
 
 
-                    <tbody>
-
-                        @foreach (var item
-                            in comparison.Items)
-                        {
-                            string resultBadgeClass =
-                                item.Result switch
-                                {
-                                    AccessibilityRemediationRetestResult
-                                        .Detected =>
-                                            "text-bg-danger",
-
-                                    AccessibilityRemediationRetestResult
-                                        .NotDetected =>
-                                            "text-bg-success",
-
-                                    AccessibilityRemediationRetestResult
-                                        .Inconclusive =>
-                                            "text-bg-warning",
-
-                                    AccessibilityRemediationRetestResult
-                                        .Failed =>
-                                            "text-bg-secondary",
-
-                                    _ =>
-                                        "text-bg-secondary"
-                                };
-
-                            string resultLabel =
-                                item.Result switch
-                                {
-                                    AccessibilityRemediationRetestResult
-                                        .Detected =>
-                                            "Still Detected",
-
-                                    AccessibilityRemediationRetestResult
-                                        .NotDetected =>
-                                            "Not Detected",
-
-                                    AccessibilityRemediationRetestResult
-                                        .Inconclusive =>
-                                            "Inconclusive",
-
-                                    AccessibilityRemediationRetestResult
-                                        .Failed =>
-                                            "Scan Failed",
-
-                                    _ =>
-                                        item.Result.ToString()
-                                };
-
-                            string remediationStatusLabel =
-                                item.CurrentStatus switch
-                                {
-                                    AccessibilityRemediationStatus.Open =>
-                                        "Open",
-
-                                    AccessibilityRemediationStatus.InProgress =>
-                                        "In Progress",
-
-                                    AccessibilityRemediationStatus.Fixed =>
-                                        "Fixed – Awaiting Verification",
-
-                                    AccessibilityRemediationStatus.Verified =>
-                                        "Verified",
-
-                                    AccessibilityRemediationStatus.WontFix =>
-                                        "Won't Fix",
-
-                                    _ =>
-                                        item.CurrentStatus.ToString()
-                                };
+                        <thead>
 
                             <tr>
 
-                                <td style="min-width: 190px;">
+                                <th scope="col">
+                                    Finding
+                                </th>
 
-                                    <div class="fw-semibold">
-                                        @item.RuleId
-                                    </div>
+                                <th scope="col">
+                                    Original State
+                                </th>
 
-                                    <div class="small text-muted">
-                                        @item.FindingType
-                                    </div>
+                                <th scope="col">
+                                    Matched Retest State
+                                </th>
 
-                                    @if (!string.IsNullOrWhiteSpace(
-                                        item.Impact))
+                                <th scope="col">
+                                    Result
+                                </th>
+
+                                <th scope="col">
+                                    Match
+                                </th>
+
+                                <th scope="col">
+                                    Remediation
+                                </th>
+
+                            </tr>
+
+                        </thead>
+
+
+                        <tbody>
+
+                            @foreach (var item
+                                in comparison.Items)
+                            {
+                                string resultBadgeClass =
+                                    item.Result switch
                                     {
-                                        <div class="small text-muted">
-                                            Severity: @item.Impact
-                                        </div>
-                                    }
+                                        AccessibilityRemediationRetestResult
+                                            .Detected =>
+                                                "text-bg-danger",
 
-                                    <div class="small mt-1">
+                                        AccessibilityRemediationRetestResult
+                                            .NotDetected =>
+                                                "text-bg-success",
 
-                                        <span class="text-muted">
-                                            Remediation:
-                                        </span>
+                                        AccessibilityRemediationRetestResult
+                                            .Inconclusive =>
+                                                "text-bg-warning",
 
-                                        #@item.RemediationItemId
+                                        AccessibilityRemediationRetestResult
+                                            .Failed =>
+                                                "text-bg-secondary",
 
-                                    </div>
+                                        _ =>
+                                                "text-bg-secondary"
+                                    };
 
-                                </td>
 
-
-                                <td style="min-width: 190px;">
-
-                                    <div class="fw-semibold">
-                                        Step @item.OriginalStepNumber
-                                    </div>
-
-                                    @if (!string.IsNullOrWhiteSpace(
-                                        item.OriginalStepName))
+                                string resultLabel =
+                                    item.Result switch
                                     {
-                                        <div class="small text-muted">
-                                            @item.OriginalStepName
-                                        </div>
-                                    }
+                                        AccessibilityRemediationRetestResult
+                                            .Detected =>
+                                                "Still Detected",
 
-                                    <div class="small
-                                                text-muted
-                                                text-break
-                                                mt-1">
-                                        @item.OriginalUrl
-                                    </div>
+                                        AccessibilityRemediationRetestResult
+                                            .NotDetected =>
+                                                "Not Detected",
 
-                                </td>
+                                        AccessibilityRemediationRetestResult
+                                            .Inconclusive =>
+                                                "Inconclusive",
+
+                                        AccessibilityRemediationRetestResult
+                                            .Failed =>
+                                                "Scan Failed",
+
+                                        _ =>
+                                                item.Result.ToString()
+                                    };
 
 
-                                <td style="min-width: 190px;">
-
-                                    @if (item.RetestStepNumber.HasValue)
+                                string remediationStatusLabel =
+                                    item.CurrentStatus switch
                                     {
+                                        AccessibilityRemediationStatus
+                                            .Open =>
+                                                "Open",
+
+                                        AccessibilityRemediationStatus
+                                            .InProgress =>
+                                                "In Progress",
+
+                                        AccessibilityRemediationStatus
+                                            .Fixed =>
+                                                "Awaiting Verification",
+
+                                        AccessibilityRemediationStatus
+                                            .Verified =>
+                                                "Verified",
+
+                                        AccessibilityRemediationStatus
+                                            .WontFix =>
+                                                "Won't Fix",
+
+                                        _ =>
+                                            item.CurrentStatus.ToString()
+                                    };
+
+
+                                string remediationBadgeClass =
+                                    item.CurrentStatus switch
+                                    {
+                                        AccessibilityRemediationStatus
+                                            .Open =>
+                                                "text-bg-danger",
+
+                                        AccessibilityRemediationStatus
+                                            .InProgress =>
+                                                "text-bg-primary",
+
+                                        AccessibilityRemediationStatus
+                                            .Fixed =>
+                                                "text-bg-warning",
+
+                                        AccessibilityRemediationStatus
+                                            .Verified =>
+                                                "text-bg-success",
+
+                                        _ =>
+                                            "text-bg-secondary"
+                                    };
+
+
+                                <tr>
+
+                                    <!-- Finding -->
+
+                                    <td style="min-width: 210px;">
+
                                         <div class="fw-semibold">
-                                            Step @item.RetestStepNumber.Value
+                                            @item.RuleId
                                         </div>
 
-                                        @if (!string.IsNullOrWhiteSpace(
-                                            item.RetestStepName))
-                                        {
-                                            <div class="small text-muted">
-                                                @item.RetestStepName
-                                            </div>
-                                        }
+
+                                        <div class="small text-muted">
+
+                                            @if (string.Equals(
+                                                item.FindingType,
+                                                "NeedsReview",
+                                                StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                <span>
+                                                    Needs Manual Review
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                @item.FindingType
+                                            }
+
+                                        </div>
+
 
                                         @if (!string.IsNullOrWhiteSpace(
-                                            item.RetestUrl))
+                                            item.Impact))
                                         {
                                             <div class="small
                                                         text-muted
+                                                        mt-1">
+                                                Severity:
+                                                @item.Impact
+                                            </div>
+                                        }
+
+
+                                        <div class="small mt-1">
+
+                                            <span class="text-muted">
+                                                Remediation
+                                            </span>
+
+                                            #@item.RemediationItemId
+
+                                        </div>
+
+                                    </td>
+
+
+                                    <!-- Original -->
+
+                                    <td style="min-width: 200px;">
+
+                                        <div class="fw-semibold">
+                                            Step @item.OriginalStepNumber
+                                        </div>
+
+
+                                        @if (!string.IsNullOrWhiteSpace(
+                                            item.OriginalStepName))
+                                        {
+                                            <div class="small text-muted">
+                                                @item.OriginalStepName
+                                            </div>
+                                        }
+
+
+                                        <details class="small mt-2">
+
+                                            <summary>
+                                                View URL
+                                            </summary>
+
+                                            <div class="text-muted
                                                         text-break
                                                         mt-1">
-                                                @item.RetestUrl
+                                                @item.OriginalUrl
                                             </div>
-                                        }
 
-                                        @if (item.StateConfidence.HasValue)
+                                        </details>
+
+                                    </td>
+
+
+                                    <!-- Retest -->
+
+                                    <td style="min-width: 210px;">
+
+                                        @if (item.RetestStepNumber.HasValue)
                                         {
-                                            <div class="small mt-1">
+                                            <div class="fw-semibold">
+                                                Step
+                                                @item.RetestStepNumber.Value
+                                            </div>
 
-                                                <span class="text-muted">
-                                                    State match:
-                                                </span>
 
-                                                @item.StateConfidence.Value.ToString("P0")
+                                            @if (!string.IsNullOrWhiteSpace(
+                                                item.RetestStepName))
+                                            {
+                                                <div class="small
+                                                            text-muted">
+                                                    @item.RetestStepName
+                                                </div>
+                                            }
 
+
+                                            @if (item.StateConfidence.HasValue)
+                                            {
+                                                <div class="small mt-1">
+
+                                                    <span class="text-muted">
+                                                        State match:
+                                                    </span>
+
+                                                    @item.StateConfidence.Value.ToString("P0")
+
+                                                </div>
+                                            }
+
+
+                                            @if (!string.IsNullOrWhiteSpace(
+                                                item.RetestUrl))
+                                            {
+                                                <details class="small mt-2">
+
+                                                    <summary>
+                                                        View URL
+                                                    </summary>
+
+                                                    <div class="text-muted
+                                                                text-break
+                                                                mt-1">
+                                                        @item.RetestUrl
+                                                    </div>
+
+                                                </details>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">
+                                                No sufficiently matching
+                                                state
+                                            </span>
+                                        }
+
+                                    </td>
+
+
+                                    <!-- Result -->
+
+                                    <td style="min-width: 165px;">
+
+                                        <span class="badge
+                                                     @resultBadgeClass">
+                                            @resultLabel
+                                        </span>
+
+
+                                        @if (!string.IsNullOrWhiteSpace(
+                                            item.Message))
+                                        {
+                                            <div class="small
+                                                        text-muted
+                                                        mt-2">
+                                                @item.Message
                                             </div>
                                         }
-                                    }
-                                    else
-                                    {
-                                        <span class="text-muted">
-                                            No sufficiently matching state
-                                        </span>
-                                    }
 
-                                </td>
+                                    </td>
 
 
-                                <td style="min-width: 170px;">
+                                    <!-- Match -->
 
-                                    <span class="badge @resultBadgeClass">
-                                        @resultLabel
-                                    </span>
+                                    <td style="min-width: 135px;">
 
-                                    @if (!string.IsNullOrWhiteSpace(
-                                        item.Message))
-                                    {
-                                        <div class="small text-muted mt-2">
-                                            @item.Message
+                                        @if (item.MatchConfidence > 0m)
+                                        {
+                                            <div class="fw-semibold">
+                                                @item.MatchConfidence.ToString("P0")
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="text-muted">
+                                                —
+                                            </div>
+                                        }
+
+
+                                        @if (!string.IsNullOrWhiteSpace(
+                                            item.MatchMethod))
+                                        {
+                                            <div class="small
+                                                        text-muted">
+                                                @item.MatchMethod
+                                            </div>
+                                        }
+
+                                    </td>
+
+
+                                    <!-- Remediation -->
+
+                                    <td style="min-width: 180px;">
+
+                                        <div class="mb-2">
+
+                                            <span class="badge
+                                                         @remediationBadgeClass">
+                                                @remediationStatusLabel
+                                            </span>
+
                                         </div>
-                                    }
-
-                                </td>
 
 
-                                <td style="min-width: 150px;">
+                                        <a asp-controller="AccessibilityRemediations"
+                                           asp-action="Details"
+                                           asp-route-id="@item.RemediationItemId"
+                                           class="btn
+                                                  btn-sm
+                                                  btn-outline-primary">
+                                            View Remediation
+                                        </a>
 
-                                    @if (item.MatchConfidence > 0m)
-                                    {
-                                        <div class="fw-semibold">
-                                            @item.MatchConfidence.ToString("P0")
-                                        </div>
-                                    }
-                                    else
-                                    {
-                                        <div class="text-muted">
-                                            —
-                                        </div>
-                                    }
+                                    </td>
 
-                                    @if (!string.IsNullOrWhiteSpace(
-                                        item.MatchMethod))
-                                    {
-                                        <div class="small text-muted">
-                                            @item.MatchMethod
-                                        </div>
-                                    }
+                                </tr>
+                            }
 
-                                </td>
+                        </tbody>
 
+                    </table>
 
-                                <td style="min-width: 170px;">
-
-                                    <div class="small mb-2">
-                                        @remediationStatusLabel
-                                    </div>
-
-                                    <a asp-controller="AccessibilityRemediations"
-                                       asp-action="Details"
-                                       asp-route-id="@item.RemediationItemId"
-                                       class="btn btn-sm btn-outline-primary">
-                                        View Remediation
-                                    </a>
-
-                                </td>
-
-                            </tr>
-                        }
-
-                    </tbody>
-
-                </table>
-
-            </div>
-        }
-
-
-        <div class="card-footer bg-transparent">
-
-            <p class="small text-muted mb-0">
-
-                <strong>
-                    Not Detected
-                </strong>
-
-                means the tracked rule was absent from a sufficiently
-                matched workflow state. It still requires explicit
-                verification before the remediation item becomes Verified.
-
-            </p>
+                </div>
+            }
 
         </div>
 
@@ -1285,9 +1664,10 @@
 
                         const confirmed =
                             window.confirm(
-                                "Apply this comparison as a formal workflow retest? " +
-                                "This will save retest evidence and may reopen " +
-                                "remediation items that are detected again."
+                                "Record this comparison as a formal workflow retest? " +
+                                "This will save retest evidence and may move " +
+                                "remediation items back to In Progress if they " +
+                                "are detected again."
                             );
 
                         if (!confirmed) {

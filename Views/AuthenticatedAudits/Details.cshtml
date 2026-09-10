@@ -1,1057 +1,1919 @@
 ﻿@model CityWebsiteAuditDashboard.ViewModels.AuthenticatedAuditDetailsViewModel
 
 @{
-    ViewData["Title"] = $"Authenticated Audit Run #{Model.Id}";
+    ViewData["Title"] =
+        $"Authenticated Audit Run #{Model.Id}";
 
     string statusBadgeClass =
         Model.Status switch
-            {
-            "Completed" => "bg-success",
-            "Running" => "bg-primary",
-            "Failed" => "bg-danger",
-            "Cancelled" => "bg-warning text-dark",
-            "Interrupted" => "bg-warning text-dark",
-            _ => "bg-secondary"
-            };
+        {
+            "Completed" =>
+                "text-bg-success",
 
-    var allAuditFindings = Model.Steps
-    .SelectMany(step => step.Findings)
-    .ToList();
+            "Running" =>
+                "text-bg-primary",
 
-    int criticalFindingCount = allAuditFindings.Count(finding =>
-        string.Equals(
-            finding.Impact,
-            "critical",
-            StringComparison.OrdinalIgnoreCase));
+            "Failed" =>
+                "text-bg-danger",
 
-    int seriousFindingCount = allAuditFindings.Count(finding =>
-        string.Equals(
-            finding.Impact,
-            "serious",
-            StringComparison.OrdinalIgnoreCase));
+            "Cancelled" =>
+                "text-bg-warning",
 
-    int moderateFindingCount = allAuditFindings.Count(finding =>
-        string.Equals(
-            finding.Impact,
-            "moderate",
-            StringComparison.OrdinalIgnoreCase));
+            "Interrupted" =>
+                "text-bg-warning",
 
-    int minorFindingCount = allAuditFindings.Count(finding =>
-        string.Equals(
-            finding.Impact,
-            "minor",
-            StringComparison.OrdinalIgnoreCase));
+            _ =>
+                "text-bg-secondary"
+        };
 
-    int wcagLevelACount = allAuditFindings.Count(finding =>
-        string.Equals(
-            finding.WcagLevel,
-            "A",
-            StringComparison.OrdinalIgnoreCase));
 
-    int wcagLevelAaCount = allAuditFindings.Count(finding =>
-        string.Equals(
-            finding.WcagLevel,
-            "AA",
-            StringComparison.OrdinalIgnoreCase));
+    var allAuditFindings =
+        Model.Steps
+            .SelectMany(step =>
+                step.Findings)
+            .ToList();
 
-    int otherFindingCount = allAuditFindings.Count(finding =>
-        string.IsNullOrWhiteSpace(
-            finding.WcagLevel));
 
-    int violationFindingCount = allAuditFindings.Count(finding =>
-        string.Equals(
-            finding.FindingType,
-            "Violation",
-            StringComparison.OrdinalIgnoreCase));
+    int criticalFindingCount =
+        allAuditFindings.Count(finding =>
+            string.Equals(
+                finding.Impact,
+                "critical",
+                StringComparison.OrdinalIgnoreCase));
 
-    @* Axe NeedsReview findings come from its Incomplete results. *@
-    int needsReviewFindingCount = allAuditFindings.Count(finding =>
-        string.Equals(
-            finding.FindingType,
-            "NeedsReview",
-            StringComparison.OrdinalIgnoreCase));
 
-    int fixFirstFindingCount = allAuditFindings.Count(finding =>
-        (string.Equals(
-            finding.Impact,
-            "critical",
-            StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(
-            finding.Impact,
-            "serious",
-            StringComparison.OrdinalIgnoreCase)) &&
-        (string.Equals(
-            finding.WcagLevel,
-            "A",
-            StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(
-            finding.WcagLevel,
-            "AA",
-            StringComparison.OrdinalIgnoreCase)));
+    int seriousFindingCount =
+        allAuditFindings.Count(finding =>
+            string.Equals(
+                finding.Impact,
+                "serious",
+                StringComparison.OrdinalIgnoreCase));
+
+
+    int moderateFindingCount =
+        allAuditFindings.Count(finding =>
+            string.Equals(
+                finding.Impact,
+                "moderate",
+                StringComparison.OrdinalIgnoreCase));
+
+
+    int minorFindingCount =
+        allAuditFindings.Count(finding =>
+            string.Equals(
+                finding.Impact,
+                "minor",
+                StringComparison.OrdinalIgnoreCase));
+
+
+    int wcagLevelACount =
+        allAuditFindings.Count(finding =>
+            string.Equals(
+                finding.WcagLevel,
+                "A",
+                StringComparison.OrdinalIgnoreCase));
+
+
+    int wcagLevelAaCount =
+        allAuditFindings.Count(finding =>
+            string.Equals(
+                finding.WcagLevel,
+                "AA",
+                StringComparison.OrdinalIgnoreCase));
+
+
+    int otherFindingCount =
+        allAuditFindings.Count(finding =>
+            string.IsNullOrWhiteSpace(
+                finding.WcagLevel));
+
+
+    int violationFindingCount =
+        allAuditFindings.Count(finding =>
+            string.Equals(
+                finding.FindingType,
+                "Violation",
+                StringComparison.OrdinalIgnoreCase));
+
+
+    int needsReviewFindingCount =
+        allAuditFindings.Count(finding =>
+            string.Equals(
+                finding.FindingType,
+                "NeedsReview",
+                StringComparison.OrdinalIgnoreCase));
+
+
+    int fixFirstFindingCount =
+        allAuditFindings.Count(finding =>
+            (
+                string.Equals(
+                    finding.Impact,
+                    "critical",
+                    StringComparison.OrdinalIgnoreCase) ||
+
+                string.Equals(
+                    finding.Impact,
+                    "serious",
+                    StringComparison.OrdinalIgnoreCase)
+            ) &&
+            (
+                string.Equals(
+                    finding.WcagLevel,
+                    "A",
+                    StringComparison.OrdinalIgnoreCase) ||
+
+                string.Equals(
+                    finding.WcagLevel,
+                    "AA",
+                    StringComparison.OrdinalIgnoreCase)
+            ));
+
+
+    int trackedFindingCount =
+        allAuditFindings.Count(finding =>
+            finding.RemediationItemId.HasValue);
 }
 
-<div class="container py-4">
-    <div class="d-flex flex-wrap
-        justify-content-between
-        align-items-start
-        gap-3
-        mb-4">
+
+<!-- =========================================================
+     Page heading
+     ========================================================= -->
+
+<header class="mb-4">
+
+    <div class="d-flex
+                flex-wrap
+                justify-content-between
+                align-items-start
+                gap-3">
+
         <div>
-            <div class="d-flex flex-wrap
-                align-items-center
-                gap-2
-                mb-1">
+
+            <div class="small
+                        fw-bold
+                        text-uppercase
+                        text-muted
+                        mb-2"
+                 style="letter-spacing: 0.06em;">
+                Authenticated Accessibility Audit
+            </div>
+
+
+            <div class="d-flex
+                        flex-wrap
+                        align-items-center
+                        gap-2
+                        mb-2">
+
                 <h1 class="h2 mb-0">
-                    Authenticated Audit Run #@Model.Id
+                    @Model.ApplicationName
                 </h1>
 
                 <span class="badge @statusBadgeClass">
                     @Model.Status
                 </span>
+
             </div>
 
+
             <p class="text-muted mb-0">
-                Review every rendered application state scanned during this
-                authenticated browser session.
+                Audit Run #@Model.Id ·
+                @Model.Steps.Count rendered
+                state@(Model.Steps.Count == 1 ? "" : "s") scanned
             </p>
+
         </div>
 
-        <div class="d-flex flex-wrap gap-2">
+
+        <div class="d-flex
+                    flex-wrap
+                    gap-2">
+
             <a asp-controller="AuthenticatedAudits"
                asp-action="History"
                class="btn btn-outline-secondary">
                 Back to History
             </a>
 
-            <a asp-controller="AuthenticatedAudits"
-               asp-action="Index"
-               class="btn btn-primary">
-                Start New Audit
-            </a>
-
             <a asp-action="DownloadPdf"
-               asp-route-id="@ViewContext.RouteData.Values["id"]"
+               asp-route-id="@Model.Id"
                class="btn btn-primary">
                 Download PDF
             </a>
+
+            <a asp-controller="AuthenticatedAudits"
+               asp-action="Index"
+               class="btn btn-outline-primary">
+                Start New Audit
+            </a>
+
         </div>
+
     </div>
 
-    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
-    {
-        <div class="alert alert-danger">
-            <strong>Run error:</strong>
-            @Model.ErrorMessage
-        </div>
-    }
+</header>
 
-    <div class="card shadow-sm mb-4">
-        <div class="card-header">
-            <h2 class="h5 mb-0">Run information</h2>
-        </div>
 
-        <div class="card-body">
-            <dl class="row mb-0">
-                <dt class="col-md-3">Application</dt>
-                <dd class="col-md-9">
-                    @Model.ApplicationName
-                </dd>
+@if (!string.IsNullOrWhiteSpace(
+    Model.ErrorMessage))
+{
+    <div class="alert alert-danger mb-4">
 
-                <dt class="col-md-3">Starting URL</dt>
-                <dd class="col-md-9 text-break">
-                    @Model.StartingUrl
-                </dd>
+        <strong>
+            Run error:
+        </strong>
 
-                <dt class="col-md-3">Accessibility engine</dt>
-                <dd class="col-md-9">
-                    @Model.AccessibilityEngine
-                </dd>
+        @Model.ErrorMessage
 
-                <dt class="col-md-3">Started</dt>
-                <dd class="col-md-9">
-                    @Model.StartedAt.ToString("yyyy-MM-dd HH:mm:ss")
-                    <span class="text-muted">UTC</span>
-                </dd>
+    </div>
+}
 
-                <dt class="col-md-3">Completed</dt>
-                <dd class="col-md-9">
-                    @if (Model.CompletedAt.HasValue)
-                    {
-                        @Model.CompletedAt.Value.ToString(
-                            "yyyy-MM-dd HH:mm:ss")
 
-                        <span class="text-muted">UTC</span>
-                    }
-                    else
-                    {
-                        <span class="text-muted">
-                            Not completed
-                        </span>
-                    }
-                </dd>
-            </dl>
-        </div>
+<!-- =========================================================
+     Primary audit summary
+     ========================================================= -->
+
+<section aria-labelledby="audit-summary-heading"
+         class="mb-4">
+
+    <div class="mb-3">
+
+        <h2 id="audit-summary-heading"
+            class="h3 mb-1">
+            Audit Summary
+        </h2>
+
+        <p class="text-muted mb-0">
+            Key results from this authenticated workflow audit.
+        </p>
+
     </div>
 
-    <div class="row g-3 mb-4">
-        <div class="col-sm-6 col-xl-3">
-            <div class="card shadow-sm h-100">
+
+    <div class="row g-3">
+
+        <div class="col-12 col-sm-6 col-xl-3">
+
+            <article class="card shadow-sm h-100">
+
                 <div class="card-body">
-                    <div class="text-muted small">
-                        Total steps
+
+                    <div class="dashboard-card-label">
+                        States Scanned
                     </div>
 
-                    <div class="fs-3 fw-semibold">
+                    <div class="dashboard-card-value">
                         @Model.Steps.Count
                     </div>
+
+                    <div class="small text-muted">
+                        @Model.SuccessfulStepCount successful,
+                        @Model.FailedStepCount failed
+                    </div>
+
                 </div>
-            </div>
+
+            </article>
+
         </div>
 
-        <div class="col-sm-6 col-xl-3">
-            <div class="card shadow-sm h-100">
+
+        <div class="col-12 col-sm-6 col-xl-3">
+
+            <article class="card
+                            shadow-sm
+                            h-100
+                            border-start
+                            border-danger
+                            border-4">
+
                 <div class="card-body">
-                    <div class="text-muted small">
-                        Successful steps
+
+                    <div class="dashboard-card-label">
+                        Fix First
                     </div>
 
-                    <div class="fs-3 fw-semibold">
-                        @Model.SuccessfulStepCount
+                    <div class="dashboard-card-value text-danger">
+                        @fixFirstFindingCount
                     </div>
+
+                    <div class="small text-muted">
+                        Critical or serious A/AA findings
+                    </div>
+
                 </div>
-            </div>
+
+            </article>
+
         </div>
 
-        <div class="col-sm-6 col-xl-3">
-            <div class="card shadow-sm h-100">
+
+        <div class="col-12 col-sm-6 col-xl-3">
+
+            <article class="card shadow-sm h-100">
+
                 <div class="card-body">
-                    <div class="text-muted small">
-                        Violation rules
+
+                    <div class="dashboard-card-label">
+                        Violations
                     </div>
 
-                    <div class="fs-3 fw-semibold">
-                        @Model.TotalViolationRuleCount
+                    <div class="dashboard-card-value">
+                        @violationFindingCount
                     </div>
+
+                    <div class="small text-muted">
+                        Saved rule-level violations
+                    </div>
+
                 </div>
-            </div>
+
+            </article>
+
         </div>
 
-        <div class="col-sm-6 col-xl-3">
-            <div class="card shadow-sm h-100">
+
+        <div class="col-12 col-sm-6 col-xl-3">
+
+            <article class="card shadow-sm h-100">
+
                 <div class="card-body">
-                    <div class="text-muted small">
-                        Affected elements
+
+                    <div class="dashboard-card-label">
+                        Affected Elements
                     </div>
 
-                    <div class="fs-3 fw-semibold">
+                    <div class="dashboard-card-value">
                         @Model.TotalAffectedElementCount
                     </div>
+
+                    <div class="small text-muted">
+                        Element occurrences across scanned states
+                    </div>
+
                 </div>
-            </div>
+
+            </article>
+
         </div>
+
     </div>
+
+</section>
+
+
+<!-- =========================================================
+     Priority breakdown
+     ========================================================= -->
+
+<section aria-labelledby="priority-summary-heading"
+         class="card shadow-sm mb-4">
+
+    <div class="card-header">
+
+        <div class="d-flex
+                    flex-wrap
+                    justify-content-between
+                    align-items-center
+                    gap-2">
+
+            <div>
+
+                <h2 id="priority-summary-heading"
+                    class="h5 mb-1">
+                    Finding Priority
+                </h2>
+
+                <p class="small text-muted mb-0">
+                    Severity, review, WCAG, and remediation summary.
+                </p>
+
+            </div>
+
+            <span class="badge text-bg-light border">
+                @trackedFindingCount tracked for remediation
+            </span>
+
+        </div>
+
+    </div>
+
+
+    <div class="card-body">
+
+        <div class="row
+                    row-cols-2
+                    row-cols-md-4
+                    g-3">
+
+            <div class="col">
+
+                <div class="border rounded p-3 h-100">
+
+                    <div class="dashboard-card-label">
+                        Critical
+                    </div>
+
+                    <div class="fs-3 fw-bold text-danger">
+                        @criticalFindingCount
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="col">
+
+                <div class="border rounded p-3 h-100">
+
+                    <div class="dashboard-card-label">
+                        Serious
+                    </div>
+
+                    <div class="fs-3 fw-bold">
+                        @seriousFindingCount
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="col">
+
+                <div class="border rounded p-3 h-100">
+
+                    <div class="dashboard-card-label">
+                        Moderate
+                    </div>
+
+                    <div class="fs-3 fw-bold">
+                        @moderateFindingCount
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="col">
+
+                <div class="border rounded p-3 h-100">
+
+                    <div class="dashboard-card-label">
+                        Minor
+                    </div>
+
+                    <div class="fs-3 fw-bold">
+                        @minorFindingCount
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="col">
+
+                <div class="border rounded p-3 h-100">
+
+                    <div class="dashboard-card-label">
+                        Needs Review
+                    </div>
+
+                    <div class="fs-3 fw-bold">
+                        @needsReviewFindingCount
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="col">
+
+                <div class="border rounded p-3 h-100">
+
+                    <div class="dashboard-card-label">
+                        WCAG Level A
+                    </div>
+
+                    <div class="fs-3 fw-bold">
+                        @wcagLevelACount
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="col">
+
+                <div class="border rounded p-3 h-100">
+
+                    <div class="dashboard-card-label">
+                        WCAG Level AA
+                    </div>
+
+                    <div class="fs-3 fw-bold">
+                        @wcagLevelAaCount
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="col">
+
+                <div class="border rounded p-3 h-100">
+
+                    <div class="dashboard-card-label">
+                        Other / Best Practice
+                    </div>
+
+                    <div class="fs-3 fw-bold">
+                        @otherFindingCount
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- =========================================================
+     Run information
+     ========================================================= -->
+
+<section aria-labelledby="run-information-heading"
+         class="card shadow-sm mb-4">
+
+    <div class="card-header">
+
+        <h2 id="run-information-heading"
+            class="h5 mb-0">
+            Run Information
+        </h2>
+
+    </div>
+
+
+    <div class="card-body">
+
+        <dl class="row mb-0">
+
+            <dt class="col-md-3">
+                Application
+            </dt>
+
+            <dd class="col-md-9">
+                @Model.ApplicationName
+            </dd>
+
+
+            <dt class="col-md-3">
+                Starting URL
+            </dt>
+
+            <dd class="col-md-9 text-break">
+                @Model.StartingUrl
+            </dd>
+
+
+            <dt class="col-md-3">
+                Accessibility Engine
+            </dt>
+
+            <dd class="col-md-9">
+                @Model.AccessibilityEngine
+            </dd>
+
+
+            <dt class="col-md-3">
+                Started
+            </dt>
+
+            <dd class="col-md-9">
+
+                @Model.StartedAt.ToString(
+                    "MMM d, yyyy h:mm tt")
+
+                <span class="text-muted">
+                    UTC
+                </span>
+
+            </dd>
+
+
+            <dt class="col-md-3">
+                Completed
+            </dt>
+
+            <dd class="col-md-9">
+
+                @if (Model.CompletedAt.HasValue)
+                {
+                    @Model.CompletedAt.Value.ToString(
+                        "MMM d, yyyy h:mm tt")
+
+                    <span class="text-muted">
+                        UTC
+                    </span>
+                }
+                else
+                {
+                    <span class="text-muted">
+                        Not completed
+                    </span>
+                }
+
+            </dd>
+
+        </dl>
+
+    </div>
+
+</section>
+
+
+<!-- =========================================================
+     Workflow states
+     ========================================================= -->
+
+<section aria-labelledby="workflow-results-heading"
+         class="mb-4">
+
+    <div class="mb-3">
+
+        <h2 id="workflow-results-heading"
+            class="h3 mb-1">
+            Workflow State Results
+        </h2>
+
+        <p class="text-muted mb-0">
+            Accessibility results for each rendered state captured
+            during the audit.
+        </p>
+
+    </div>
+
 
     @if (Model.Steps.Count == 0)
     {
-        <div class="alert alert-info">
-            No rendered states were scanned during this audit run.
+        <div class="card shadow-sm">
+
+            <div class="card-body py-4">
+
+                <p class="text-muted mb-0">
+                    No rendered states were scanned during this audit.
+                </p>
+
+            </div>
+
         </div>
     }
     else
     {
-        <div class="d-flex flex-column gap-4">
-            <div class="card shadow-sm mb-4">
-                <div class="card-header">
-                    <h2 class="h5 mb-0">
-                        Accessibility Priority Summary
-                    </h2>
-                </div>
+        <div class="d-flex
+                    flex-column
+                    gap-4">
 
-                <div class="card-body">
-                    <div class="d-flex flex-wrap gap-2 mb-3">
-                        <span class="badge text-bg-primary">
-                            Scanned pages: @Model.Steps.Count
-                        </span>
-
-                        <span class="badge text-bg-success">
-                            Successful: @Model.SuccessfulStepCount
-                        </span>
-
-                        <span class="badge text-bg-danger">
-                            Failed: @Model.FailedStepCount
-                        </span>
-                    </div>
-                    <div class="d-flex flex-wrap gap-2 mb-3">
-                        <span class="badge text-bg-danger">
-                            Fix first: @fixFirstFindingCount
-                        </span>
-                        <span class="badge text-bg-danger">
-                            Violation rules: @violationFindingCount
-                        </span>
-
-                        <span class="badge text-bg-warning">
-                            Needs review: @needsReviewFindingCount
-                        </span>
-                        <span class="badge text-bg-dark">
-                            Affected elements: @Model.TotalAffectedElementCount
-                        </span>
-                    </div>
-                    <div class="d-flex flex-wrap gap-2 mb-3">
-                        <span class="badge text-bg-danger">
-                            Critical: @criticalFindingCount
-                        </span>
-
-                        <span class="badge text-bg-warning">
-                            Serious: @seriousFindingCount
-                        </span>
-
-                        <span class="badge text-bg-info">
-                            Moderate: @moderateFindingCount
-                        </span>
-
-                        <span class="badge text-bg-secondary">
-                            Minor: @minorFindingCount
-                        </span>
-                    </div>
-
-                    <div class="d-flex flex-wrap gap-2">
-                        <span class="badge text-bg-primary">
-                            WCAG Level A: @wcagLevelACount
-                        </span>
-
-                        <span class="badge text-bg-primary">
-                            WCAG Level AA: @wcagLevelAaCount
-                        </span>
-
-                        <span class="badge text-bg-secondary">
-                            Other / Best Practice: @otherFindingCount
-                        </span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="alert alert-warning mb-4">
-                <strong>Important:</strong>
-                These are automated axe-core results. Automated testing cannot
-                detect every accessibility issue or confirm full WCAG compliance.
-                Needs-review findings require manual evaluation, along with keyboard,
-                screen-reader, zoom, and other assistive-technology testing.
-            </div>
-
-            @foreach (var step in Model.Steps)
+            @foreach (var step
+                in Model.Steps
+                    .OrderBy(step =>
+                        step.StepNumber))
             {
                 string stepBorderClass =
                     step.ScanSucceeded
                         ? "border-success"
                         : "border-danger";
 
-                <div class="card shadow-sm @stepBorderClass">
-                    <div class="card-header d-flex
-                        flex-wrap
-                        justify-content-between
-                        align-items-center
-                        gap-2">
-                        <div class="d-flex flex-wrap
-                            align-items-center
-                            gap-2">
-                            <h2 class="h5 mb-0">
-                                Step @step.StepNumber:
-                                @step.StepName
-                            </h2>
 
-                            @if (step.WasFinalStep)
-                            {
-                                <span class="badge bg-dark">
-                                    Final scanned state
-                                </span>
-                            }
+                var violationFindings =
+                    step.Findings
+                        .Where(finding =>
+                            string.Equals(
+                                finding.FindingType,
+                                "Violation",
+                                StringComparison.OrdinalIgnoreCase))
+                        .OrderBy(finding =>
+                            finding.PriorityRank)
+                        .ThenBy(finding =>
+                            finding.RuleId)
+                        .ToList();
+
+
+                var needsReviewFindings =
+                    step.Findings
+                        .Where(finding =>
+                            string.Equals(
+                                finding.FindingType,
+                                "NeedsReview",
+                                StringComparison.OrdinalIgnoreCase))
+                        .OrderBy(finding =>
+                            finding.PriorityRank)
+                        .ThenBy(finding =>
+                            finding.RuleId)
+                        .ToList();
+
+
+                <article class="card
+                                shadow-sm
+                                @stepBorderClass">
+
+                    <!-- =========================================
+                         State header
+                         ========================================= -->
+
+                    <div class="card-header">
+
+                        <div class="d-flex
+                                    flex-wrap
+                                    justify-content-between
+                                    align-items-start
+                                    gap-3">
+
+                            <div>
+
+                                <div class="small
+                                            fw-bold
+                                            text-uppercase
+                                            text-muted
+                                            mb-1"
+                                     style="letter-spacing: 0.05em;">
+                                    Workflow State @step.StepNumber
+                                </div>
+
+                                <h3 class="h5 mb-1">
+                                    @step.StepName
+                                </h3>
+
+                                @if (!string.IsNullOrWhiteSpace(
+                                    step.PageTitle))
+                                {
+                                    <div class="small text-muted">
+                                        @step.PageTitle
+                                    </div>
+                                }
+
+                            </div>
+
+
+                            <div class="d-flex
+                                        flex-wrap
+                                        gap-2">
+
+                                @if (step.WasFinalStep)
+                                {
+                                    <span class="badge text-bg-dark">
+                                        Final Scanned State
+                                    </span>
+                                }
+
+                                @if (step.ScanSucceeded)
+                                {
+                                    <span class="badge text-bg-success">
+                                        Scan Succeeded
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge text-bg-danger">
+                                        Scan Failed
+                                    </span>
+                                }
+
+                            </div>
+
                         </div>
 
-                        @if (step.ScanSucceeded)
-                        {
-                            <span class="badge bg-success">
-                                Scan succeeded
-                            </span>
-                        }
-                        else
-                        {
-                            <span class="badge bg-danger">
-                                Scan failed
-                            </span>
-                        }
                     </div>
 
+
                     <div class="card-body">
-                        <dl class="row">
-                            <dt class="col-md-3">Page title</dt>
-                            <dd class="col-md-9">
-                                @(step.PageTitle ?? "Not detected")
-                            </dd>
 
-                            <dt class="col-md-3">Main heading</dt>
-                            <dd class="col-md-9">
-                                @(step.Heading ?? "Not detected")
-                            </dd>
+                        <!-- =====================================
+                             State result summary
+                             ===================================== -->
 
-                            <dt class="col-md-3">Current URL</dt>
-                            <dd class="col-md-9 text-break">
-                                @step.Url
-                            </dd>
+                        <div class="row
+                                    row-cols-2
+                                    row-cols-md-4
+                                    g-3
+                                    mb-4">
 
-                            <dt class="col-md-3">Scanned</dt>
-                            <dd class="col-md-9">
-                                @step.ScannedAt.ToString(
-                                    "yyyy-MM-dd HH:mm:ss")
+                            <div class="col">
 
-                                <span class="text-muted">UTC</span>
-                            </dd>
+                                <div class="border
+                                            rounded
+                                            p-3
+                                            text-center
+                                            h-100">
 
-                            <dt class="col-md-3">DOM fingerprint</dt>
-                            <dd class="col-md-9">
-                                @*
-                                    The fingerprint identifies a rendered state
-                                    without storing entered form values.
-                                *@
-                                <code class="text-break">
-                                    @(step.DomFingerprint ?? "Not generated")
-                                </code>
-                            </dd>
-                        </dl>
-
-                        <div class="row g-3 mt-1">
-                            <div class="col-6 col-md-4 col-xl">
-                                <div class="border rounded
-                                    p-3
-                                    text-center
-                                    h-100">
-                                    <div class="fs-4 fw-semibold">
-                                        @step.VisibleFormCount
-                                    </div>
-
-                                    <div class="small text-muted">
-                                        Visible forms
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="col-6 col-md-4 col-xl">
-                                <div class="border rounded
-                                    p-3
-                                    text-center
-                                    h-100">
-                                    <div class="fs-4 fw-semibold">
-                                        @step.VisibleFieldCount
-                                    </div>
-
-                                    <div class="small text-muted">
-                                        Visible fields
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="col-6 col-md-4 col-xl">
-                                <div class="border rounded
-                                    p-3
-                                    text-center
-                                    h-100">
-                                    <div class="fs-4 fw-semibold">
-                                        @step.VisibleButtonCount
-                                    </div>
-
-                                    <div class="small text-muted">
-                                        Visible buttons
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="col-6 col-md-4 col-xl">
-                                <div class="border rounded
-                                    p-3
-                                    text-center
-                                    h-100">
-                                    <div class="fs-4 fw-semibold">
+                                    <div class="fs-3 fw-bold">
                                         @step.ViolationRuleCount
                                     </div>
 
                                     <div class="small text-muted">
-                                        Violation rules
+                                        Violations
                                     </div>
+
                                 </div>
+
                             </div>
 
-                            <div class="col-6 col-md-4 col-xl">
-                                <div class="border rounded
-                                    p-3
-                                    text-center
-                                    h-100">
-                                    <div class="fs-4 fw-semibold">
+
+                            <div class="col">
+
+                                <div class="border
+                                            rounded
+                                            p-3
+                                            text-center
+                                            h-100">
+
+                                    <div class="fs-3 fw-bold">
                                         @step.AffectedElementCount
                                     </div>
 
                                     <div class="small text-muted">
-                                        Affected elements
+                                        Affected Elements
                                     </div>
+
                                 </div>
+
                             </div>
 
-                            <div class="col-6 col-md-4 col-xl">
-                                <div class="border rounded
-                                    p-3
-                                    text-center
-                                    h-100">
-                                    <div class="fs-4 fw-semibold">
+
+                            <div class="col">
+
+                                <div class="border
+                                            rounded
+                                            p-3
+                                            text-center
+                                            h-100">
+
+                                    <div class="fs-3 fw-bold">
                                         @step.NeedsReviewRuleCount
                                     </div>
 
                                     <div class="small text-muted">
-                                        Needs review
+                                        Needs Review
                                     </div>
+
                                 </div>
+
                             </div>
 
-                            <div class="col-6 col-md-4 col-xl">
-                                <div class="border rounded
-                                    p-3
-                                    text-center
-                                    h-100">
-                                    <div class="fs-4 fw-semibold">
+
+                            <div class="col">
+
+                                <div class="border
+                                            rounded
+                                            p-3
+                                            text-center
+                                            h-100">
+
+                                    <div class="fs-3 fw-bold text-success">
                                         @step.PassedRuleCount
                                     </div>
 
                                     <div class="small text-muted">
-                                        Passed rules
+                                        Passed Rules
                                     </div>
+
                                 </div>
+
                             </div>
+
                         </div>
 
-                        @*
-                        Only violations and needs-review rules are saved individually.
-                        Passed rules remain represented by the summary count above.
-                        *@
+
+                        <!-- =====================================
+                             Technical state information
+                             ===================================== -->
+
+                        <details class="border
+                                        rounded
+                                        p-3
+                                        mb-4">
+
+                            <summary class="fw-semibold">
+                                Technical State Details
+                            </summary>
+
+
+                            <div class="mt-3">
+
+                                <dl class="row mb-0">
+
+                                    <dt class="col-md-3">
+                                        Current URL
+                                    </dt>
+
+                                    <dd class="col-md-9 text-break">
+                                        @step.Url
+                                    </dd>
+
+
+                                    <dt class="col-md-3">
+                                        Main Heading
+                                    </dt>
+
+                                    <dd class="col-md-9">
+                                        @(step.Heading ??
+                                            "Not detected")
+                                    </dd>
+
+
+                                    <dt class="col-md-3">
+                                        Scanned
+                                    </dt>
+
+                                    <dd class="col-md-9">
+
+                                        @step.ScannedAt.ToString(
+                                            "MMM d, yyyy h:mm:ss tt")
+
+                                        <span class="text-muted">
+                                            UTC
+                                        </span>
+
+                                    </dd>
+
+
+                                    <dt class="col-md-3">
+                                        DOM Fingerprint
+                                    </dt>
+
+                                    <dd class="col-md-9">
+
+                                        <code class="text-break">
+                                            @(step.DomFingerprint ??
+                                                "Not generated")
+                                        </code>
+
+                                    </dd>
+
+
+                                    <dt class="col-md-3">
+                                        Visible Forms
+                                    </dt>
+
+                                    <dd class="col-md-9">
+                                        @step.VisibleFormCount
+                                    </dd>
+
+
+                                    <dt class="col-md-3">
+                                        Visible Fields
+                                    </dt>
+
+                                    <dd class="col-md-9">
+                                        @step.VisibleFieldCount
+                                    </dd>
+
+
+                                    <dt class="col-md-3">
+                                        Visible Buttons
+                                    </dt>
+
+                                    <dd class="col-md-9">
+                                        @step.VisibleButtonCount
+                                    </dd>
+
+                                </dl>
+
+                            </div>
+
+                        </details>
+
+
+                        @if (!string.IsNullOrWhiteSpace(
+                            step.ErrorMessage))
+                        {
+                            <div class="alert alert-danger mb-4">
+
+                                <strong>
+                                    Step error:
+                                </strong>
+
+                                @step.ErrorMessage
+
+                            </div>
+                        }
+
+
+                        <!-- =====================================
+                             No saved findings
+                             ===================================== -->
+
                         @if (step.Findings.Count == 0)
                         {
-                            <div class="alert alert-secondary mt-4 mb-0">
-                                No rule-level violations or needs-review findings were saved
-                                for this rendered state.
+                            <div class="alert
+                                        alert-light
+                                        border
+                                        mb-0">
+
+                                No rule-level violations or
+                                needs-review findings were saved for
+                                this rendered state.
 
                                 @if (step.ScanSucceeded &&
-                                     (step.ViolationRuleCount > 0 ||
-                                      step.NeedsReviewRuleCount > 0))
+                                     (
+                                         step.ViolationRuleCount > 0 ||
+                                         step.NeedsReviewRuleCount > 0
+                                     ))
                                 {
-                                    <div class="small mt-2">
-                                        This may be an older scan created before individual
-                                        finding storage was added.
+                                    <div class="small text-muted mt-2">
+
+                                        This may be an older scan created
+                                        before individual finding storage
+                                        was added.
+
                                     </div>
                                 }
+
                             </div>
                         }
                         else
                         {
-                            var violationFindings = step.Findings
-                                .Where(finding =>
-                                    finding.FindingType == "Violation")
-                                .ToList();
+                            <!-- =================================
+                                 Violations
+                                 ================================= -->
 
-                            var needsReviewFindings = step.Findings
-                                .Where(finding =>
-                                    finding.FindingType == "NeedsReview")
-                                .ToList();
+                            @if (violationFindings.Count > 0)
+                            {
+                                <section aria-labelledby="violations-step-@step.StepNumber"
+                                         class="mb-4">
 
-                            <div class="alert alert-info mt-3 mb-3">
-                                <strong>Recommended fix order:</strong>
-                                Findings are ordered by axe impact—Critical, Serious,
-                                Moderate, then Minor. Within the same impact level,
-                                WCAG Level A appears before Level AA, followed by
-                                other or best-practice checks.
-                            </div>
+                                    <div class="d-flex
+                                                flex-wrap
+                                                justify-content-between
+                                                align-items-end
+                                                gap-2
+                                                mb-3">
 
-                            <div class="mt-4">
-                                <h3 class="h6">
-                                    Accessibility findings
-                                </h3>
+                                        <div>
 
-                                <p class="small text-muted">
-                                    These records contain rule-level information only.
-                                    Element HTML and entered form values are not stored.
-                                </p>
+                                            <h4 id="violations-step-@step.StepNumber"
+                                                class="h5 mb-1">
+                                                Violations
+                                            </h4>
 
-                                @if (violationFindings.Count > 0)
-                                {
-                                    <div class="mb-4">
-                                        <h4 class="h6 text-danger">
-                                            Violations (@violationFindings.Count)
-                                        </h4>
+                                            <p class="small
+                                                      text-muted
+                                                      mb-0">
+                                                Ordered by remediation
+                                                priority.
+                                            </p>
 
-                                        <div class="d-flex flex-column gap-3">
-                                            @foreach (var finding in violationFindings)
-                                            {
-                                                string impactBadgeClass =
-                                                    finding.Impact?.ToLowerInvariant() switch
-                                                    {
-                                                        "critical" => "bg-danger",
-                                                        "serious" => "bg-danger",
-                                                        "moderate" => "bg-warning text-dark",
-                                                        "minor" => "bg-info text-dark",
-                                                        _ => "bg-secondary"
-                                                    };
+                                        </div>
 
-                                                <div class="border border-danger
-                                                    rounded
-                                                    p-3">
-                                                    <div class="d-flex flex-wrap
-                                                        justify-content-between
-                                                        align-items-start
-                                                        gap-2">
-                                                        <div>
-                                                            <div class="fw-semibold">
+
+                                        <span class="badge
+                                                     text-bg-danger">
+                                            @violationFindings.Count
+                                        </span>
+
+                                    </div>
+
+
+                                    <div class="d-flex
+                                                flex-column
+                                                gap-3">
+
+                                        @foreach (var finding
+                                            in violationFindings)
+                                        {
+                                            string impactBadgeClass =
+                                                finding.Impact?
+                                                    .ToLowerInvariant()
+                                                switch
+                                                {
+                                                    "critical" =>
+                                                        "text-bg-danger",
+
+                                                    "serious" =>
+                                                        "text-bg-danger",
+
+                                                    "moderate" =>
+                                                        "text-bg-warning",
+
+                                                    "minor" =>
+                                                        "text-bg-info",
+
+                                                    _ =>
+                                                        "text-bg-secondary"
+                                                };
+
+
+                                            bool isFixFirst =
+                                                (
+                                                    string.Equals(
+                                                        finding.Impact,
+                                                        "critical",
+                                                        StringComparison.OrdinalIgnoreCase) ||
+
+                                                    string.Equals(
+                                                        finding.Impact,
+                                                        "serious",
+                                                        StringComparison.OrdinalIgnoreCase)
+                                                ) &&
+                                                (
+                                                    string.Equals(
+                                                        finding.WcagLevel,
+                                                        "A",
+                                                        StringComparison.OrdinalIgnoreCase) ||
+
+                                                    string.Equals(
+                                                        finding.WcagLevel,
+                                                        "AA",
+                                                        StringComparison.OrdinalIgnoreCase)
+                                                );
+
+
+                                            <article class="border
+                                                            border-danger
+                                                            rounded
+                                                            overflow-hidden">
+
+                                                <div class="p-3">
+
+                                                    <div class="d-flex
+                                                                flex-wrap
+                                                                justify-content-between
+                                                                align-items-start
+                                                                gap-3">
+
+                                                        <div style="max-width: 800px;">
+
+                                                            <div class="small
+                                                                        text-muted
+                                                                        mb-1">
                                                                 @finding.RuleId
                                                             </div>
 
+
+                                                            <h5 class="h6 mb-1">
+
+                                                                @(string.IsNullOrWhiteSpace(
+                                                                    finding.Help)
+                                                                    ? finding.RuleId
+                                                                    : finding.Help)
+
+                                                            </h5>
+
+
                                                             @if (!string.IsNullOrWhiteSpace(
-                                                                finding.Help))
+                                                                finding.Description))
                                                             {
-                                                                <div>
-                                                                    @finding.Help
-                                                                </div>
+                                                                <p class="small
+                                                                          text-muted
+                                                                          mb-0">
+                                                                    @finding.Description
+                                                                </p>
                                                             }
+
                                                         </div>
 
-                                                        <div class="d-flex flex-wrap gap-2">
 
-                                                            @if (
-                                                                (string.Equals(
-                                                                    finding.Impact,
-                                                                    "critical",
-                                                                    StringComparison.OrdinalIgnoreCase) ||
-                                                                string.Equals(
-                                                                    finding.Impact,
-                                                                    "serious",
-                                                                    StringComparison.OrdinalIgnoreCase)) &&
-                                                                (string.Equals(
-                                                                    finding.WcagLevel,
-                                                                    "A",
-                                                                    StringComparison.OrdinalIgnoreCase) ||
-                                                                string.Equals(
-                                                                    finding.WcagLevel,
-                                                                    "AA",
-                                                                    StringComparison.OrdinalIgnoreCase)))
+                                                        <div class="d-flex
+                                                                    flex-wrap
+                                                                    gap-2">
+
+                                                            @if (isFixFirst)
                                                             {
-                                                                <span class="badge text-bg-danger">
+                                                                <span class="badge
+                                                                             text-bg-danger">
                                                                     Fix First
                                                                 </span>
                                                             }
-                                                        </div>
 
-                                                        <div class="d-flex flex-wrap gap-2">
-                                                            <span class="badge @impactBadgeClass">
-                                                                @(finding.Impact ?? "Unknown impact")
+
+                                                            <span class="badge
+                                                                         @impactBadgeClass">
+
+                                                                @(string.IsNullOrWhiteSpace(
+                                                                    finding.Impact)
+                                                                    ? "Unknown"
+                                                                    : finding.Impact)
+
                                                             </span>
 
-                                                            @* Some axe rules are best-practice checks rather than WCAG A or AA. *@
-                                                            @if (!string.IsNullOrWhiteSpace(finding.WcagLevel))
+
+                                                            @if (!string.IsNullOrWhiteSpace(
+                                                                finding.WcagLevel))
                                                             {
-                                                                <span class="badge text-bg-primary">
-                                                                    WCAG @finding.WcagLevel
+                                                                <span class="badge
+                                                                             text-bg-primary">
+                                                                    WCAG
+                                                                    @finding.WcagLevel
                                                                 </span>
                                                             }
                                                             else
                                                             {
-                                                                <span class="badge text-bg-secondary">
+                                                                <span class="badge
+                                                                             text-bg-secondary">
                                                                     Other / Best Practice
                                                                 </span>
                                                             }
 
-                                                            <span class="badge bg-dark">
+
+                                                            <span class="badge
+                                                                         text-bg-dark">
                                                                 @finding.AffectedElementCount
                                                                 affected
                                                             </span>
+
                                                         </div>
 
-                                                        @if (finding.Nodes.Count > 0)
-                                                        {
-                                                            <details class="d-flex justify-content-end mt-3">
-                                                                <summary class="fw-semibold text-nowrap">
-                                                                    View exact affected elements
-                                                                    (@finding.Nodes.Count)
-                                                                </summary>
-
-                                                                <div class="mt-3">
-                                                                    @for (int nodeIndex = 0;
-                                                                        nodeIndex < finding.Nodes.Count;
-                                                                        nodeIndex++)
-                                                                    {
-                                                                        var node = finding.Nodes[nodeIndex];
-
-                                                                        <div class="border rounded p-3 mb-3">
-                                                                            <h6 class="mb-3">
-                                                                                Affected Element @(nodeIndex + 1)
-                                                                            </h6>
-
-                                                                            <div class="mb-3">
-                                                                                <strong>CSS selector / target</strong>
-
-                                                                                <code class="d-block border rounded p-2 mt-1 text-break">
-                                                                                    @(string.IsNullOrWhiteSpace(node.Target)
-                                                                                        ? "Target not available"
-                                                                                        : node.Target)
-                                                                                </code>
-                                                                            </div>
-
-                                                                            @if (!string.IsNullOrWhiteSpace(
-                                                                                node.FailureSummary))
-                                                                            {
-                                                                                <div class="mb-3">
-                                                                                    <strong>Why this element failed</strong>
-
-                                                                                    <div class="border rounded p-2 mt-1"
-                                                                                         style="white-space: pre-line;">
-                                                                                        @node.FailureSummary
-                                                                                    </div>
-                                                                                </div>
-
-                                                                                @if (!string.IsNullOrWhiteSpace(node.ElementFixGuidance))
-                                                                                {
-                                                                                    <div class="alert alert-success mt-3 mb-0">
-                                                                                        <div class="fw-semibold mb-1">
-                                                                                            How to fix this exact element
-                                                                                        </div>
-
-                                                                                        <div style="white-space: pre-line;">
-                                                                                            @node.ElementFixGuidance
-                                                                                        </div>
-                                                                                    </div>
-                                                                                }
-                                                                            }
-
-                                                                            @if (!string.IsNullOrWhiteSpace(node.Html))
-                                                                            {
-                                                                                <div>
-                                                                                    <strong>HTML snippet</strong>
-
-                                                                                    @* Razor encodes the saved HTML so it is shown
-                                                                                    as text instead of executing on this page. *@
-                                                                                    <pre class="border rounded p-2 mt-1 mb-0 text-wrap"><code>@node.Html</code></pre>
-                                                                                </div>
-                                                                            }
-                                                                        </div>
-                                                                    }
-                                                                </div>
-                                                            </details>
-                                                        }
                                                     </div>
 
-                                                    @if (!string.IsNullOrWhiteSpace(
-                                                        finding.Description))
-                                                    {
-                                                        <p class="small text-muted mt-3 mb-2">
-                                                            @finding.Description
-                                                        </p>
-                                                    }
 
-                                                    @if (!string.IsNullOrWhiteSpace(finding.WcagTags))
+                                                    @if (!string.IsNullOrWhiteSpace(
+                                                        finding.WcagTags))
                                                     {
-                                                        <div class="small text-muted mt-2">
-                                                            <strong>WCAG tags:</strong>
+                                                        <div class="small
+                                                                    text-muted
+                                                                    mt-3">
+
+                                                            <strong>
+                                                                WCAG tags:
+                                                            </strong>
+
                                                             @finding.WcagTags
+
                                                         </div>
                                                     }
 
-                                                    @if (!string.IsNullOrWhiteSpace(
-                                                        finding.HelpUrl))
+
+                                                    <!-- =====================
+                                                         Finding actions
+                                                         ===================== -->
+
+                                                    <div class="d-flex
+                                                                flex-wrap
+                                                                gap-2
+                                                                mt-3">
+
+                                                        @if (!string.IsNullOrWhiteSpace(
+                                                            finding.HelpUrl))
+                                                        {
+                                                            <a href="@finding.HelpUrl"
+                                                               target="_blank"
+                                                               rel="noopener noreferrer"
+                                                               class="btn
+                                                                      btn-sm
+                                                                      btn-outline-primary">
+
+                                                                Rule Guidance
+
+                                                                <span class="visually-hidden">
+                                                                    opens in a new tab
+                                                                </span>
+
+                                                            </a>
+                                                        }
+
+
+                                                        @if (finding.RemediationItemId.HasValue)
+                                                        {
+                                                            <a asp-controller="AccessibilityRemediations"
+                                                               asp-action="Details"
+                                                               asp-route-id="@finding.RemediationItemId.Value"
+                                                               class="btn
+                                                                      btn-sm
+                                                                      btn-success">
+
+                                                                View Remediation
+
+                                                                @if (!string.IsNullOrWhiteSpace(
+                                                                    finding.RemediationStatus))
+                                                                {
+                                                                    <span>
+                                                                        ·
+                                                                        @finding.RemediationStatus
+                                                                    </span>
+                                                                }
+
+                                                            </a>
+                                                        }
+                                                        else
+                                                        {
+                                                            <form asp-controller="AccessibilityRemediations"
+                                                                  asp-action="Start"
+                                                                  method="post"
+                                                                  class="d-inline">
+
+                                                                @Html.AntiForgeryToken()
+
+                                                                <input type="hidden"
+                                                                       name="findingId"
+                                                                       value="@finding.Id" />
+
+                                                                <input type="hidden"
+                                                                       name="auditRunId"
+                                                                       value="@Model.Id" />
+
+                                                                <button type="submit"
+                                                                        class="btn
+                                                                               btn-sm
+                                                                               btn-success">
+                                                                    Start Remediation
+                                                                </button>
+
+                                                            </form>
+                                                        }
+
+                                                    </div>
+
+
+                                                    <!-- =====================
+                                                         Element details
+                                                         ===================== -->
+
+                                                    @if (finding.Nodes.Count > 0)
                                                     {
-                                                        <a href="@finding.HelpUrl"
-                                                           target="_blank"
-                                                           rel="noopener noreferrer"
-                                                           class="btn btn-sm
-                                                            btn-outline-primary">
-                                                            View Rule Guidance
-                                                        </a>
+                                                        <details class="border-top
+                                                                        mt-3
+                                                                        pt-3">
+
+                                                            <summary class="fw-semibold">
+                                                                Technical Affected Elements
+                                                                (@finding.Nodes.Count)
+                                                            </summary>
+
+
+                                                            <div class="mt-3">
+
+                                                                @for (
+                                                                    int nodeIndex = 0;
+                                                                    nodeIndex < finding.Nodes.Count;
+                                                                    nodeIndex++)
+                                                                {
+                                                                    var node =
+                                                                        finding.Nodes[nodeIndex];
+
+
+                                                                    <div class="border
+                                                                                rounded
+                                                                                p-3
+                                                                                mb-3">
+
+                                                                        <h6 class="mb-3">
+                                                                            Affected Element
+                                                                            @(nodeIndex + 1)
+                                                                        </h6>
+
+
+                                                                        <div class="mb-3">
+
+                                                                            <div class="small
+                                                                                        fw-semibold
+                                                                                        mb-1">
+                                                                                CSS Selector / Target
+                                                                            </div>
+
+                                                                            <code class="d-block
+                                                                                         border
+                                                                                         rounded
+                                                                                         bg-light
+                                                                                         p-2
+                                                                                         text-break">
+
+                                                                                @(string.IsNullOrWhiteSpace(
+                                                                                    node.Target)
+                                                                                    ? "Target not available"
+                                                                                    : node.Target)
+
+                                                                            </code>
+
+                                                                        </div>
+
+
+                                                                        @if (!string.IsNullOrWhiteSpace(
+                                                                            node.FailureSummary))
+                                                                        {
+                                                                            <div class="mb-3">
+
+                                                                                <div class="small
+                                                                                            fw-semibold
+                                                                                            mb-1">
+                                                                                    Why This Element Failed
+                                                                                </div>
+
+                                                                                <div class="border
+                                                                                            rounded
+                                                                                            p-2"
+                                                                                     style="white-space: pre-line;">
+                                                                                    @node.FailureSummary
+                                                                                </div>
+
+                                                                            </div>
+                                                                        }
+
+
+                                                                        @if (!string.IsNullOrWhiteSpace(
+                                                                            node.ElementFixGuidance))
+                                                                        {
+                                                                            <div class="alert
+                                                                                        alert-success
+                                                                                        mb-3">
+
+                                                                                <div class="fw-semibold
+                                                                                            mb-1">
+                                                                                    Element Fix Guidance
+                                                                                </div>
+
+                                                                                <div style="white-space: pre-line;">
+                                                                                    @node.ElementFixGuidance
+                                                                                </div>
+
+                                                                            </div>
+                                                                        }
+
+
+                                                                        @if (!string.IsNullOrWhiteSpace(
+                                                                            node.Html))
+                                                                        {
+                                                                            <div>
+
+                                                                                <div class="small
+                                                                                            fw-semibold
+                                                                                            mb-1">
+                                                                                    HTML Snippet
+                                                                                </div>
+
+                                                                                <pre class="border
+                                                                                            rounded
+                                                                                            bg-light
+                                                                                            p-2
+                                                                                            mb-0
+                                                                                            text-wrap"><code>@node.Html</code></pre>
+
+                                                                            </div>
+                                                                        }
+
+                                                                    </div>
+                                                                }
+
+                                                            </div>
+
+                                                        </details>
                                                     }
-                                                    @if (finding.RemediationItemId.HasValue)
-                                                    {
-                                                        <a asp-controller="AccessibilityRemediations"
-                                                           asp-action="Details"
-                                                           asp-route-id="@finding.RemediationItemId.Value"
-                                                           class="btn btn-sm btn-success ms-2">
-                                                            View Remediation
-                                                        </a>
-                                                    }
-                                                    else
-                                                    {
-                                                        <form asp-controller="AccessibilityRemediations"
-                                                              asp-action="Start"
-                                                              method="post"
-                                                              class="d-inline ms-2">
 
-                                                            @Html.AntiForgeryToken()
-
-                                                            <input type="hidden"
-                                                                   name="findingId"
-                                                                   value="@finding.Id" />
-
-                                                            <input type="hidden"
-                                                                   name="auditRunId"
-                                                                   value="@Model.Id" />
-
-                                                            <button type="submit"
-                                                                    class="btn btn-sm btn-success">
-                                                                Start Remediation
-                                                            </button>
-                                                        </form>
-                                                    }
                                                 </div>
-                                            }
-                                        </div>
+
+                                            </article>
+                                        }
+
                                     </div>
-                                }
 
-                                @if (needsReviewFindings.Count > 0)
-                                {
-                                    <div>
-                                        <h4 class="h6 text-warning">
-                                            Needs manual review
-                                            (@needsReviewFindings.Count)
-                                        </h4>
+                                </section>
+                            }
 
-                                        <div class="d-flex flex-column gap-3">
-                                            @foreach (var finding in needsReviewFindings)
-                                            {
-                                                string impactBadgeClass =
-                                                    finding.Impact?.ToLowerInvariant() switch
-                                                    {
-                                                        "critical" => "bg-danger",
-                                                        "serious" => "bg-danger",
-                                                        "moderate" => "bg-warning text-dark",
-                                                        "minor" => "bg-info text-dark",
-                                                        _ => "bg-secondary"
-                                                    };
 
-                                                <div class="border border-warning
-                                                    rounded
-                                                    p-3">
-                                                    <div class="d-flex flex-wrap
-                                                        justify-content-between
-                                                        align-items-start
-                                                        gap-2">
-                                                        <div>
-                                                            <div class="fw-semibold">
+                            <!-- =================================
+                                 Needs manual review
+                                 ================================= -->
+
+                            @if (needsReviewFindings.Count > 0)
+                            {
+                                <section aria-labelledby="review-step-@step.StepNumber">
+
+                                    <div class="d-flex
+                                                flex-wrap
+                                                justify-content-between
+                                                align-items-end
+                                                gap-2
+                                                mb-3">
+
+                                        <div>
+
+                                            <h4 id="review-step-@step.StepNumber"
+                                                class="h5 mb-1">
+                                                Needs Manual Review
+                                            </h4>
+
+                                            <p class="small
+                                                      text-muted
+                                                      mb-0">
+                                                Findings requiring
+                                                additional evaluation.
+                                            </p>
+
+                                        </div>
+
+
+                                        <span class="badge
+                                                     text-bg-warning">
+                                            @needsReviewFindings.Count
+                                        </span>
+
+                                    </div>
+
+
+                                    <div class="d-flex
+                                                flex-column
+                                                gap-3">
+
+                                        @foreach (var finding
+                                            in needsReviewFindings)
+                                        {
+                                            string impactBadgeClass =
+                                                finding.Impact?
+                                                    .ToLowerInvariant()
+                                                switch
+                                                {
+                                                    "critical" =>
+                                                        "text-bg-danger",
+
+                                                    "serious" =>
+                                                        "text-bg-danger",
+
+                                                    "moderate" =>
+                                                        "text-bg-warning",
+
+                                                    "minor" =>
+                                                        "text-bg-info",
+
+                                                    _ =>
+                                                        "text-bg-secondary"
+                                                };
+
+
+                                            bool isFixFirst =
+                                                (
+                                                    string.Equals(
+                                                        finding.Impact,
+                                                        "critical",
+                                                        StringComparison.OrdinalIgnoreCase) ||
+
+                                                    string.Equals(
+                                                        finding.Impact,
+                                                        "serious",
+                                                        StringComparison.OrdinalIgnoreCase)
+                                                ) &&
+                                                (
+                                                    string.Equals(
+                                                        finding.WcagLevel,
+                                                        "A",
+                                                        StringComparison.OrdinalIgnoreCase) ||
+
+                                                    string.Equals(
+                                                        finding.WcagLevel,
+                                                        "AA",
+                                                        StringComparison.OrdinalIgnoreCase)
+                                                );
+
+
+                                            <article class="border
+                                                            border-warning
+                                                            rounded
+                                                            overflow-hidden">
+
+                                                <div class="p-3">
+
+                                                    <div class="d-flex
+                                                                flex-wrap
+                                                                justify-content-between
+                                                                align-items-start
+                                                                gap-3">
+
+                                                        <div style="max-width: 800px;">
+
+                                                            <div class="small
+                                                                        text-muted
+                                                                        mb-1">
                                                                 @finding.RuleId
                                                             </div>
 
+
+                                                            <h5 class="h6 mb-1">
+
+                                                                @(string.IsNullOrWhiteSpace(
+                                                                    finding.Help)
+                                                                    ? finding.RuleId
+                                                                    : finding.Help)
+
+                                                            </h5>
+
+
                                                             @if (!string.IsNullOrWhiteSpace(
-                                                                finding.Help))
+                                                                finding.Description))
                                                             {
-                                                                <div>
-                                                                    @finding.Help
-                                                                </div>
-                                                            }
-                                                        </div>
-
-                                                        <div class="d-flex flex-wrap gap-2">
-
-                                                            @if (
-                                                                (string.Equals(
-                                                                    finding.Impact,
-                                                                    "critical",
-                                                                    StringComparison.OrdinalIgnoreCase) ||
-                                                                string.Equals(
-                                                                    finding.Impact,
-                                                                    "serious",
-                                                                    StringComparison.OrdinalIgnoreCase)) &&
-                                                                (string.Equals(
-                                                                    finding.WcagLevel,
-                                                                    "A",
-                                                                    StringComparison.OrdinalIgnoreCase) ||
-                                                                string.Equals(
-                                                                    finding.WcagLevel,
-                                                                    "AA",
-                                                                    StringComparison.OrdinalIgnoreCase)))
-                                                            {
-                                                            <span class="badge text-bg-danger">
-                                                                Fix First
-                                                            </span>
+                                                                <p class="small
+                                                                          text-muted
+                                                                          mb-0">
+                                                                    @finding.Description
+                                                                </p>
                                                             }
 
                                                         </div>
 
-                                                        <div class="d-flex flex-wrap gap-2">
-                                                            <span class="badge @impactBadgeClass">
-                                                                @(finding.Impact ?? "Unknown impact")
+
+                                                        <div class="d-flex
+                                                                    flex-wrap
+                                                                    gap-2">
+
+                                                            @if (isFixFirst)
+                                                            {
+                                                                <span class="badge
+                                                                             text-bg-danger">
+                                                                    Fix First
+                                                                </span>
+                                                            }
+
+
+                                                            <span class="badge
+                                                                         @impactBadgeClass">
+
+                                                                @(string.IsNullOrWhiteSpace(
+                                                                    finding.Impact)
+                                                                    ? "Unknown"
+                                                                    : finding.Impact)
+
                                                             </span>
 
-                                                            @* Some axe rules are best-practice checks rather than WCAG A or AA. *@
-                                                            @if (!string.IsNullOrWhiteSpace(finding.WcagLevel))
+
+                                                            @if (!string.IsNullOrWhiteSpace(
+                                                                finding.WcagLevel))
                                                             {
-                                                                <span class="badge text-bg-primary">
-                                                                    WCAG @finding.WcagLevel
+                                                                <span class="badge
+                                                                             text-bg-primary">
+                                                                    WCAG
+                                                                    @finding.WcagLevel
                                                                 </span>
                                                             }
                                                             else
                                                             {
-                                                                <span class="badge text-bg-secondary">
+                                                                <span class="badge
+                                                                             text-bg-secondary">
                                                                     Other / Best Practice
                                                                 </span>
                                                             }
 
-                                                            <span class="badge bg-dark">
+
+                                                            <span class="badge
+                                                                         text-bg-dark">
                                                                 @finding.AffectedElementCount
                                                                 affected
                                                             </span>
+
                                                         </div>
 
-                                                        @if (finding.Nodes.Count > 0)
+                                                    </div>
+
+
+                                                    @if (!string.IsNullOrWhiteSpace(
+                                                        finding.WcagTags))
+                                                    {
+                                                        <div class="small
+                                                                    text-muted
+                                                                    mt-3">
+
+                                                            <strong>
+                                                                WCAG tags:
+                                                            </strong>
+
+                                                            @finding.WcagTags
+
+                                                        </div>
+                                                    }
+
+
+                                                    <div class="d-flex
+                                                                flex-wrap
+                                                                gap-2
+                                                                mt-3">
+
+                                                        @if (!string.IsNullOrWhiteSpace(
+                                                            finding.HelpUrl))
                                                         {
-                                                            <details class="d-flex justify-content-end mt-3">
-                                                                <summary class="fw-semibold text-nowrap">
-                                                                    View exact affected elements
-                                                                    (@finding.Nodes.Count)
-                                                                </summary>
+                                                            <a href="@finding.HelpUrl"
+                                                               target="_blank"
+                                                               rel="noopener noreferrer"
+                                                               class="btn
+                                                                      btn-sm
+                                                                      btn-outline-primary">
 
-                                                                <div class="mt-3">
-                                                                    @for (int nodeIndex = 0;
-                                                                        nodeIndex < finding.Nodes.Count;
-                                                                        nodeIndex++)
-                                                                    {
-                                                                        var node = finding.Nodes[nodeIndex];
+                                                                Rule Guidance
 
-                                                                        <div class="border rounded p-3 mb-3">
-                                                                            <h6 class="mb-3">
-                                                                                Affected Element @(nodeIndex + 1)
-                                                                            </h6>
+                                                                <span class="visually-hidden">
+                                                                    opens in a new tab
+                                                                </span>
 
-                                                                            <div class="mb-3">
-                                                                                <strong>CSS selector / target</strong>
+                                                            </a>
+                                                        }
 
-                                                                                <code class="d-block border rounded p-2 mt-1 text-break">
-                                                                                    @(string.IsNullOrWhiteSpace(node.Target)
-                                                                                        ? "Target not available"
-                                                                                        : node.Target)
-                                                                                </code>
-                                                                            </div>
 
-                                                                            @if (!string.IsNullOrWhiteSpace(
-                                                                                node.FailureSummary))
-                                                                            {
-                                                                                <div class="mb-3">
-                                                                                    <strong>Why this element failed</strong>
+                                                        @if (finding.RemediationItemId.HasValue)
+                                                        {
+                                                            <a asp-controller="AccessibilityRemediations"
+                                                               asp-action="Details"
+                                                               asp-route-id="@finding.RemediationItemId.Value"
+                                                               class="btn
+                                                                      btn-sm
+                                                                      btn-success">
 
-                                                                                    <div class="border rounded p-2 mt-1"
-                                                                                         style="white-space: pre-line;">
-                                                                                        @node.FailureSummary
-                                                                                    </div>
-                                                                                </div>
+                                                                View Remediation
 
-                                                                                @if (!string.IsNullOrWhiteSpace(node.ElementFixGuidance))
-                                                                                {
-                                                                                    <div class="alert alert-success mt-3 mb-0">
-                                                                                        <div class="fw-semibold mb-1">
-                                                                                            How to fix this exact element
-                                                                                        </div>
+                                                                @if (!string.IsNullOrWhiteSpace(
+                                                                    finding.RemediationStatus))
+                                                                {
+                                                                    <span>
+                                                                        ·
+                                                                        @finding.RemediationStatus
+                                                                    </span>
+                                                                }
 
-                                                                                        <div style="white-space: pre-line;">
-                                                                                            @node.ElementFixGuidance
-                                                                                        </div>
-                                                                                    </div>
-                                                                                }
-                                                                            }
+                                                            </a>
+                                                        }
+                                                        else
+                                                        {
+                                                            <form asp-controller="AccessibilityRemediations"
+                                                                  asp-action="Start"
+                                                                  method="post"
+                                                                  class="d-inline">
 
-                                                                            @if (!string.IsNullOrWhiteSpace(node.Html))
-                                                                            {
-                                                                                <div>
-                                                                                    <strong>HTML snippet</strong>
+                                                                @Html.AntiForgeryToken()
 
-                                                                                    @* Razor encodes the saved HTML so it is shown
-                                                                                    as text instead of executing on this page. *@
-                                                                                    <pre class="border rounded p-2 mt-1 mb-0 text-wrap"><code>@node.Html</code></pre>
-                                                                                </div>
-                                                                            }
-                                                                        </div>
-                                                                    }
-                                                                </div>
-                                                            </details>
+                                                                <input type="hidden"
+                                                                       name="findingId"
+                                                                       value="@finding.Id" />
+
+                                                                <input type="hidden"
+                                                                       name="auditRunId"
+                                                                       value="@Model.Id" />
+
+                                                                <button type="submit"
+                                                                        class="btn
+                                                                               btn-sm
+                                                                               btn-success">
+                                                                    Start Remediation
+                                                                </button>
+
+                                                            </form>
                                                         }
 
                                                     </div>
 
-                                                    @if (!string.IsNullOrWhiteSpace(
-                                                        finding.Description))
+
+                                                    @if (finding.Nodes.Count > 0)
                                                     {
-                                                        <p class="small text-muted mt-3 mb-2">
-                                                            @finding.Description
-                                                        </p>
+                                                        <details class="border-top
+                                                                        mt-3
+                                                                        pt-3">
+
+                                                            <summary class="fw-semibold">
+                                                                Technical Affected Elements
+                                                                (@finding.Nodes.Count)
+                                                            </summary>
+
+
+                                                            <div class="mt-3">
+
+                                                                @for (
+                                                                    int nodeIndex = 0;
+                                                                    nodeIndex < finding.Nodes.Count;
+                                                                    nodeIndex++)
+                                                                {
+                                                                    var node =
+                                                                        finding.Nodes[nodeIndex];
+
+
+                                                                    <div class="border
+                                                                                rounded
+                                                                                p-3
+                                                                                mb-3">
+
+                                                                        <h6 class="mb-3">
+                                                                            Affected Element
+                                                                            @(nodeIndex + 1)
+                                                                        </h6>
+
+
+                                                                        <div class="mb-3">
+
+                                                                            <div class="small
+                                                                                        fw-semibold
+                                                                                        mb-1">
+                                                                                CSS Selector / Target
+                                                                            </div>
+
+                                                                            <code class="d-block
+                                                                                         border
+                                                                                         rounded
+                                                                                         bg-light
+                                                                                         p-2
+                                                                                         text-break">
+
+                                                                                @(string.IsNullOrWhiteSpace(
+                                                                                    node.Target)
+                                                                                    ? "Target not available"
+                                                                                    : node.Target)
+
+                                                                            </code>
+
+                                                                        </div>
+
+
+                                                                        @if (!string.IsNullOrWhiteSpace(
+                                                                            node.FailureSummary))
+                                                                        {
+                                                                            <div class="mb-3">
+
+                                                                                <div class="small
+                                                                                            fw-semibold
+                                                                                            mb-1">
+                                                                                    Why This Element Failed
+                                                                                </div>
+
+                                                                                <div class="border
+                                                                                            rounded
+                                                                                            p-2"
+                                                                                     style="white-space: pre-line;">
+                                                                                    @node.FailureSummary
+                                                                                </div>
+
+                                                                            </div>
+                                                                        }
+
+
+                                                                        @if (!string.IsNullOrWhiteSpace(
+                                                                            node.ElementFixGuidance))
+                                                                        {
+                                                                            <div class="alert
+                                                                                        alert-success
+                                                                                        mb-3">
+
+                                                                                <div class="fw-semibold
+                                                                                            mb-1">
+                                                                                    Element Fix Guidance
+                                                                                </div>
+
+                                                                                <div style="white-space: pre-line;">
+                                                                                    @node.ElementFixGuidance
+                                                                                </div>
+
+                                                                            </div>
+                                                                        }
+
+
+                                                                        @if (!string.IsNullOrWhiteSpace(
+                                                                            node.Html))
+                                                                        {
+                                                                            <div>
+
+                                                                                <div class="small
+                                                                                            fw-semibold
+                                                                                            mb-1">
+                                                                                    HTML Snippet
+                                                                                </div>
+
+                                                                                <pre class="border
+                                                                                            rounded
+                                                                                            bg-light
+                                                                                            p-2
+                                                                                            mb-0
+                                                                                            text-wrap"><code>@node.Html</code></pre>
+
+                                                                            </div>
+                                                                        }
+
+                                                                    </div>
+                                                                }
+
+                                                            </div>
+
+                                                        </details>
                                                     }
 
-                                                    @if (!string.IsNullOrWhiteSpace(finding.WcagTags))
-                                                    {
-                                                        <div class="small text-muted mt-1">
-                                                            <strong>WCAG tags:</strong>
-                                                            @finding.WcagTags
-                                                        </div>
-                                                    }
-
-                                                    @if (!string.IsNullOrWhiteSpace(
-                                                        finding.HelpUrl))
-                                                    {
-                                                        <a href="@finding.HelpUrl"
-                                                           target="_blank"
-                                                           rel="noopener noreferrer"
-                                                           class="btn btn-sm
-                                                            btn-outline-primary">
-                                                            View Rule Guidance
-                                                        </a>
-                                                    }
-
-                                                    @if (finding.RemediationItemId.HasValue)
-                                                    {
-                                                        <a asp-controller="AccessibilityRemediations"
-                                                           asp-action="Details"
-                                                           asp-route-id="@finding.RemediationItemId.Value"
-                                                           class="btn btn-sm btn-success ms-2">
-                                                            View Remediation
-                                                        </a>
-                                                    }
-                                                    else
-                                                    {
-                                                        <form asp-controller="AccessibilityRemediations"
-                                                              asp-action="Start"
-                                                              method="post"
-                                                              class="d-inline ms-2">
-
-                                                            @Html.AntiForgeryToken()
-
-                                                            <input type="hidden"
-                                                                   name="findingId"
-                                                                   value="@finding.Id" />
-
-                                                            <input type="hidden"
-                                                                   name="auditRunId"
-                                                                   value="@Model.Id" />
-
-                                                            <button type="submit"
-                                                                    class="btn btn-sm btn-success">
-                                                                Start Remediation
-                                                            </button>
-                                                        </form>
-                                                    }
                                                 </div>
-                                            }
-                                        </div>
+
+                                            </article>
+                                        }
+
                                     </div>
-                                }
-                            </div>
+
+                                </section>
+                            }
                         }
 
-                        @if (!string.IsNullOrWhiteSpace(step.ErrorMessage))
-                        {
-                            <div class="alert alert-danger mt-4 mb-0">
-                                <strong>Step error:</strong>
-                                @step.ErrorMessage
-                            </div>
-                        }
                     </div>
-                </div>
+
+                </article>
             }
+
         </div>
     }
-</div>
+
+</section>

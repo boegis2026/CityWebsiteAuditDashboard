@@ -2,34 +2,57 @@
 
 @{
     ViewData["Title"] = "Accessibility Overview";
+
+    string reportingScopeLabel =
+        Model.Filters.LatestOnly
+            ? "Latest audits only"
+            : "All audit history";
 }
 
-<div class="mb-4">
 
-    <div class="d-flex flex-wrap
+<!-- =========================================================
+     Page heading
+     ========================================================= -->
+
+<header class="mb-4">
+
+    <div class="d-flex
+                flex-wrap
                 justify-content-between
                 align-items-start
                 gap-3">
 
-        <div>
+        <div style="max-width: 760px;">
 
-            <h1 class="display-6 fw-bold mb-1">
+            <div class="small
+                        fw-bold
+                        text-uppercase
+                        text-muted
+                        mb-2"
+                 style="letter-spacing: 0.06em;">
+                Accessibility Management
+            </div>
+
+            <h1 class="display-6 fw-bold mb-2">
                 Accessibility Overview
             </h1>
 
-            <p class="lead mb-0">
-                Management-facing summary of authenticated workflow
-                accessibility audits, remediation progress, retesting,
-                and verification.
+            <p class="lead text-muted mb-0">
+                Current accessibility findings, remediation progress,
+                retesting, and verification across audited City web
+                applications.
             </p>
 
         </div>
 
-        <div class="d-flex flex-wrap gap-2">
+
+        <div class="d-flex
+                    flex-wrap
+                    gap-2">
 
             <a asp-controller="AccessibilityRemediations"
                asp-action="Index"
-               class="btn btn-outline-primary">
+               class="btn btn-primary">
                 Remediation Tracker
             </a>
 
@@ -49,341 +72,337 @@
 
     </div>
 
-    <div class="alert alert-info mt-3 mb-0"
-         role="note">
+</header>
 
-        <strong>
-            About these results:
-        </strong>
+@if (!Model.HasAnyData)
+{
+    <!-- =====================================================
+         Filters
+         ===================================================== -->
 
-        Automated testing identifies accessibility issues that can be
-        detected by the configured testing tools. These results do not
-        guarantee complete ADA or WCAG compliance and do not replace
-        manual accessibility evaluation.
+    <section aria-labelledby="overview-filters-heading"
+             class="card shadow-sm mb-4">
 
-    </div>
+        <div class="card-header">
 
-</div>
+            <h2 id="overview-filters-heading"
+                class="h5 mb-0">
+                Reporting Filters
+            </h2>
 
-
-<section aria-labelledby="overview-filters-heading"
-         class="card shadow-sm mb-4">
-
-    <div class="card-body">
-
-        <h2 id="overview-filters-heading"
-            class="h4 mb-3">
-            Dashboard Filters
-        </h2>
-
-        <div asp-validation-summary="ModelOnly"
-             class="alert alert-danger"
-             role="alert">
         </div>
 
-        <form method="get"
-              asp-controller="AccessibilityOverview"
-              asp-action="Index">
+        <div class="card-body">
 
-            <div class="row g-3">
+            <div asp-validation-summary="ModelOnly"
+                 class="alert alert-danger"
+                 role="alert">
+            </div>
 
-                <div class="col-12 col-md-6 col-xl-3">
 
-                    <label for="applicationName"
-                           class="form-label">
-                        Application
-                    </label>
+            <form method="get"
+                  asp-controller="AccessibilityOverview"
+                  asp-action="Index">
 
-                    <select id="applicationName"
-                            name="applicationName"
-                            class="form-select">
+                <div class="row g-3">
 
-                        <option value="">
-                            All applications
-                        </option>
+                    <div class="col-12 col-md-6 col-xl-3">
 
-                        @foreach (string application
-                            in Model.ApplicationOptions)
-                        {
-                            if (string.Equals(
-                                Model.Filters.ApplicationName,
-                                application,
-                                StringComparison.OrdinalIgnoreCase))
+                        <label for="applicationName"
+                               class="form-label fw-semibold">
+                            Application
+                        </label>
+
+                        <select id="applicationName"
+                                name="applicationName"
+                                class="form-select">
+
+                            <option value="">
+                                All applications
+                            </option>
+
+                            @foreach (string application
+                                in Model.ApplicationOptions)
                             {
-                                <option value="@application"
+                                if (string.Equals(
+                                    Model.Filters.ApplicationName,
+                                    application,
+                                    StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <option value="@application"
+                                            selected>
+                                        @application
+                                    </option>
+                                }
+                                else
+                                {
+                                    <option value="@application">
+                                        @application
+                                    </option>
+                                }
+                            }
+
+                        </select>
+
+                    </div>
+
+
+                    <div class="col-12 col-md-6 col-xl-3">
+
+                        <label for="startDate"
+                               class="form-label fw-semibold">
+                            Start Date
+                        </label>
+
+                        <input id="startDate"
+                               name="startDate"
+                               type="date"
+                               class="form-control"
+                               value="@Model.Filters.StartDate?.ToString("yyyy-MM-dd")" />
+
+                    </div>
+
+
+                    <div class="col-12 col-md-6 col-xl-3">
+
+                        <label for="endDate"
+                               class="form-label fw-semibold">
+                            End Date
+                        </label>
+
+                        <input id="endDate"
+                               name="endDate"
+                               type="date"
+                               class="form-control"
+                               value="@Model.Filters.EndDate?.ToString("yyyy-MM-dd")" />
+
+                    </div>
+
+
+                    <div class="col-12 col-md-6 col-xl-3">
+
+                        <label for="severity"
+                               class="form-label fw-semibold">
+                            Severity
+                        </label>
+
+                        <select id="severity"
+                                name="severity"
+                                class="form-select">
+
+                            <option value="">
+                                All severities
+                            </option>
+
+                            @foreach (string severityOption in new[]
+                            {
+                                "Critical",
+                                "Serious",
+                                "Moderate",
+                                "Minor",
+                                "Unknown"
+                            })
+                            {
+                                if (Model.Filters.Severity ==
+                                    severityOption)
+                                {
+                                    <option value="@severityOption"
+                                            selected>
+                                        @severityOption
+                                    </option>
+                                }
+                                else
+                                {
+                                    <option value="@severityOption">
+                                        @severityOption
+                                    </option>
+                                }
+                            }
+
+                        </select>
+
+                    </div>
+
+
+                    <div class="col-12 col-md-6 col-xl-3">
+
+                        <label for="wcagLevel"
+                               class="form-label fw-semibold">
+                            WCAG Level
+                        </label>
+
+                        <select id="wcagLevel"
+                                name="wcagLevel"
+                                class="form-select">
+
+                            <option value="">
+                                All WCAG mappings
+                            </option>
+
+                            @if (Model.Filters.WcagLevel == "A")
+                            {
+                                <option value="A"
                                         selected>
-                                    @application
+                                    Level A
                                 </option>
                             }
                             else
                             {
-                                <option value="@application">
-                                    @application
+                                <option value="A">
+                                    Level A
                                 </option>
                             }
-                        }
 
-                    </select>
+                            @if (Model.Filters.WcagLevel == "AA")
+                            {
+                                <option value="AA"
+                                        selected>
+                                    Level AA
+                                </option>
+                            }
+                            else
+                            {
+                                <option value="AA">
+                                    Level AA
+                                </option>
+                            }
 
-                    <div class="form-text">
-                        Filter to one authenticated application.
+                            @if (Model.Filters.WcagLevel ==
+                                "Unmapped")
+                            {
+                                <option value="Unmapped"
+                                        selected>
+                                    Best practice or unmapped
+                                </option>
+                            }
+                            else
+                            {
+                                <option value="Unmapped">
+                                    Best practice or unmapped
+                                </option>
+                            }
+
+                        </select>
+
+                    </div>
+
+
+                    <div class="col-12 col-md-6 col-xl-3">
+
+                        <label for="findingType"
+                               class="form-label fw-semibold">
+                            Finding Type
+                        </label>
+
+                        <select id="findingType"
+                                name="findingType"
+                                class="form-select">
+
+                            <option value="">
+                                All finding types
+                            </option>
+
+                            @if (Model.Filters.FindingType ==
+                                "Violation")
+                            {
+                                <option value="Violation"
+                                        selected>
+                                    Violation
+                                </option>
+                            }
+                            else
+                            {
+                                <option value="Violation">
+                                    Violation
+                                </option>
+                            }
+
+                            @if (Model.Filters.FindingType ==
+                                "NeedsReview")
+                            {
+                                <option value="NeedsReview"
+                                        selected>
+                                    Needs manual review
+                                </option>
+                            }
+                            else
+                            {
+                                <option value="NeedsReview">
+                                    Needs manual review
+                                </option>
+                            }
+
+                        </select>
+
+                    </div>
+
+
+                    <div class="col-12 col-md-6 col-xl-3">
+
+                        <label for="latestOnly"
+                               class="form-label fw-semibold">
+                            Audit History
+                        </label>
+
+                        <select id="latestOnly"
+                                name="latestOnly"
+                                class="form-select">
+
+                            @if (Model.Filters.LatestOnly)
+                            {
+                                <option value="true"
+                                        selected>
+                                    Latest audit only
+                                </option>
+
+                                <option value="false">
+                                    All audit history
+                                </option>
+                            }
+                            else
+                            {
+                                <option value="true">
+                                    Latest audit only
+                                </option>
+
+                                <option value="false"
+                                        selected>
+                                    All audit history
+                                </option>
+                            }
+
+                        </select>
+
                     </div>
 
                 </div>
 
 
-                <div class="col-12 col-md-6 col-xl-3">
+                <div class="d-flex
+                            flex-wrap
+                            gap-2
+                            mt-4">
 
-                    <label for="startDate"
-                           class="form-label">
-                        Start date
-                    </label>
+                    <button type="submit"
+                            class="btn btn-primary">
+                        Apply Filters
+                    </button>
 
-                    <input id="startDate"
-                           name="startDate"
-                           type="date"
-                           class="form-control"
-                           value="@Model.Filters.StartDate?.ToString("yyyy-MM-dd")" />
-
-                </div>
-
-
-                <div class="col-12 col-md-6 col-xl-3">
-
-                    <label for="endDate"
-                           class="form-label">
-                        End date
-                    </label>
-
-                    <input id="endDate"
-                           name="endDate"
-                           type="date"
-                           class="form-control"
-                           value="@Model.Filters.EndDate?.ToString("yyyy-MM-dd")" />
+                    <a asp-controller="AccessibilityOverview"
+                       asp-action="Index"
+                       class="btn btn-outline-secondary">
+                        Clear Filters
+                    </a>
 
                 </div>
 
+            </form>
 
-                <div class="col-12 col-md-6 col-xl-3">
+        </div>
 
-                    <label for="severity"
-                           class="form-label">
-                        Severity
-                    </label>
-
-                    <select id="severity"
-                            name="severity"
-                            class="form-select">
-
-                        <option value="">
-                            All severities
-                        </option>
-
-                        @foreach (string severityOption in new[]
-                        {
-                            "Critical",
-                            "Serious",
-                            "Moderate",
-                            "Minor",
-                            "Unknown"
-                        })
-                        {
-                            if (Model.Filters.Severity ==
-                                severityOption)
-                            {
-                                <option value="@severityOption"
-                                        selected>
-                                    @severityOption
-                                </option>
-                            }
-                            else
-                            {
-                                <option value="@severityOption">
-                                    @severityOption
-                                </option>
-                            }
-                        }
-
-                    </select>
-
-                </div>
+    </section>
 
 
-                <div class="col-12 col-md-6 col-xl-3">
-
-                    <label for="wcagLevel"
-                           class="form-label">
-                        WCAG level
-                    </label>
-
-                    <select id="wcagLevel"
-                            name="wcagLevel"
-                            class="form-select">
-
-                        <option value="">
-                            All WCAG mappings
-                        </option>
-
-                        @if (Model.Filters.WcagLevel == "A")
-                        {
-                            <option value="A"
-                                    selected>
-                                Level A
-                            </option>
-                        }
-                        else
-                        {
-                            <option value="A">
-                                Level A
-                            </option>
-                        }
-
-                        @if (Model.Filters.WcagLevel == "AA")
-                        {
-                            <option value="AA"
-                                    selected>
-                                Level AA
-                            </option>
-                        }
-                        else
-                        {
-                            <option value="AA">
-                                Level AA
-                            </option>
-                        }
-
-                        @if (Model.Filters.WcagLevel == "Unmapped")
-                        {
-                            <option value="Unmapped"
-                                    selected>
-                                Best practice or unmapped
-                            </option>
-                        }
-                        else
-                        {
-                            <option value="Unmapped">
-                                Best practice or unmapped
-                            </option>
-                        }
-
-                    </select>
-
-                </div>
-
-
-                <div class="col-12 col-md-6 col-xl-3">
-
-                    <label for="findingType"
-                           class="form-label">
-                        Finding type
-                    </label>
-
-                    <select id="findingType"
-                            name="findingType"
-                            class="form-select">
-
-                        <option value="">
-                            All finding types
-                        </option>
-
-                        @if (Model.Filters.FindingType == "Violation")
-                        {
-                            <option value="Violation"
-                                    selected>
-                                Violation
-                            </option>
-                        }
-                        else
-                        {
-                            <option value="Violation">
-                                Violation
-                            </option>
-                        }
-
-                        @if (Model.Filters.FindingType == "NeedsReview")
-                        {
-                            <option value="NeedsReview"
-                                    selected>
-                                Needs manual review
-                            </option>
-                        }
-                        else
-                        {
-                            <option value="NeedsReview">
-                                Needs manual review
-                            </option>
-                        }
-
-                    </select>
-
-                </div>
-
-
-                <div class="col-12 col-md-6 col-xl-3">
-
-                    <label for="latestOnly"
-                           class="form-label">
-                        Audit history
-                    </label>
-
-                    <select id="latestOnly"
-                            name="latestOnly"
-                            class="form-select">
-
-                        @if (Model.Filters.LatestOnly)
-                        {
-                            <option value="true"
-                                    selected>
-                                Latest audit only
-                            </option>
-
-                            <option value="false">
-                                All audit history
-                            </option>
-                        }
-                        else
-                        {
-                            <option value="true">
-                                Latest audit only
-                            </option>
-
-                            <option value="false"
-                                    selected>
-                                All audit history
-                            </option>
-                        }
-
-                    </select>
-
-                </div>
-
-            </div>
-
-
-            <div class="d-flex flex-wrap gap-2 mt-4">
-
-                <button type="submit"
-                        class="btn btn-primary">
-                    Apply Filters
-                </button>
-
-                <a asp-controller="AccessibilityOverview"
-                   asp-action="Index"
-                   class="btn btn-outline-secondary">
-                    Clear Filters
-                </a>
-
-            </div>
-
-        </form>
-
-    </div>
-
-</section>
-
-
-@if (!Model.HasAnyData)
-{
     <div class="card shadow-sm">
 
         <div class="card-body text-center py-5">
@@ -394,7 +413,7 @@
 
             <p class="text-muted mb-0">
                 No successful authenticated workflow-state scans match
-                the selected filters.
+                the selected reporting scope.
             </p>
 
         </div>
@@ -403,41 +422,196 @@
 }
 else
 {
-    <section aria-labelledby="summary-cards-heading"
+    <!-- =====================================================
+         Executive attention summary
+         ===================================================== -->
+
+    <section aria-labelledby="attention-summary-heading"
              class="mb-4">
 
-        <div class="d-flex flex-wrap
+        <div class="d-flex
+                    flex-wrap
                     justify-content-between
                     align-items-end
-                    gap-2
+                    gap-3
                     mb-3">
 
             <div>
 
-                <h2 id="summary-cards-heading"
+                <h2 id="attention-summary-heading"
                     class="h3 mb-1">
-                    Accessibility Results Summary
+                    Current Attention Summary
                 </h2>
 
                 <p class="text-muted mb-0">
-                    Current automated test results for the selected
-                    reporting scope.
+                    Priority accessibility work requiring management or
+                    remediation attention.
                 </p>
 
             </div>
 
-            <span class="badge text-bg-light border fs-6">
 
-                @(Model.Filters.LatestOnly
-                    ? "Latest audits only"
-                    : "All audit history")
-
+            <span class="badge
+                         text-bg-light
+                         border
+                         px-3
+                         py-2">
+                @reportingScopeLabel
             </span>
 
         </div>
 
 
-        <div class="row row-cols-1
+        <div class="row g-3">
+
+            <div class="col-12 col-sm-6 col-xl-3">
+
+                <article class="card
+                                shadow-sm
+                                h-100
+                                border-start
+                                border-danger
+                                border-4">
+
+                    <div class="card-body">
+
+                        <h3 class="dashboard-card-label">
+                            Fix First
+                        </h3>
+
+                        <p class="dashboard-card-value text-danger">
+                            @Model.Summary.FixFirstFindings
+                        </p>
+
+                        <p class="small text-muted mb-0">
+                            Critical or serious Level A or AA findings
+                        </p>
+
+                    </div>
+
+                </article>
+
+            </div>
+
+
+            <div class="col-12 col-sm-6 col-xl-3">
+
+                <article class="card
+                                shadow-sm
+                                h-100
+                                border-start
+                                border-danger
+                                border-4">
+
+                    <div class="card-body">
+
+                        <h3 class="dashboard-card-label">
+                            Open Remediation
+                        </h3>
+
+                        <p class="dashboard-card-value">
+                            @Model.RemediationProgress.Open
+                        </p>
+
+                        <p class="small text-muted mb-0">
+                            Tracked issues not yet in active remediation
+                        </p>
+
+                    </div>
+
+                </article>
+
+            </div>
+
+
+            <div class="col-12 col-sm-6 col-xl-3">
+
+                <article class="card
+                                shadow-sm
+                                h-100
+                                border-start
+                                border-warning
+                                border-4">
+
+                    <div class="card-body">
+
+                        <h3 class="dashboard-card-label">
+                            Awaiting Verification
+                        </h3>
+
+                        <p class="dashboard-card-value">
+                            @Model.RemediationProgress.AwaitingVerification
+                        </p>
+
+                        <p class="small text-muted mb-0">
+                            Reported fixed and waiting for verification
+                        </p>
+
+                    </div>
+
+                </article>
+
+            </div>
+
+
+            <div class="col-12 col-sm-6 col-xl-3">
+
+                <article class="card
+                                shadow-sm
+                                h-100
+                                border-start
+                                border-warning
+                                border-4">
+
+                    <div class="card-body">
+
+                        <h3 class="dashboard-card-label">
+                            Needs Manual Review
+                        </h3>
+
+                        <p class="dashboard-card-value">
+                            @Model.Health.NeedsReviewRuleResults
+                        </p>
+
+                        <p class="small text-muted mb-0">
+                            Automated results requiring human evaluation
+                        </p>
+
+                    </div>
+
+                </article>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         Operational summary
+         ===================================================== -->
+
+    <section aria-labelledby="summary-cards-heading"
+             class="mb-4">
+
+        <div class="mb-3">
+
+            <h2 id="summary-cards-heading"
+                class="h3 mb-1">
+                Audit Summary
+            </h2>
+
+            <p class="text-muted mb-0">
+                Current authenticated accessibility audit coverage and
+                automated result totals.
+            </p>
+
+        </div>
+
+
+        <div class="row
+                    row-cols-1
                     row-cols-sm-2
                     row-cols-lg-4
                     g-3">
@@ -524,31 +698,6 @@ else
                     <div class="card-body">
 
                         <h3 class="dashboard-card-label">
-                            Needs Manual Review
-                        </h3>
-
-                        <p class="dashboard-card-value">
-                            @Model.Health.NeedsReviewRuleResults
-                        </p>
-
-                        <p class="small text-muted mb-0">
-                            Results requiring human evaluation
-                        </p>
-
-                    </div>
-
-                </article>
-
-            </div>
-
-
-            <div class="col">
-
-                <article class="card shadow-sm h-100">
-
-                    <div class="card-body">
-
-                        <h3 class="dashboard-card-label">
                             Affected Elements
                         </h3>
 
@@ -574,31 +723,6 @@ else
                     <div class="card-body">
 
                         <h3 class="dashboard-card-label">
-                            Fix First
-                        </h3>
-
-                        <p class="dashboard-card-value">
-                            @Model.Summary.FixFirstFindings
-                        </p>
-
-                        <p class="small text-muted mb-0">
-                            Critical or serious Level A or AA violations
-                        </p>
-
-                    </div>
-
-                </article>
-
-            </div>
-
-
-            <div class="col">
-
-                <article class="card shadow-sm h-100">
-
-                    <div class="card-body">
-
-                        <h3 class="dashboard-card-label">
                             States With Findings
                         </h3>
 
@@ -607,7 +731,7 @@ else
                         </p>
 
                         <p class="small text-muted mb-0">
-                            Workflow states containing saved findings
+                            Workflow states containing findings
                         </p>
 
                     </div>
@@ -650,10 +774,1402 @@ else
 
             </div>
 
+
+            <div class="col">
+
+                <article class="card shadow-sm h-100">
+
+                    <div class="card-body">
+
+                        <h3 class="dashboard-card-label">
+                            Total Tracked
+                        </h3>
+
+                        <p class="dashboard-card-value">
+                            @Model.RemediationProgress.TotalTracked
+                        </p>
+
+                        <p class="small text-muted mb-0">
+                            Findings currently tracked for remediation
+                        </p>
+
+                    </div>
+
+                </article>
+
+            </div>
+
+
+            <div class="col">
+
+                <article class="card shadow-sm h-100">
+
+                    <div class="card-body">
+
+                        <h3 class="dashboard-card-label">
+                            Verified
+                        </h3>
+
+                        <p class="dashboard-card-value text-success">
+                            @Model.RemediationProgress.Verified
+                        </p>
+
+                        <p class="small text-muted mb-0">
+                            Remediation items explicitly verified
+                        </p>
+
+                    </div>
+
+                </article>
+
+            </div>
+
         </div>
 
     </section>
 
+
+    <!-- =====================================================
+         Filters
+         ===================================================== -->
+
+    <section aria-labelledby="overview-filters-heading"
+             class="card shadow-sm mb-4">
+
+        <div class="card-header">
+
+            <div class="d-flex
+                        flex-wrap
+                        justify-content-between
+                        align-items-center
+                        gap-2">
+
+                <div>
+
+                    <h2 id="overview-filters-heading"
+                        class="h5 mb-1">
+                        Reporting Filters
+                    </h2>
+
+                    <p class="small text-muted mb-0">
+                        Refine the dashboard by application, date,
+                        severity, WCAG mapping, or finding type.
+                    </p>
+
+                </div>
+
+                <span class="badge text-bg-light border">
+                    @reportingScopeLabel
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <div class="card-body">
+
+            <div asp-validation-summary="ModelOnly"
+                 class="alert alert-danger"
+                 role="alert">
+            </div>
+
+
+            <form method="get"
+                  asp-controller="AccessibilityOverview"
+                  asp-action="Index">
+
+                <div class="row g-3">
+
+                    <div class="col-12 col-md-6 col-xl-3">
+
+                        <label for="applicationName"
+                               class="form-label fw-semibold">
+                            Application
+                        </label>
+
+                        <select id="applicationName"
+                                name="applicationName"
+                                class="form-select">
+
+                            <option value="">
+                                All applications
+                            </option>
+
+                            @foreach (string application
+                                in Model.ApplicationOptions)
+                            {
+                                if (string.Equals(
+                                    Model.Filters.ApplicationName,
+                                    application,
+                                    StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <option value="@application"
+                                            selected>
+                                        @application
+                                    </option>
+                                }
+                                else
+                                {
+                                    <option value="@application">
+                                        @application
+                                    </option>
+                                }
+                            }
+
+                        </select>
+
+                    </div>
+
+
+                    <div class="col-12 col-md-6 col-xl-3">
+
+                        <label for="startDate"
+                               class="form-label fw-semibold">
+                            Start Date
+                        </label>
+
+                        <input id="startDate"
+                               name="startDate"
+                               type="date"
+                               class="form-control"
+                               value="@Model.Filters.StartDate?.ToString("yyyy-MM-dd")" />
+
+                    </div>
+
+
+                    <div class="col-12 col-md-6 col-xl-3">
+
+                        <label for="endDate"
+                               class="form-label fw-semibold">
+                            End Date
+                        </label>
+
+                        <input id="endDate"
+                               name="endDate"
+                               type="date"
+                               class="form-control"
+                               value="@Model.Filters.EndDate?.ToString("yyyy-MM-dd")" />
+
+                    </div>
+
+
+                    <div class="col-12 col-md-6 col-xl-3">
+
+                        <label for="severity"
+                               class="form-label fw-semibold">
+                            Severity
+                        </label>
+
+                        <select id="severity"
+                                name="severity"
+                                class="form-select">
+
+                            <option value="">
+                                All severities
+                            </option>
+
+                            @foreach (string severityOption in new[]
+                            {
+                                "Critical",
+                                "Serious",
+                                "Moderate",
+                                "Minor",
+                                "Unknown"
+                            })
+                            {
+                                if (Model.Filters.Severity ==
+                                    severityOption)
+                                {
+                                    <option value="@severityOption"
+                                            selected>
+                                        @severityOption
+                                    </option>
+                                }
+                                else
+                                {
+                                    <option value="@severityOption">
+                                        @severityOption
+                                    </option>
+                                }
+                            }
+
+                        </select>
+
+                    </div>
+
+
+                    <div class="col-12 col-md-6 col-xl-3">
+
+                        <label for="wcagLevel"
+                               class="form-label fw-semibold">
+                            WCAG Level
+                        </label>
+
+                        <select id="wcagLevel"
+                                name="wcagLevel"
+                                class="form-select">
+
+                            <option value="">
+                                All WCAG mappings
+                            </option>
+
+                            @if (Model.Filters.WcagLevel == "A")
+                            {
+                                <option value="A"
+                                        selected>
+                                    Level A
+                                </option>
+                            }
+                            else
+                            {
+                                <option value="A">
+                                    Level A
+                                </option>
+                            }
+
+                            @if (Model.Filters.WcagLevel == "AA")
+                            {
+                                <option value="AA"
+                                        selected>
+                                    Level AA
+                                </option>
+                            }
+                            else
+                            {
+                                <option value="AA">
+                                    Level AA
+                                </option>
+                            }
+
+                            @if (Model.Filters.WcagLevel ==
+                                "Unmapped")
+                            {
+                                <option value="Unmapped"
+                                        selected>
+                                    Best practice or unmapped
+                                </option>
+                            }
+                            else
+                            {
+                                <option value="Unmapped">
+                                    Best practice or unmapped
+                                </option>
+                            }
+
+                        </select>
+
+                    </div>
+
+
+                    <div class="col-12 col-md-6 col-xl-3">
+
+                        <label for="findingType"
+                               class="form-label fw-semibold">
+                            Finding Type
+                        </label>
+
+                        <select id="findingType"
+                                name="findingType"
+                                class="form-select">
+
+                            <option value="">
+                                All finding types
+                            </option>
+
+                            @if (Model.Filters.FindingType ==
+                                "Violation")
+                            {
+                                <option value="Violation"
+                                        selected>
+                                    Violation
+                                </option>
+                            }
+                            else
+                            {
+                                <option value="Violation">
+                                    Violation
+                                </option>
+                            }
+
+                            @if (Model.Filters.FindingType ==
+                                "NeedsReview")
+                            {
+                                <option value="NeedsReview"
+                                        selected>
+                                    Needs manual review
+                                </option>
+                            }
+                            else
+                            {
+                                <option value="NeedsReview">
+                                    Needs manual review
+                                </option>
+                            }
+
+                        </select>
+
+                    </div>
+
+
+                    <div class="col-12 col-md-6 col-xl-3">
+
+                        <label for="latestOnly"
+                               class="form-label fw-semibold">
+                            Audit History
+                        </label>
+
+                        <select id="latestOnly"
+                                name="latestOnly"
+                                class="form-select">
+
+                            @if (Model.Filters.LatestOnly)
+                            {
+                                <option value="true"
+                                        selected>
+                                    Latest audit only
+                                </option>
+
+                                <option value="false">
+                                    All audit history
+                                </option>
+                            }
+                            else
+                            {
+                                <option value="true">
+                                    Latest audit only
+                                </option>
+
+                                <option value="false"
+                                        selected>
+                                    All audit history
+                                </option>
+                            }
+
+                        </select>
+
+                    </div>
+
+                </div>
+
+
+                <div class="d-flex flex-wrap gap-2 mt-4">
+
+                    <button type="submit"
+                            class="btn btn-primary">
+                        Apply Filters
+                    </button>
+
+                    <a asp-controller="AccessibilityOverview"
+                       asp-action="Index"
+                       class="btn btn-outline-secondary">
+                        Clear Filters
+                    </a>
+
+                </div>
+
+            </form>
+
+        </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         Remediation progress
+         ===================================================== -->
+
+    <section aria-labelledby="remediation-progress-heading"
+             class="mb-4">
+
+        <div class="d-flex
+                    flex-wrap
+                    justify-content-between
+                    align-items-end
+                    gap-3
+                    mb-3">
+
+            <div>
+
+                <h2 id="remediation-progress-heading"
+                    class="h3 mb-1">
+                    Remediation Progress
+                </h2>
+
+                <p class="text-muted mb-0">
+                    Current lifecycle status of tracked accessibility
+                    findings.
+                </p>
+
+            </div>
+
+
+            <div class="d-flex flex-wrap gap-2">
+
+                <a asp-controller="AccessibilityRemediations"
+                   asp-action="Index"
+                   class="btn btn-outline-primary">
+                    Open Remediation Tracker
+                </a>
+
+                <a asp-controller="AccessibilityWorkflowRetests"
+                   asp-action="Index"
+                   class="btn btn-outline-secondary">
+                    Compare Workflow Retests
+                </a>
+
+            </div>
+
+        </div>
+
+
+        @if (!Model.RemediationProgress.HasData)
+        {
+            <div class="card shadow-sm">
+
+                <div class="card-body py-4">
+
+                    <h3 class="h5">
+                        No remediation items are currently tracked
+                    </h3>
+
+                    <p class="text-muted mb-0">
+                        Findings appear here after remediation tracking
+                        is started from an authenticated accessibility
+                        audit.
+                    </p>
+
+                </div>
+
+            </div>
+        }
+        else
+        {
+            <div class="row g-3 mb-3">
+
+                <div class="col-12 col-xl-4">
+
+                    <article class="card shadow-sm h-100">
+
+                        <div class="card-body">
+
+                            <div class="dashboard-card-label">
+                                Verified Progress
+                            </div>
+
+                            <div class="display-4 fw-bold text-success">
+                                @Model.RemediationProgress.VerifiedPercent.ToString("0.0")%
+                            </div>
+
+                            <p class="text-muted mb-3">
+                                of tracked findings are currently verified.
+                            </p>
+
+
+                            <div class="progress"
+                                 role="progressbar"
+                                 aria-label="Verified remediation progress"
+                                 aria-valuenow="@Model.RemediationProgress.VerifiedPercent"
+                                 aria-valuemin="0"
+                                 aria-valuemax="100"
+                                 style="height: 10px;">
+
+                                <div class="progress-bar bg-success"
+                                     style="width: @Model.RemediationProgress.VerifiedPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%;">
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="card-footer">
+
+                            <span class="small text-muted">
+                                Verified means the issue was no longer
+                                detected during qualifying retesting and
+                                was explicitly confirmed.
+                            </span>
+
+                        </div>
+
+                    </article>
+
+                </div>
+
+
+                <div class="col-12 col-xl-8">
+
+                    <div class="row
+                                row-cols-2
+                                row-cols-lg-3
+                                g-3
+                                h-100">
+
+                        <div class="col">
+
+                            <article class="card shadow-sm h-100">
+
+                                <div class="card-body">
+
+                                    <div class="dashboard-card-label">
+                                        Total Tracked
+                                    </div>
+
+                                    <div class="fs-2 fw-bold">
+                                        @Model.RemediationProgress.TotalTracked
+                                    </div>
+
+                                </div>
+
+                            </article>
+
+                        </div>
+
+
+                        <div class="col">
+
+                            <article class="card shadow-sm h-100">
+
+                                <div class="card-body">
+
+                                    <div class="dashboard-card-label">
+                                        Open
+                                    </div>
+
+                                    <div class="fs-2 fw-bold text-danger">
+                                        @Model.RemediationProgress.Open
+                                    </div>
+
+                                </div>
+
+                            </article>
+
+                        </div>
+
+
+                        <div class="col">
+
+                            <article class="card shadow-sm h-100">
+
+                                <div class="card-body">
+
+                                    <div class="dashboard-card-label">
+                                        In Progress
+                                    </div>
+
+                                    <div class="fs-2 fw-bold">
+                                        @Model.RemediationProgress.InProgress
+                                    </div>
+
+                                </div>
+
+                            </article>
+
+                        </div>
+
+
+                        <div class="col">
+
+                            <article class="card shadow-sm h-100">
+
+                                <div class="card-body">
+
+                                    <div class="dashboard-card-label">
+                                        Awaiting Verification
+                                    </div>
+
+                                    <div class="fs-2 fw-bold">
+                                        @Model.RemediationProgress.AwaitingVerification
+                                    </div>
+
+                                </div>
+
+                            </article>
+
+                        </div>
+
+
+                        <div class="col">
+
+                            <article class="card shadow-sm h-100">
+
+                                <div class="card-body">
+
+                                    <div class="dashboard-card-label">
+                                        Verified
+                                    </div>
+
+                                    <div class="fs-2 fw-bold text-success">
+                                        @Model.RemediationProgress.Verified
+                                    </div>
+
+                                </div>
+
+                            </article>
+
+                        </div>
+
+
+                        <div class="col">
+
+                            <article class="card shadow-sm h-100">
+
+                                <div class="card-body">
+
+                                    <div class="dashboard-card-label">
+                                        Won't Fix
+                                    </div>
+
+                                    <div class="fs-2 fw-bold">
+                                        @Model.RemediationProgress.WontFix
+                                    </div>
+
+                                </div>
+
+                            </article>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="alert alert-light border"
+                 role="note">
+
+                <strong>
+                    Remediation workflow:
+                </strong>
+
+                Open →
+                In Progress →
+                Fixed – Awaiting Verification →
+                Verified.
+
+                A later retest that detects the issue again can reopen it.
+
+            </div>
+
+
+            @if (Model.RemediationProgress
+                .FormalWorkflow
+                .HasData)
+            {
+                <div class="card shadow-sm mb-3">
+
+                    <div class="card-header">
+
+                        <div class="d-flex
+                                    flex-wrap
+                                    justify-content-between
+                                    align-items-start
+                                    gap-2">
+
+                            <div>
+
+                                <h3 class="h5 mb-1">
+                                    Formal Workflow Retesting
+                                </h3>
+
+                                <p class="small text-muted mb-0">
+                                    Latest saved full-workflow retest
+                                    status for each application.
+                                </p>
+
+                            </div>
+
+
+                            @if (Model.RemediationProgress
+                                .FormalWorkflow
+                                .LatestFormalRetestAt
+                                .HasValue)
+                            {
+                                <span class="small text-muted">
+
+                                    Latest recorded:
+
+                                    @Model.RemediationProgress
+                                        .FormalWorkflow
+                                        .LatestFormalRetestAt
+                                        .Value
+                                        .ToString("MMM d, yyyy")
+
+                                </span>
+                            }
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="card-body">
+
+                        <div class="row g-3">
+
+                            <div class="col-6 col-lg-3">
+
+                                <div class="border
+                                            rounded
+                                            p-3
+                                            h-100">
+
+                                    <div class="dashboard-card-label">
+                                        Formal Retest Runs
+                                    </div>
+
+                                    <div class="fs-3 fw-bold">
+                                        @Model.RemediationProgress
+                                            .FormalWorkflow
+                                            .TotalFormalRetestRuns
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+
+                            <div class="col-6 col-lg-3">
+
+                                <div class="border
+                                            rounded
+                                            p-3
+                                            h-100">
+
+                                    <div class="dashboard-card-label">
+                                        Applications Retested
+                                    </div>
+
+                                    <div class="fs-3 fw-bold">
+                                        @Model.RemediationProgress
+                                            .FormalWorkflow
+                                            .ApplicationsFormallyRetested
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+
+                            <div class="col-6 col-lg-2">
+
+                                <div class="border
+                                            rounded
+                                            p-3
+                                            h-100">
+
+                                    <div class="dashboard-card-label">
+                                        Applied
+                                    </div>
+
+                                    <div class="fs-3 fw-bold">
+                                        @Model.RemediationProgress
+                                            .FormalWorkflow
+                                            .LatestApplied
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+
+                            <div class="col-6 col-lg-2">
+
+                                <div class="border
+                                            rounded
+                                            p-3
+                                            h-100">
+
+                                    <div class="dashboard-card-label">
+                                        Partial
+                                    </div>
+
+                                    <div class="fs-3
+                                                fw-bold
+                                                text-warning">
+                                        @Model.RemediationProgress
+                                            .FormalWorkflow
+                                            .LatestPartiallyVerified
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+
+                            <div class="col-12 col-lg-2">
+
+                                <div class="border
+                                            rounded
+                                            p-3
+                                            h-100">
+
+                                    <div class="dashboard-card-label">
+                                        Fully Verified
+                                    </div>
+
+                                    <div class="fs-3
+                                                fw-bold
+                                                text-success">
+                                        @Model.RemediationProgress
+                                            .FormalWorkflow
+                                            .LatestFullyVerified
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+                    @if (Model.RemediationProgress
+                        .FormalWorkflow
+                        .Applications
+                        .Count > 0)
+                    {
+                        <div class="table-responsive">
+
+                            <table class="table
+                                          table-hover
+                                          align-middle
+                                          mb-0">
+
+                                <thead>
+
+                                    <tr>
+
+                                        <th scope="col">
+                                            Application
+                                        </th>
+
+                                        <th scope="col">
+                                            Latest Retest
+                                        </th>
+
+                                        <th scope="col">
+                                            Retest Results
+                                        </th>
+
+                                        <th scope="col">
+                                            Verification
+                                        </th>
+
+                                        <th scope="col">
+                                            Verified Passes
+                                        </th>
+
+                                        <th scope="col">
+                                            <span class="visually-hidden">
+                                                Actions
+                                            </span>
+                                        </th>
+
+                                    </tr>
+
+                                </thead>
+
+
+                                <tbody>
+
+                                    @foreach (var workflow
+                                        in Model.RemediationProgress
+                                            .FormalWorkflow
+                                            .Applications)
+                                    {
+                                        string verificationBadgeClass =
+                                            workflow.VerificationState
+                                                switch
+                                                {
+                                                    "Fully Verified" =>
+                                                        "text-bg-success",
+
+                                                    "Partially Verified" =>
+                                                        "text-bg-warning",
+
+                                                    _ =>
+                                                        "text-bg-secondary"
+                                                };
+
+                                        <tr>
+
+                                            <th scope="row">
+                                                @workflow.ApplicationName
+                                            </th>
+
+
+                                            <td>
+
+                                                <div class="fw-semibold">
+                                                    Run #@workflow.RetestAuditRunId
+                                                </div>
+
+                                                <div class="small text-muted">
+                                                    @workflow.RetestedAt.ToString("MMM d, yyyy")
+                                                </div>
+
+                                            </td>
+
+
+                                            <td>
+
+                                                <div class="small">
+
+                                                    <span class="text-danger
+                                                                 fw-semibold">
+                                                        @workflow.StillDetected
+                                                    </span>
+
+                                                    still detected
+
+                                                </div>
+
+
+                                                <div class="small">
+
+                                                    <span class="text-success
+                                                                 fw-semibold">
+                                                        @workflow.NotDetected
+                                                    </span>
+
+                                                    not detected
+
+                                                </div>
+
+
+                                                @if (workflow.Inconclusive > 0 ||
+                                                     workflow.Failed > 0)
+                                                {
+                                                    <div class="small text-muted">
+
+                                                        @workflow.Inconclusive
+                                                        inconclusive,
+
+                                                        @workflow.Failed
+                                                        failed
+
+                                                    </div>
+                                                }
+
+
+                                                @if (workflow.Reopened > 0)
+                                                {
+                                                    <div class="small
+                                                                text-warning
+                                                                fw-semibold">
+                                                        @workflow.Reopened
+                                                        reopened
+                                                    </div>
+                                                }
+
+                                            </td>
+
+
+                                            <td>
+
+                                                <span class="badge
+                                                             @verificationBadgeClass">
+                                                    @workflow.VerificationState
+                                                </span>
+
+                                            </td>
+
+
+                                            <td>
+
+                                                @if (workflow.NotDetected > 0)
+                                                {
+                                                    <div class="fw-semibold">
+
+                                                        @workflow.VerifiedFromThisRetest
+                                                        /
+                                                        @workflow.NotDetected
+
+                                                    </div>
+
+                                                    <div class="small text-muted">
+
+                                                        @workflow.VerifiedPassedIssuePercent.ToString("0.0")%
+
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">
+                                                        —
+                                                    </span>
+                                                }
+
+                                            </td>
+
+
+                                            <td class="text-end">
+
+                                                <a asp-controller="AuthenticatedAudits"
+                                                   asp-action="Details"
+                                                   asp-route-id="@workflow.RetestAuditRunId"
+                                                   class="btn
+                                                          btn-sm
+                                                          btn-outline-primary">
+                                                    View Audit
+                                                </a>
+
+                                            </td>
+
+                                        </tr>
+                                    }
+
+                                </tbody>
+
+                            </table>
+
+                        </div>
+                    }
+
+
+                    <div class="card-footer">
+
+                        <p class="small text-muted mb-0">
+                            Applied, Partially Verified, and Fully
+                            Verified describe remediation workflow
+                            status. They are not ADA or WCAG compliance
+                            labels.
+                        </p>
+
+                    </div>
+
+                </div>
+            }
+            else
+            {
+                <div class="card shadow-sm mb-3">
+
+                    <div class="card-body">
+
+                        <h3 class="h5">
+                            Formal Workflow Retesting
+                        </h3>
+
+                        <p class="text-muted mb-0">
+                            No formal full-workflow retests have been
+                            recorded for the selected remediation scope.
+                        </p>
+
+                    </div>
+
+                </div>
+            }
+
+
+            @if (Model.RemediationProgress.Applications.Count > 0)
+            {
+                <div class="card shadow-sm mb-3">
+
+                    <div class="card-header">
+
+                        <h3 class="h5 mb-1">
+                            Remediation Progress by Application
+                        </h3>
+
+                        <p class="small text-muted mb-0">
+                            Applications with more remaining work appear
+                            first.
+                        </p>
+
+                    </div>
+
+
+                    <div class="table-responsive">
+
+                        <table class="table
+                                      table-hover
+                                      align-middle
+                                      mb-0">
+
+                            <thead>
+
+                                <tr>
+
+                                    <th scope="col">
+                                        Application
+                                    </th>
+
+                                    <th scope="col"
+                                        class="text-end">
+                                        Tracked
+                                    </th>
+
+                                    <th scope="col"
+                                        class="text-end">
+                                        Open
+                                    </th>
+
+                                    <th scope="col"
+                                        class="text-end">
+                                        In Progress
+                                    </th>
+
+                                    <th scope="col"
+                                        class="text-end">
+                                        Awaiting Verification
+                                    </th>
+
+                                    <th scope="col"
+                                        class="text-end">
+                                        Verified
+                                    </th>
+
+                                    <th scope="col"
+                                        style="min-width: 180px;">
+                                        Progress
+                                    </th>
+
+                                </tr>
+
+                            </thead>
+
+
+                            <tbody>
+
+                                @foreach (var application
+                                    in Model.RemediationProgress
+                                        .Applications)
+                                {
+                                    <tr>
+
+                                        <th scope="row">
+                                            @application.ApplicationName
+                                        </th>
+
+                                        <td class="text-end fw-semibold">
+                                            @application.TotalTracked
+                                        </td>
+
+                                        <td class="text-end">
+                                            @application.Open
+                                        </td>
+
+                                        <td class="text-end">
+                                            @application.InProgress
+                                        </td>
+
+                                        <td class="text-end">
+                                            @application.AwaitingVerification
+                                        </td>
+
+                                        <td class="text-end
+                                                   fw-semibold
+                                                   text-success">
+                                            @application.Verified
+                                        </td>
+
+                                        <td>
+
+                                            <div class="d-flex
+                                                        justify-content-between
+                                                        gap-2
+                                                        small
+                                                        mb-1">
+
+                                                <span>
+                                                    Verified
+                                                </span>
+
+                                                <strong>
+                                                    @application.VerifiedPercent.ToString("0.0")%
+                                                </strong>
+
+                                            </div>
+
+
+                                            <div class="progress"
+                                                 role="progressbar"
+                                                 aria-label="Verified remediation progress for @application.ApplicationName"
+                                                 aria-valuenow="@application.VerifiedPercent"
+                                                 aria-valuemin="0"
+                                                 aria-valuemax="100"
+                                                 style="height: 8px;">
+
+                                                <div class="progress-bar
+                                                            bg-success"
+                                                     style="width: @application.VerifiedPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%;">
+                                                </div>
+
+                                            </div>
+
+                                        </td>
+
+                                    </tr>
+                                }
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+
+                </div>
+            }
+
+
+            @if (Model.RemediationProgress.Trends.Count > 0)
+            {
+                <div class="card shadow-sm">
+
+                    <div class="card-header">
+
+                        <h3 class="h5 mb-1">
+                            Remediation Activity
+                        </h3>
+
+                        <p class="small text-muted mb-0">
+                            Verification events and issues detected again
+                            during later retesting.
+                        </p>
+
+                    </div>
+
+
+                    <div class="table-responsive">
+
+                        <table class="table
+                                      table-hover
+                                      align-middle
+                                      mb-0">
+
+                            <thead>
+
+                                <tr>
+
+                                    <th scope="col">
+                                        Date
+                                    </th>
+
+                                    <th scope="col"
+                                        class="text-end">
+                                        Verified
+                                    </th>
+
+                                    <th scope="col"
+                                        class="text-end">
+                                        Reopened
+                                    </th>
+
+                                    <th scope="col"
+                                        class="text-end">
+                                        Net Progress
+                                    </th>
+
+                                </tr>
+
+                            </thead>
+
+
+                            <tbody>
+
+                                @foreach (var point
+                                    in Model.RemediationProgress.Trends
+                                        .OrderByDescending(point =>
+                                            point.Date))
+                                {
+                                    int netProgress =
+                                        point.Verified -
+                                        point.Reopened;
+
+                                    <tr>
+
+                                        <td>
+                                            @point.Date.ToString("MMM d, yyyy")
+                                        </td>
+
+
+                                        <td class="text-end">
+
+                                            <span class="badge
+                                                         text-bg-success">
+                                                +@point.Verified
+                                            </span>
+
+                                        </td>
+
+
+                                        <td class="text-end">
+
+                                            @if (point.Reopened > 0)
+                                            {
+                                                <span class="badge
+                                                             text-bg-danger">
+                                                    @point.Reopened
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">
+                                                    0
+                                                </span>
+                                            }
+
+                                        </td>
+
+
+                                        <td class="text-end fw-semibold">
+
+                                            @if (netProgress > 0)
+                                            {
+                                                <span class="text-success">
+                                                    +@netProgress
+                                                </span>
+                                            }
+                                            else if (netProgress < 0)
+                                            {
+                                                <span class="text-danger">
+                                                    @netProgress
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">
+                                                    0
+                                                </span>
+                                            }
+
+                                        </td>
+
+                                    </tr>
+                                }
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+
+
+                    <div class="card-footer">
+
+                        <p class="small text-muted mb-0">
+                            Reopened means a previously fixed or verified
+                            issue was detected again during later
+                            retesting.
+                        </p>
+
+                    </div>
+
+                </div>
+            }
+        }
+
+    </section>
+
+
+    <!-- =====================================================
+         Automated accessibility health
+         ===================================================== -->
 
     <section aria-labelledby="accessibility-health-heading"
              class="mb-4">
@@ -679,7 +2195,9 @@ else
 
                 @if (Model.Health.HasAuthenticatedRuleData)
                 {
-                    <div class="row g-4 align-items-center">
+                    <div class="row
+                                g-4
+                                align-items-center">
 
                         <div class="col-12 col-lg-4">
 
@@ -689,6 +2207,10 @@ else
 
                             <div class="text-muted">
                                 Automated check pass rate
+                            </div>
+
+                            <div class="small text-muted mt-2">
+                                This is not a compliance score.
                             </div>
 
                         </div>
@@ -781,7 +2303,7 @@ else
             </div>
 
 
-            <div class="card-footer bg-transparent">
+            <div class="card-footer">
 
                 <p class="small text-muted mb-0">
                     Automated Accessibility Health summarizes detectable
@@ -796,915 +2318,9 @@ else
     </section>
 
 
-    <section aria-labelledby="remediation-progress-heading"
-             class="mb-4">
-
-        <div class="d-flex flex-wrap
-                    justify-content-between
-                    align-items-end
-                    gap-2
-                    mb-3">
-
-            <div>
-
-                <h2 id="remediation-progress-heading"
-                    class="h3 mb-1">
-                    Remediation Progress
-                </h2>
-
-                <p class="text-muted mb-0">
-                    Current lifecycle status of tracked accessibility
-                    findings.
-                </p>
-
-            </div>
-
-
-            <div class="d-flex flex-wrap gap-2">
-
-                <a asp-controller="AccessibilityRemediations"
-                   asp-action="Index"
-                   class="btn btn-outline-primary">
-                    Open Remediation Tracker
-                </a>
-
-                <a asp-controller="AccessibilityWorkflowRetests"
-                   asp-action="Index"
-                   class="btn btn-outline-secondary">
-                    Compare Workflow Retests
-                </a>
-
-            </div>
-
-        </div>
-
-
-        @if (!Model.RemediationProgress.HasData)
-        {
-            <div class="card shadow-sm">
-
-                <div class="card-body py-4">
-
-                    <h3 class="h5">
-                        No remediation items are being tracked yet
-                    </h3>
-
-                    <p class="text-muted mb-0">
-                        Findings will appear here after remediation
-                        tracking is started from an authenticated
-                        accessibility audit.
-                    </p>
-
-                </div>
-
-            </div>
-        }
-        else
-        {
-            <div class="row g-3 mb-3">
-
-                <div class="col-12 col-xl-4">
-
-                    <article class="card shadow-sm h-100">
-
-                        <div class="card-body">
-
-                            <div class="text-muted small mb-1">
-                                Verified Remediation Progress
-                            </div>
-
-                            <div class="display-4 fw-bold">
-                                @Model.RemediationProgress.VerifiedPercent.ToString("0.0")%
-                            </div>
-
-                            <p class="text-muted mb-3">
-                                of tracked findings are currently verified.
-                            </p>
-
-                            <div class="progress"
-                                 role="progressbar"
-                                 aria-label="Verified remediation progress"
-                                 aria-valuenow="@Model.RemediationProgress.VerifiedPercent"
-                                 aria-valuemin="0"
-                                 aria-valuemax="100"
-                                 style="height: 12px;">
-
-                                <div class="progress-bar bg-success"
-                                     style="width: @Model.RemediationProgress.VerifiedPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%;">
-                                </div>
-
-                            </div>
-
-                        </div>
-
-
-                        <div class="card-footer bg-transparent">
-
-                            <span class="small text-muted">
-                                Verified means the issue was no longer
-                                detected during qualifying retesting and
-                                was then explicitly confirmed.
-                            </span>
-
-                        </div>
-
-                    </article>
-
-                </div>
-
-
-                <div class="col-12 col-xl-8">
-
-                    <div class="row g-3 h-100">
-
-                        <div class="col-6 col-lg-4">
-
-                            <article class="card shadow-sm h-100">
-
-                                <div class="card-body">
-
-                                    <div class="text-muted small">
-                                        Total Tracked
-                                    </div>
-
-                                    <div class="fs-2 fw-bold">
-                                        @Model.RemediationProgress.TotalTracked
-                                    </div>
-
-                                </div>
-
-                            </article>
-
-                        </div>
-
-
-                        <div class="col-6 col-lg-4">
-
-                            <article class="card shadow-sm h-100">
-
-                                <div class="card-body">
-
-                                    <div class="text-muted small">
-                                        Open
-                                    </div>
-
-                                    <div class="fs-2 fw-bold text-danger">
-                                        @Model.RemediationProgress.Open
-                                    </div>
-
-                                </div>
-
-                            </article>
-
-                        </div>
-
-
-                        <div class="col-6 col-lg-4">
-
-                            <article class="card shadow-sm h-100">
-
-                                <div class="card-body">
-
-                                    <div class="text-muted small">
-                                        In Progress
-                                    </div>
-
-                                    <div class="fs-2 fw-bold">
-                                        @Model.RemediationProgress.InProgress
-                                    </div>
-
-                                </div>
-
-                            </article>
-
-                        </div>
-
-
-                        <div class="col-6 col-lg-4">
-
-                            <article class="card shadow-sm h-100">
-
-                                <div class="card-body">
-
-                                    <div class="text-muted small">
-                                        Awaiting Verification
-                                    </div>
-
-                                    <div class="fs-2 fw-bold">
-                                        @Model.RemediationProgress.AwaitingVerification
-                                    </div>
-
-                                </div>
-
-                            </article>
-
-                        </div>
-
-
-                        <div class="col-6 col-lg-4">
-
-                            <article class="card shadow-sm h-100">
-
-                                <div class="card-body">
-
-                                    <div class="text-muted small">
-                                        Verified
-                                    </div>
-
-                                    <div class="fs-2 fw-bold text-success">
-                                        @Model.RemediationProgress.Verified
-                                    </div>
-
-                                </div>
-
-                            </article>
-
-                        </div>
-
-
-                        <div class="col-6 col-lg-4">
-
-                            <article class="card shadow-sm h-100">
-
-                                <div class="card-body">
-
-                                    <div class="text-muted small">
-                                        Won't Fix
-                                    </div>
-
-                                    <div class="fs-2 fw-bold">
-                                        @Model.RemediationProgress.WontFix
-                                    </div>
-
-                                </div>
-
-                            </article>
-
-                        </div>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-
-            <div class="alert alert-light border"
-                 role="note">
-
-                <strong>
-                    Workflow:
-                </strong>
-
-                Open →
-                In Progress →
-                Fixed – Awaiting Verification →
-                Verified.
-
-                A later retest that detects an issue again can reopen it.
-
-            </div>
-
-
-            @if (Model.RemediationProgress.FormalWorkflow.HasData)
-            {
-                <div class="card shadow-sm mb-3">
-
-                    <div class="card-header bg-transparent">
-
-                        <div class="d-flex flex-wrap
-                                    justify-content-between
-                                    align-items-start
-                                    gap-2">
-
-                            <div>
-
-                                <h3 class="h5 mb-1">
-                                    Formal Workflow Retesting
-                                </h3>
-
-                                <p class="small text-muted mb-0">
-                                    Latest saved full-workflow retest status
-                                    for each application.
-                                </p>
-
-                            </div>
-
-                            @if (Model.RemediationProgress
-                                .FormalWorkflow
-                                .LatestFormalRetestAt
-                                .HasValue)
-                            {
-                                <span class="small text-muted">
-
-                                    Latest recorded:
-
-                                    @Model.RemediationProgress
-                                        .FormalWorkflow
-                                        .LatestFormalRetestAt
-                                        .Value
-                                        .ToString("MMM d, yyyy")
-
-                                </span>
-                            }
-
-                        </div>
-
-                    </div>
-
-
-                    <div class="card-body">
-
-                        <div class="row g-3">
-
-                            <div class="col-6 col-lg-3">
-
-                                <div class="border rounded p-3 h-100">
-
-                                    <div class="text-muted small">
-                                        Formal Retest Runs
-                                    </div>
-
-                                    <div class="fs-3 fw-bold">
-                                        @Model.RemediationProgress
-                                            .FormalWorkflow
-                                            .TotalFormalRetestRuns
-                                    </div>
-
-                                </div>
-
-                            </div>
-
-
-                            <div class="col-6 col-lg-3">
-
-                                <div class="border rounded p-3 h-100">
-
-                                    <div class="text-muted small">
-                                        Applications Retested
-                                    </div>
-
-                                    <div class="fs-3 fw-bold">
-                                        @Model.RemediationProgress
-                                            .FormalWorkflow
-                                            .ApplicationsFormallyRetested
-                                    </div>
-
-                                </div>
-
-                            </div>
-
-
-                            <div class="col-6 col-lg-2">
-
-                                <div class="border rounded p-3 h-100">
-
-                                    <div class="text-muted small">
-                                        Applied
-                                    </div>
-
-                                    <div class="fs-3 fw-bold">
-                                        @Model.RemediationProgress
-                                            .FormalWorkflow
-                                            .LatestApplied
-                                    </div>
-
-                                </div>
-
-                            </div>
-
-
-                            <div class="col-6 col-lg-2">
-
-                                <div class="border rounded p-3 h-100">
-
-                                    <div class="text-muted small">
-                                        Partial
-                                    </div>
-
-                                    <div class="fs-3 fw-bold text-warning">
-                                        @Model.RemediationProgress
-                                            .FormalWorkflow
-                                            .LatestPartiallyVerified
-                                    </div>
-
-                                </div>
-
-                            </div>
-
-
-                            <div class="col-12 col-lg-2">
-
-                                <div class="border rounded p-3 h-100">
-
-                                    <div class="text-muted small">
-                                        Fully Verified
-                                    </div>
-
-                                    <div class="fs-3 fw-bold text-success">
-                                        @Model.RemediationProgress
-                                            .FormalWorkflow
-                                            .LatestFullyVerified
-                                    </div>
-
-                                </div>
-
-                            </div>
-
-                        </div>
-
-                    </div>
-
-
-                    @if (Model.RemediationProgress
-                        .FormalWorkflow
-                        .Applications.Count > 0)
-                    {
-                        <div class="table-responsive">
-
-                            <table class="table table-hover
-                                          align-middle mb-0">
-
-                                <thead>
-
-                                    <tr>
-
-                                        <th scope="col">
-                                            Application
-                                        </th>
-
-                                        <th scope="col">
-                                            Latest Formal Retest
-                                        </th>
-
-                                        <th scope="col">
-                                            Retest Results
-                                        </th>
-
-                                        <th scope="col">
-                                            Verification
-                                        </th>
-
-                                        <th scope="col">
-                                            Verified Passes
-                                        </th>
-
-                                        <th scope="col"></th>
-
-                                    </tr>
-
-                                </thead>
-
-
-                                <tbody>
-
-                                    @foreach (var workflow
-                                        in Model.RemediationProgress
-                                            .FormalWorkflow
-                                            .Applications)
-                                    {
-                                        string verificationBadgeClass =
-                                            workflow.VerificationState switch
-                                            {
-                                                "Fully Verified" =>
-                                                    "text-bg-success",
-
-                                                "Partially Verified" =>
-                                                    "text-bg-warning",
-
-                                                _ =>
-                                                    "text-bg-secondary"
-                                            };
-
-                                        <tr>
-
-                                            <th scope="row">
-                                                @workflow.ApplicationName
-                                            </th>
-
-
-                                            <td>
-
-                                                <div class="fw-semibold">
-                                                    Run #@workflow.RetestAuditRunId
-                                                </div>
-
-                                                <div class="small text-muted">
-                                                    @workflow.RetestedAt.ToString("MMM d, yyyy")
-                                                </div>
-
-                                            </td>
-
-
-                                            <td>
-
-                                                <div class="small">
-                                                    <span class="text-danger fw-semibold">
-                                                        @workflow.StillDetected
-                                                    </span>
-                                                    still detected
-                                                </div>
-
-                                                <div class="small">
-                                                    <span class="text-success fw-semibold">
-                                                        @workflow.NotDetected
-                                                    </span>
-                                                    not detected
-                                                </div>
-
-                                                @if (workflow.Inconclusive > 0 ||
-                                                     workflow.Failed > 0)
-                                                {
-                                                    <div class="small text-muted">
-
-                                                        @workflow.Inconclusive inconclusive,
-                                                        @workflow.Failed failed
-
-                                                    </div>
-                                                }
-
-                                                @if (workflow.Reopened > 0)
-                                                {
-                                                    <div class="small text-warning fw-semibold">
-                                                        @workflow.Reopened reopened
-                                                    </div>
-                                                }
-
-                                            </td>
-
-
-                                            <td>
-
-                                                <span class="badge @verificationBadgeClass">
-                                                    @workflow.VerificationState
-                                                </span>
-
-                                            </td>
-
-
-                                            <td>
-
-                                                @if (workflow.NotDetected > 0)
-                                                {
-                                                    <div class="fw-semibold">
-                                                        @workflow.VerifiedFromThisRetest
-                                                        /
-                                                        @workflow.NotDetected
-                                                    </div>
-
-                                                    <div class="small text-muted">
-                                                        @workflow.VerifiedPassedIssuePercent.ToString("0.0")%
-                                                    </div>
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">
-                                                        —
-                                                    </span>
-                                                }
-
-                                            </td>
-
-
-                                            <td class="text-end">
-
-                                                <a asp-controller="AuthenticatedAudits"
-                                                   asp-action="Details"
-                                                   asp-route-id="@workflow.RetestAuditRunId"
-                                                   class="btn btn-sm btn-outline-primary">
-                                                    View Retest Audit
-                                                </a>
-
-                                            </td>
-
-                                        </tr>
-                                    }
-
-                                </tbody>
-
-                            </table>
-
-                        </div>
-                    }
-
-
-                    <div class="card-footer bg-transparent">
-
-                        <p class="small text-muted mb-0">
-                            Applied, Partially Verified, and Fully Verified
-                            describe the remediation verification workflow.
-                            They are not ADA or WCAG compliance labels.
-                        </p>
-
-                    </div>
-
-                </div>
-            }
-            else
-            {
-                <div class="card shadow-sm mb-3">
-
-                    <div class="card-body">
-
-                        <h3 class="h5">
-                            Formal Workflow Retesting
-                        </h3>
-
-                        <p class="text-muted mb-0">
-                            No formal full-workflow retests have been
-                            recorded for the currently selected remediation
-                            scope.
-                        </p>
-
-                    </div>
-
-                </div>
-            }
-
-
-            @if (Model.RemediationProgress.Applications.Count > 0)
-            {
-                <div class="card shadow-sm mb-3">
-
-                    <div class="card-header bg-transparent">
-
-                        <h3 class="h5 mb-1">
-                            Remediation Progress by Application
-                        </h3>
-
-                        <p class="small text-muted mb-0">
-                            Applications with lower verification progress
-                            and more remaining work appear first.
-                        </p>
-
-                    </div>
-
-
-                    <div class="table-responsive">
-
-                        <table class="table align-middle mb-0">
-
-                            <thead>
-
-                                <tr>
-
-                                    <th scope="col">
-                                        Application
-                                    </th>
-
-                                    <th scope="col"
-                                        class="text-end">
-                                        Tracked
-                                    </th>
-
-                                    <th scope="col"
-                                        class="text-end">
-                                        Open
-                                    </th>
-
-                                    <th scope="col"
-                                        class="text-end">
-                                        In Progress
-                                    </th>
-
-                                    <th scope="col"
-                                        class="text-end">
-                                        Awaiting Verification
-                                    </th>
-
-                                    <th scope="col"
-                                        class="text-end">
-                                        Verified
-                                    </th>
-
-                                    <th scope="col"
-                                        style="min-width: 180px;">
-                                        Progress
-                                    </th>
-
-                                </tr>
-
-                            </thead>
-
-
-                            <tbody>
-
-                                @foreach (var application
-                                    in Model.RemediationProgress.Applications)
-                                {
-                                    <tr>
-
-                                        <th scope="row">
-                                            @application.ApplicationName
-                                        </th>
-
-                                        <td class="text-end fw-semibold">
-                                            @application.TotalTracked
-                                        </td>
-
-                                        <td class="text-end">
-                                            @application.Open
-                                        </td>
-
-                                        <td class="text-end">
-                                            @application.InProgress
-                                        </td>
-
-                                        <td class="text-end">
-                                            @application.AwaitingVerification
-                                        </td>
-
-                                        <td class="text-end fw-semibold text-success">
-                                            @application.Verified
-                                        </td>
-
-                                        <td>
-
-                                            <div class="d-flex
-                                                        justify-content-between
-                                                        gap-2
-                                                        small
-                                                        mb-1">
-
-                                                <span>
-                                                    Verified
-                                                </span>
-
-                                                <strong>
-                                                    @application.VerifiedPercent.ToString("0.0")%
-                                                </strong>
-
-                                            </div>
-
-                                            <div class="progress"
-                                                 role="progressbar"
-                                                 aria-label="Verified remediation progress for @application.ApplicationName"
-                                                 aria-valuenow="@application.VerifiedPercent"
-                                                 aria-valuemin="0"
-                                                 aria-valuemax="100"
-                                                 style="height: 8px;">
-
-                                                <div class="progress-bar bg-success"
-                                                     style="width: @application.VerifiedPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%;">
-                                                </div>
-
-                                            </div>
-
-                                        </td>
-
-                                    </tr>
-                                }
-
-                            </tbody>
-
-                        </table>
-
-                    </div>
-
-                </div>
-            }
-
-
-            @if (Model.RemediationProgress.Trends.Count > 0)
-            {
-                <div class="card shadow-sm">
-
-                    <div class="card-header bg-transparent">
-
-                        <h3 class="h5 mb-1">
-                            Remediation Activity
-                        </h3>
-
-                        <p class="small text-muted mb-0">
-                            Verification events and issues detected again
-                            during later retesting.
-                        </p>
-
-                    </div>
-
-
-                    <div class="table-responsive">
-
-                        <table class="table align-middle mb-0">
-
-                            <thead>
-
-                                <tr>
-
-                                    <th scope="col">
-                                        Date
-                                    </th>
-
-                                    <th scope="col"
-                                        class="text-end">
-                                        Verified
-                                    </th>
-
-                                    <th scope="col"
-                                        class="text-end">
-                                        Reopened
-                                    </th>
-
-                                    <th scope="col"
-                                        class="text-end">
-                                        Net Progress
-                                    </th>
-
-                                </tr>
-
-                            </thead>
-
-
-                            <tbody>
-
-                                @foreach (var point
-                                    in Model.RemediationProgress.Trends
-                                        .OrderByDescending(point =>
-                                            point.Date))
-                                {
-                                    int netProgress =
-                                        point.Verified -
-                                        point.Reopened;
-
-                                    <tr>
-
-                                        <td>
-                                            @point.Date.ToString("MMM d, yyyy")
-                                        </td>
-
-                                        <td class="text-end">
-
-                                            <span class="badge text-bg-success">
-                                                +@point.Verified
-                                            </span>
-
-                                        </td>
-
-                                        <td class="text-end">
-
-                                            @if (point.Reopened > 0)
-                                            {
-                                                <span class="badge text-bg-danger">
-                                                    @point.Reopened
-                                                </span>
-                                            }
-                                            else
-                                            {
-                                                <span class="text-muted">
-                                                    0
-                                                </span>
-                                            }
-
-                                        </td>
-
-                                        <td class="text-end fw-semibold">
-
-                                            @if (netProgress > 0)
-                                            {
-                                                <span class="text-success">
-                                                    +@netProgress
-                                                </span>
-                                            }
-                                            else if (netProgress < 0)
-                                            {
-                                                <span class="text-danger">
-                                                    @netProgress
-                                                </span>
-                                            }
-                                            else
-                                            {
-                                                <span class="text-muted">
-                                                    0
-                                                </span>
-                                            }
-
-                                        </td>
-
-                                    </tr>
-                                }
-
-                            </tbody>
-
-                        </table>
-
-                    </div>
-
-
-                    <div class="card-footer bg-transparent">
-
-                        <p class="small text-muted mb-0">
-                            Reopened means a previously fixed or verified
-                            issue was detected again during later retesting.
-                        </p>
-
-                    </div>
-
-                </div>
-            }
-        }
-
-    </section>
-
+    <!-- =====================================================
+         Issue breakdown
+         ===================================================== -->
 
     <section aria-labelledby="issue-breakdown-heading"
              class="mb-4">
@@ -1713,11 +2329,12 @@ else
 
             <h2 id="issue-breakdown-heading"
                 class="h3 mb-1">
-                Authenticated Issue Breakdown
+                Finding Breakdown
             </h2>
 
             <p class="text-muted mb-0">
-                Severity and WCAG mappings from saved axe-core findings.
+                Severity, WCAG mappings, and manual-review results from
+                saved authenticated axe-core findings.
             </p>
 
         </div>
@@ -1729,110 +2346,116 @@ else
 
                 <article class="card shadow-sm h-100">
 
-                    <div class="card-body">
+                    <div class="card-header">
 
-                        <h3 class="h4">
+                        <h3 class="h5 mb-0">
                             Violation Severity
                         </h3>
 
-                        <div class="table-responsive">
-
-                            <table class="table align-middle mb-0">
-
-                                <caption class="visually-hidden">
-                                    Authenticated violation counts grouped
-                                    by severity
-                                </caption>
-
-                                <thead>
-
-                                    <tr>
-
-                                        <th scope="col">
-                                            Severity
-                                        </th>
-
-                                        <th scope="col"
-                                            class="text-end">
-                                            Findings
-                                        </th>
-
-                                    </tr>
-
-                                </thead>
+                    </div>
 
 
-                                <tbody>
+                    <div class="table-responsive">
 
-                                    <tr>
+                        <table class="table
+                                      table-hover
+                                      align-middle
+                                      mb-0">
 
-                                        <th scope="row">
-                                            Critical
-                                        </th>
+                            <caption class="visually-hidden">
+                                Authenticated violation counts grouped
+                                by severity
+                            </caption>
 
-                                        <td class="text-end fw-bold text-danger">
-                                            @Model.IssueBreakdown.Critical
-                                        </td>
+                            <thead>
 
-                                    </tr>
+                                <tr>
 
+                                    <th scope="col">
+                                        Severity
+                                    </th>
 
-                                    <tr>
+                                    <th scope="col"
+                                        class="text-end">
+                                        Findings
+                                    </th>
 
-                                        <th scope="row">
-                                            Serious
-                                        </th>
+                                </tr>
 
-                                        <td class="text-end fw-bold">
-                                            @Model.IssueBreakdown.Serious
-                                        </td>
-
-                                    </tr>
-
-
-                                    <tr>
-
-                                        <th scope="row">
-                                            Moderate
-                                        </th>
-
-                                        <td class="text-end fw-bold">
-                                            @Model.IssueBreakdown.Moderate
-                                        </td>
-
-                                    </tr>
+                            </thead>
 
 
-                                    <tr>
+                            <tbody>
 
-                                        <th scope="row">
-                                            Minor
-                                        </th>
+                                <tr>
 
-                                        <td class="text-end fw-bold">
-                                            @Model.IssueBreakdown.Minor
-                                        </td>
+                                    <th scope="row">
+                                        Critical
+                                    </th>
 
-                                    </tr>
+                                    <td class="text-end
+                                               fw-bold
+                                               text-danger">
+                                        @Model.IssueBreakdown.Critical
+                                    </td>
+
+                                </tr>
 
 
-                                    <tr>
+                                <tr>
 
-                                        <th scope="row">
-                                            Unknown
-                                        </th>
+                                    <th scope="row">
+                                        Serious
+                                    </th>
 
-                                        <td class="text-end fw-bold">
-                                            @Model.IssueBreakdown.UnknownSeverity
-                                        </td>
+                                    <td class="text-end fw-bold">
+                                        @Model.IssueBreakdown.Serious
+                                    </td>
 
-                                    </tr>
+                                </tr>
 
-                                </tbody>
 
-                            </table>
+                                <tr>
 
-                        </div>
+                                    <th scope="row">
+                                        Moderate
+                                    </th>
+
+                                    <td class="text-end fw-bold">
+                                        @Model.IssueBreakdown.Moderate
+                                    </td>
+
+                                </tr>
+
+
+                                <tr>
+
+                                    <th scope="row">
+                                        Minor
+                                    </th>
+
+                                    <td class="text-end fw-bold">
+                                        @Model.IssueBreakdown.Minor
+                                    </td>
+
+                                </tr>
+
+
+                                <tr>
+
+                                    <th scope="row">
+                                        Unknown
+                                    </th>
+
+                                    <td class="text-end fw-bold">
+                                        @Model.IssueBreakdown.UnknownSeverity
+                                    </td>
+
+                                </tr>
+
+                            </tbody>
+
+                        </table>
 
                     </div>
 
@@ -1845,97 +2468,101 @@ else
 
                 <article class="card shadow-sm h-100">
 
-                    <div class="card-body">
+                    <div class="card-header">
 
-                        <h3 class="h4">
+                        <h3 class="h5 mb-0">
                             WCAG Mapping and Review
                         </h3>
 
-                        <div class="table-responsive">
-
-                            <table class="table align-middle mb-0">
-
-                                <caption class="visually-hidden">
-                                    Authenticated findings grouped by WCAG
-                                    level and review status
-                                </caption>
-
-                                <thead>
-
-                                    <tr>
-
-                                        <th scope="col">
-                                            Result group
-                                        </th>
-
-                                        <th scope="col"
-                                            class="text-end">
-                                            Findings
-                                        </th>
-
-                                    </tr>
-
-                                </thead>
+                    </div>
 
 
-                                <tbody>
+                    <div class="table-responsive">
 
-                                    <tr>
+                        <table class="table
+                                      table-hover
+                                      align-middle
+                                      mb-0">
 
-                                        <th scope="row">
-                                            WCAG Level A
-                                        </th>
+                            <caption class="visually-hidden">
+                                Authenticated findings grouped by WCAG
+                                level and review status
+                            </caption>
 
-                                        <td class="text-end fw-bold">
-                                            @Model.IssueBreakdown.WcagLevelA
-                                        </td>
+                            <thead>
 
-                                    </tr>
+                                <tr>
 
+                                    <th scope="col">
+                                        Result Group
+                                    </th>
 
-                                    <tr>
+                                    <th scope="col"
+                                        class="text-end">
+                                        Findings
+                                    </th>
 
-                                        <th scope="row">
-                                            WCAG Level AA
-                                        </th>
+                                </tr>
 
-                                        <td class="text-end fw-bold">
-                                            @Model.IssueBreakdown.WcagLevelAA
-                                        </td>
-
-                                    </tr>
-
-
-                                    <tr>
-
-                                        <th scope="row">
-                                            Best practice or unmapped
-                                        </th>
-
-                                        <td class="text-end fw-bold">
-                                            @Model.IssueBreakdown.BestPracticeOrUnmapped
-                                        </td>
-
-                                    </tr>
+                            </thead>
 
 
-                                    <tr>
+                            <tbody>
 
-                                        <th scope="row">
-                                            Needs manual review
-                                        </th>
+                                <tr>
 
-                                        <td class="text-end fw-bold">
-                                            @Model.IssueBreakdown.NeedsManualReview
-                                        </td>
+                                    <th scope="row">
+                                        WCAG Level A
+                                    </th>
 
-                                    </tr>
+                                    <td class="text-end fw-bold">
+                                        @Model.IssueBreakdown.WcagLevelA
+                                    </td>
 
-                                </tbody>
+                                </tr>
 
-                            </table>
 
-                        </div>
+                                <tr>
+
+                                    <th scope="row">
+                                        WCAG Level AA
+                                    </th>
+
+                                    <td class="text-end fw-bold">
+                                        @Model.IssueBreakdown.WcagLevelAA
+                                    </td>
+
+                                </tr>
+
+
+                                <tr>
+
+                                    <th scope="row">
+                                        Best practice or unmapped
+                                    </th>
+
+                                    <td class="text-end fw-bold">
+                                        @Model.IssueBreakdown.BestPracticeOrUnmapped
+                                    </td>
+
+                                </tr>
+
+
+                                <tr>
+
+                                    <th scope="row">
+                                        Needs manual review
+                                    </th>
+
+                                    <td class="text-end fw-bold">
+                                        @Model.IssueBreakdown.NeedsManualReview
+                                    </td>
+
+                                </tr>
+
+                            </tbody>
+
+                        </table>
 
                     </div>
 
@@ -1948,6 +2575,10 @@ else
     </section>
 
 
+    <!-- =====================================================
+         Top findings
+         ===================================================== -->
+
     <section aria-labelledby="top-findings-heading"
              class="mb-4">
 
@@ -1955,12 +2586,12 @@ else
 
             <h2 id="top-findings-heading"
                 class="h3 mb-1">
-                Top Authenticated Findings
+                Priority and Repeated Findings
             </h2>
 
             <p class="text-muted mb-0">
-                Repeated axe-core rules ranked by severity, WCAG level,
-                application coverage, and affected elements.
+                Repeated accessibility rules ranked by severity, WCAG
+                level, application coverage, and affected elements.
             </p>
 
         </div>
@@ -1968,218 +2599,233 @@ else
 
         <article class="card shadow-sm">
 
-            <div class="card-body">
+            @if (Model.TopFindings.Count == 0)
+            {
+                <div class="card-body">
 
-                @if (Model.TopFindings.Count == 0)
-                {
                     <p class="text-muted mb-0">
-                        No authenticated findings match the selected filters.
+                        No authenticated findings match the selected
+                        filters.
                     </p>
-                }
-                else
-                {
-                    <div class="table-responsive">
 
-                        <table class="table table-striped
-                                      table-hover
-                                      align-middle
-                                      mb-0">
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
 
-                            <caption class="visually-hidden">
-                                Top authenticated accessibility findings
-                            </caption>
+                    <table class="table
+                                  table-striped
+                                  table-hover
+                                  align-middle
+                                  mb-0">
 
-                            <thead>
+                        <caption class="visually-hidden">
+                            Priority and repeated authenticated
+                            accessibility findings
+                        </caption>
 
+                        <thead>
+
+                            <tr>
+
+                                <th scope="col">
+                                    Finding
+                                </th>
+
+                                <th scope="col">
+                                    Type
+                                </th>
+
+                                <th scope="col">
+                                    Severity
+                                </th>
+
+                                <th scope="col">
+                                    WCAG
+                                </th>
+
+                                <th scope="col"
+                                    class="text-end">
+                                    Applications
+                                </th>
+
+                                <th scope="col"
+                                    class="text-end">
+                                    States
+                                </th>
+
+                                <th scope="col"
+                                    class="text-end">
+                                    Elements
+                                </th>
+
+                                <th scope="col">
+                                    Example
+                                </th>
+
+                            </tr>
+
+                        </thead>
+
+
+                        <tbody>
+
+                            @foreach (var finding
+                                in Model.TopFindings)
+                            {
                                 <tr>
 
-                                    <th scope="col">
-                                        Finding
-                                    </th>
+                                    <th scope="row">
 
-                                    <th scope="col">
-                                        Type
-                                    </th>
+                                        <div class="fw-semibold">
 
-                                    <th scope="col">
-                                        Severity
-                                    </th>
+                                            @(string.IsNullOrWhiteSpace(
+                                                finding.Help)
+                                                ? finding.RuleId
+                                                : finding.Help)
 
-                                    <th scope="col">
-                                        WCAG
-                                    </th>
+                                        </div>
 
-                                    <th scope="col"
-                                        class="text-end">
-                                        Applications
-                                    </th>
-
-                                    <th scope="col"
-                                        class="text-end">
-                                        States
-                                    </th>
-
-                                    <th scope="col"
-                                        class="text-end">
-                                        Elements
-                                    </th>
-
-                                    <th scope="col">
-                                        Example
-                                    </th>
-
-                                </tr>
-
-                            </thead>
+                                        <code>
+                                            @finding.RuleId
+                                        </code>
 
 
-                            <tbody>
-
-                                @foreach (var finding
-                                    in Model.TopFindings)
-                                {
-                                    <tr>
-
-                                        <th scope="row">
-
-                                            <div class="fw-semibold">
-
-                                                @(string.IsNullOrWhiteSpace(
-                                                    finding.Help)
-                                                    ? finding.RuleId
-                                                    : finding.Help)
-
+                                        @if (!string.IsNullOrWhiteSpace(
+                                            finding.Description))
+                                        {
+                                            <div class="small
+                                                        text-muted
+                                                        mt-1">
+                                                @finding.Description
                                             </div>
-
-                                            <code>
-                                                @finding.RuleId
-                                            </code>
-
-                                            @if (!string.IsNullOrWhiteSpace(
-                                                finding.Description))
-                                            {
-                                                <div class="small text-muted mt-1">
-                                                    @finding.Description
-                                                </div>
-                                            }
-
-                                            @if (!string.IsNullOrWhiteSpace(
-                                                finding.HelpUrl))
-                                            {
-                                                <div class="mt-1">
-
-                                                    <a href="@finding.HelpUrl"
-                                                       target="_blank"
-                                                       rel="noopener noreferrer"
-                                                       class="small">
-
-                                                        Rule guidance
-
-                                                        <span class="visually-hidden">
-                                                            opens in a new tab
-                                                        </span>
-
-                                                    </a>
-
-                                                </div>
-                                            }
-
-                                        </th>
+                                        }
 
 
-                                        <td>
+                                        @if (!string.IsNullOrWhiteSpace(
+                                            finding.HelpUrl))
+                                        {
+                                            <div class="mt-1">
 
-                                            @if (string.Equals(
-                                                finding.FindingType,
-                                                "NeedsReview",
-                                                StringComparison.OrdinalIgnoreCase))
-                                            {
-                                                <span class="badge text-bg-warning">
-                                                    Manual Review
-                                                </span>
-                                            }
-                                            else
-                                            {
-                                                <span class="badge text-bg-danger">
-                                                    Violation
-                                                </span>
-                                            }
+                                                <a href="@finding.HelpUrl"
+                                                   target="_blank"
+                                                   rel="noopener noreferrer"
+                                                   class="small">
 
-                                        </td>
-
-
-                                        <td>
-
-                                            @(string.IsNullOrWhiteSpace(
-                                                finding.Impact)
-                                                ? "Unknown"
-                                                : finding.Impact)
-
-                                        </td>
-
-
-                                        <td>
-
-                                            @(string.IsNullOrWhiteSpace(
-                                                finding.WcagLevel)
-                                                ? "Unmapped"
-                                                : finding.WcagLevel)
-
-                                        </td>
-
-
-                                        <td class="text-end fw-bold">
-                                            @finding.ApplicationCount
-                                        </td>
-
-
-                                        <td class="text-end">
-                                            @finding.StateCount
-                                        </td>
-
-
-                                        <td class="text-end">
-                                            @finding.AffectedElementCount
-                                        </td>
-
-
-                                        <td>
-
-                                            @if (finding.LatestRunId.HasValue)
-                                            {
-                                                <a asp-controller="AuthenticatedAudits"
-                                                   asp-action="Details"
-                                                   asp-route-id="@finding.LatestRunId.Value"
-                                                   class="btn btn-sm btn-outline-primary">
-
-                                                    View Audit
+                                                    Rule guidance
 
                                                     <span class="visually-hidden">
-                                                        for
-                                                        @finding.LatestApplicationName
+                                                        opens in a new tab
                                                     </span>
 
                                                 </a>
-                                            }
 
-                                        </td>
+                                            </div>
+                                        }
 
-                                    </tr>
-                                }
+                                    </th>
 
-                            </tbody>
 
-                        </table>
+                                    <td>
 
-                    </div>
-                }
+                                        @if (string.Equals(
+                                            finding.FindingType,
+                                            "NeedsReview",
+                                            StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            <span class="badge
+                                                         text-bg-warning">
+                                                Manual Review
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge
+                                                         text-bg-danger">
+                                                Violation
+                                            </span>
+                                        }
 
-            </div>
+                                    </td>
+
+
+                                    <td>
+
+                                        @(string.IsNullOrWhiteSpace(
+                                            finding.Impact)
+                                            ? "Unknown"
+                                            : finding.Impact)
+
+                                    </td>
+
+
+                                    <td>
+
+                                        @(string.IsNullOrWhiteSpace(
+                                            finding.WcagLevel)
+                                            ? "Unmapped"
+                                            : finding.WcagLevel)
+
+                                    </td>
+
+
+                                    <td class="text-end fw-bold">
+                                        @finding.ApplicationCount
+                                    </td>
+
+
+                                    <td class="text-end">
+                                        @finding.StateCount
+                                    </td>
+
+
+                                    <td class="text-end">
+                                        @finding.AffectedElementCount
+                                    </td>
+
+
+                                    <td>
+
+                                        @if (finding.LatestRunId.HasValue)
+                                        {
+                                            <a asp-controller="AuthenticatedAudits"
+                                               asp-action="Details"
+                                               asp-route-id="@finding.LatestRunId.Value"
+                                               class="btn
+                                                      btn-sm
+                                                      btn-outline-primary">
+
+                                                View Audit
+
+                                                <span class="visually-hidden">
+                                                    for
+                                                    @finding.LatestApplicationName
+                                                </span>
+
+                                            </a>
+                                        }
+
+                                    </td>
+
+                                </tr>
+                            }
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+            }
 
         </article>
 
     </section>
 
+
+    <!-- =====================================================
+         Trends
+         ===================================================== -->
 
     <section aria-labelledby="accessibility-trends-heading"
              class="mb-4">
@@ -2192,8 +2838,8 @@ else
             </h2>
 
             <p class="text-muted mb-0">
-                Daily automated test activity and detected finding totals
-                for the selected reporting scope.
+                Daily automated audit activity and finding totals for
+                the selected reporting scope.
             </p>
 
         </div>
@@ -2215,7 +2861,8 @@ else
                         System.Text.Json.JsonSerializer.Serialize(
                             Model.Trends
                                 .Select(trend =>
-                                    trend.Date.ToString("MMM d, yyyy"))
+                                    trend.Date.ToString(
+                                        "MMM d, yyyy"))
                                 .ToArray());
 
                     string authenticatedStatesJson =
@@ -2239,6 +2886,7 @@ else
                                     trend.FixFirstFindings)
                                 .ToArray());
 
+
                     <div id="accessibility-trend-data"
                          class="d-none"
                          data-labels="@trendLabelsJson"
@@ -2248,7 +2896,10 @@ else
                     </div>
 
 
-                    <div class="border rounded p-3 mb-3">
+                    <div class="border
+                                rounded
+                                p-3
+                                mb-3">
 
                         <h3 class="h5">
                             Authenticated Audit Trends
@@ -2258,6 +2909,7 @@ else
                             Saved workflow-state activity and axe-core
                             findings by audit date.
                         </p>
+
 
                         <div class="accessibility-chart-container">
 
@@ -2284,14 +2936,16 @@ else
 
                     <div class="table-responsive">
 
-                        <table class="table table-striped
+                        <table class="table
+                                      table-striped
                                       table-hover
                                       align-middle
                                       mb-0">
 
                             <caption>
-                                Complete daily accessibility audit activity
-                                represented by the visual trend chart.
+                                Complete daily accessibility audit
+                                activity represented by the visual trend
+                                chart.
                             </caption>
 
                             <thead>
@@ -2358,7 +3012,7 @@ else
             </div>
 
 
-            <div class="card-footer bg-transparent">
+            <div class="card-footer">
 
                 <p class="small text-muted mb-0">
                     Each date represents saved audit activity, not a
@@ -2372,6 +3026,10 @@ else
     </section>
 
 
+    <!-- =====================================================
+         Application comparison
+         ===================================================== -->
+
     <section aria-labelledby="application-rankings-heading"
              class="mb-4">
 
@@ -2379,13 +3037,13 @@ else
 
             <h2 id="application-rankings-heading"
                 class="h3 mb-1">
-                Application Rankings
+                Application Comparison
             </h2>
 
             <p class="text-muted mb-0">
-                Latest authenticated audit for each application, ranked by
-                higher-priority findings. Finding change compares the
-                latest audit with its immediately previous matching audit.
+                Latest authenticated audit for each application.
+                Finding change compares the latest run with its
+                immediately previous matching audit.
             </p>
 
         </div>
@@ -2393,262 +3051,279 @@ else
 
         <article class="card shadow-sm">
 
-            <div class="card-body">
+            @if (Model.Applications.Count == 0)
+            {
+                <div class="card-body">
 
-                @if (Model.Applications.Count == 0)
-                {
                     <p class="text-muted mb-0">
                         No authenticated applications match the selected
                         filters.
                     </p>
-                }
-                else
-                {
-                    <div class="table-responsive">
 
-                        <table class="table table-striped
-                                      table-hover
-                                      align-middle
-                                      mb-0">
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
 
-                            <caption class="visually-hidden">
-                                Authenticated applications ranked by
-                                accessibility findings
-                            </caption>
+                    <table class="table
+                                  table-striped
+                                  table-hover
+                                  align-middle
+                                  mb-0">
 
-                            <thead>
+                        <caption class="visually-hidden">
+                            Authenticated applications compared by
+                            accessibility findings
+                        </caption>
 
+                        <thead>
+
+                            <tr>
+
+                                <th scope="col">
+                                    Application
+                                </th>
+
+                                <th scope="col"
+                                    class="text-end">
+                                    States
+                                </th>
+
+                                <th scope="col"
+                                    class="text-end">
+                                    Critical
+                                </th>
+
+                                <th scope="col"
+                                    class="text-end">
+                                    Serious
+                                </th>
+
+                                <th scope="col"
+                                    class="text-end">
+                                    Fix First
+                                </th>
+
+                                <th scope="col">
+                                    Finding Change
+                                </th>
+
+                                <th scope="col"
+                                    class="text-end">
+                                    Manual Review
+                                </th>
+
+                                <th scope="col"
+                                    class="text-end">
+                                    Elements
+                                </th>
+
+                                <th scope="col">
+                                    Audit Date
+                                </th>
+
+                                <th scope="col">
+                                    <span class="visually-hidden">
+                                        Actions
+                                    </span>
+                                </th>
+
+                            </tr>
+
+                        </thead>
+
+
+                        <tbody>
+
+                            @foreach (var application
+                                in Model.Applications)
+                            {
                                 <tr>
 
-                                    <th scope="col">
-                                        Application
+                                    <th scope="row">
+
+                                        <div class="fw-semibold">
+                                            @application.ApplicationName
+                                        </div>
+
+                                        <div class="small
+                                                    text-muted
+                                                    text-break"
+                                             style="max-width: 380px;">
+                                            @application.StartingUrl
+                                        </div>
+
                                     </th>
 
-                                    <th scope="col"
-                                        class="text-end">
-                                        States
-                                    </th>
 
-                                    <th scope="col"
-                                        class="text-end">
-                                        Critical
-                                    </th>
+                                    <td class="text-end">
 
-                                    <th scope="col"
-                                        class="text-end">
-                                        Serious
-                                    </th>
+                                        @application.SuccessfulStateCount
+                                        /
+                                        @application.StateCount
 
-                                    <th scope="col"
-                                        class="text-end">
-                                        Fix First
-                                    </th>
-
-                                    <th scope="col">
-                                        Finding Change
-                                    </th>
-
-                                    <th scope="col"
-                                        class="text-end">
-                                        Manual Review
-                                    </th>
-
-                                    <th scope="col"
-                                        class="text-end">
-                                        Elements
-                                    </th>
-
-                                    <th scope="col">
-                                        Audit Date
-                                    </th>
-
-                                    <th scope="col"></th>
-
-                                </tr>
-
-                            </thead>
+                                    </td>
 
 
-                            <tbody>
+                                    <td class="text-end
+                                               fw-bold
+                                               text-danger">
+                                        @application.CriticalFindingCount
+                                    </td>
 
-                                @foreach (var application
-                                    in Model.Applications)
-                                {
-                                    <tr>
 
-                                        <th scope="row">
+                                    <td class="text-end fw-bold">
+                                        @application.SeriousFindingCount
+                                    </td>
 
-                                            <div>
-                                                @application.ApplicationName
-                                            </div>
+
+                                    <td class="text-end fw-bold">
+                                        @application.FixFirstFindingCount
+                                    </td>
+
+
+                                    <td>
+
+                                        @if (!application
+                                            .PreviousFindingCount
+                                            .HasValue)
+                                        {
+                                            <span class="text-muted">
+                                                No prior audit
+                                            </span>
+                                        }
+                                        else if (application
+                                            .CoverageChanged)
+                                        {
+                                            <span class="badge
+                                                         text-bg-warning">
+                                                Coverage changed
+                                            </span>
 
                                             <div class="small
                                                         text-muted
-                                                        text-break">
-                                                @application.StartingUrl
+                                                        mt-1">
+
+                                                @application.PreviousStateCount
+                                                previous states;
+
+                                                @application.StateCount
+                                                current states
+
                                             </div>
 
-                                        </th>
 
-
-                                        <td class="text-end">
-
-                                            @application.SuccessfulStateCount
-                                            /
-                                            @application.StateCount
-
-                                        </td>
-
-
-                                        <td class="text-end fw-bold text-danger">
-                                            @application.CriticalFindingCount
-                                        </td>
-
-
-                                        <td class="text-end fw-bold">
-                                            @application.SeriousFindingCount
-                                        </td>
-
-
-                                        <td class="text-end fw-bold">
-                                            @application.FixFirstFindingCount
-                                        </td>
-
-
-                                        <td>
-
-                                            @if (!application
-                                                .PreviousFindingCount
+                                            @if (application
+                                                .FindingCountChange
                                                 .HasValue)
                                             {
-                                                <span class="text-muted">
-                                                    No prior audit
-                                                </span>
-                                            }
-                                            else if (application.CoverageChanged)
-                                            {
-                                                <span class="badge text-bg-warning">
-                                                    Coverage changed
-                                                </span>
+                                                <div class="small mt-1">
 
-                                                <div class="small text-muted mt-1">
+                                                    Raw finding change:
 
-                                                    @application.PreviousStateCount
-                                                    previous states;
+                                                    @(application
+                                                        .FindingCountChange
+                                                        .Value > 0
+                                                        ? "+"
+                                                        : "")
 
-                                                    @application.StateCount
-                                                    current states
+                                                    @application.FindingCountChange.Value
 
                                                 </div>
-
-                                                @if (application
-                                                    .FindingCountChange
-                                                    .HasValue)
-                                                {
-                                                    <div class="small mt-1">
-
-                                                        Raw finding change:
-
-                                                        @(application
-                                                            .FindingCountChange
-                                                            .Value > 0
-                                                            ? "+"
-                                                            : "")
-
-                                                        @application.FindingCountChange.Value
-
-                                                    </div>
-                                                }
                                             }
-                                            else if (application
+                                        }
+                                        else if (application
+                                            .FindingCountChange
+                                            .HasValue &&
+                                            application
                                                 .FindingCountChange
-                                                .HasValue &&
-                                                application
+                                                .Value > 0)
+                                        {
+                                            <span class="fw-semibold
+                                                         text-danger">
+
+                                                Increased by
+
+                                                @application
                                                     .FindingCountChange
-                                                    .Value > 0)
-                                            {
-                                                <span class="fw-semibold text-danger">
+                                                    .Value
 
-                                                    Increased by
+                                            </span>
+                                        }
+                                        else if (application
+                                            .FindingCountChange
+                                            .HasValue &&
+                                            application
+                                                .FindingCountChange
+                                                .Value < 0)
+                                        {
+                                            <span class="fw-semibold
+                                                         text-success">
 
-                                                    @application
+                                                Improved by
+
+                                                @Math.Abs(
+                                                    application
                                                         .FindingCountChange
-                                                        .Value
+                                                        .Value)
 
-                                                </span>
-                                            }
-                                            else if (application
-                                                .FindingCountChange
-                                                .HasValue &&
-                                                application
-                                                    .FindingCountChange
-                                                    .Value < 0)
-                                            {
-                                                <span class="fw-semibold text-success">
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">
+                                                No change
+                                            </span>
+                                        }
 
-                                                    Improved by
-
-                                                    @Math.Abs(
-                                                        application
-                                                            .FindingCountChange
-                                                            .Value)
-
-                                                </span>
-                                            }
-                                            else
-                                            {
-                                                <span class="text-muted">
-                                                    No change
-                                                </span>
-                                            }
-
-                                        </td>
+                                    </td>
 
 
-                                        <td class="text-end">
-                                            @application.NeedsReviewFindingCount
-                                        </td>
+                                    <td class="text-end">
+                                        @application.NeedsReviewFindingCount
+                                    </td>
 
 
-                                        <td class="text-end">
-                                            @application.AffectedElementCount
-                                        </td>
+                                    <td class="text-end">
+                                        @application.AffectedElementCount
+                                    </td>
 
 
-                                        <td>
-                                            @application.LatestAuditDate.ToString("MMM d, yyyy")
-                                        </td>
+                                    <td>
+                                        @application.LatestAuditDate.ToString("MMM d, yyyy")
+                                    </td>
 
 
-                                        <td class="text-end">
+                                    <td class="text-end">
 
-                                            <a asp-controller="AuthenticatedAudits"
-                                               asp-action="Details"
-                                               asp-route-id="@application.LatestRunId"
-                                               class="btn btn-sm btn-outline-primary">
+                                        <a asp-controller="AuthenticatedAudits"
+                                           asp-action="Details"
+                                           asp-route-id="@application.LatestRunId"
+                                           class="btn
+                                                  btn-sm
+                                                  btn-outline-primary">
 
-                                                View Audit
+                                            View Audit
 
-                                                <span class="visually-hidden">
-                                                    for
-                                                    @application.ApplicationName
-                                                </span>
+                                            <span class="visually-hidden">
+                                                for
+                                                @application.ApplicationName
+                                            </span>
 
-                                            </a>
+                                        </a>
 
-                                        </td>
+                                    </td>
 
-                                    </tr>
-                                }
+                                </tr>
+                            }
 
-                            </tbody>
+                        </tbody>
 
-                        </table>
+                    </table>
 
-                    </div>
-                }
-
-            </div>
+                </div>
+            }
 
         </article>
 
