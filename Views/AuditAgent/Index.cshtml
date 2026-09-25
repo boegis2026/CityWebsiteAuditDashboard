@@ -1,0 +1,77 @@
+﻿@model CityWebsiteAuditDashboard.Services.AuditAgent.AuditAgentConnectionStatus
+
+@{
+    ViewData["Title"] = "Audit Agent connection";
+
+    var losAngelesTimeZone =
+        TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+
+    bool recentlySeen =
+        Model is not null &&
+        DateTimeOffset.UtcNow - Model.LastSeenAt <
+            TimeSpan.FromSeconds(45);
+}
+
+<h1>Audit Agent connection</h1>
+
+<p>
+    Step 1 checks the connection between this dashboard
+    and your workstation Agent.
+</p>
+
+@if (Model is null)
+{
+    <p class="alert alert-secondary" role="status">
+        No Agent connected.
+    </p>
+}
+else
+{
+    <p class="alert @(recentlySeen ? "alert-success" : "alert-warning")"
+       role="status">
+        @(recentlySeen
+            ? "Agent connected."
+            : "Agent connection may have been lost.")
+    </p>
+
+    <dl>
+        <dt>Workstation</dt>
+        <dd>@Model.MachineName</dd>
+
+        <dt>Connected at — Los Angeles time</dt>
+        <dd>
+            @TimeZoneInfo.ConvertTime(
+                Model.ConnectedAt,
+                losAngelesTimeZone
+            ).ToString("MM/dd/yyyy h:mm:ss tt")
+        </dd>
+
+        <dt>Last contact — Los Angeles time</dt>
+        <dd>
+            @TimeZoneInfo.ConvertTime(
+                Model.LastSeenAt,
+                losAngelesTimeZone
+            ).ToString("MM/dd/yyyy h:mm:ss tt")
+        </dd>
+    </dl>
+}
+
+<p>
+    <a asp-controller="AuditAgent"
+       asp-action="Index"
+       class="btn btn-primary">
+        Refresh connection status
+    </a>
+</p>
+
+<p>
+    Browser controls still use the existing auditing service.
+    The Agent does not open Edge in Step 1.
+</p>
+
+<p>
+    <a asp-controller="AuthenticatedAudits"
+       asp-action="Index">
+        Return to authenticated audits
+    </a>
+</p>

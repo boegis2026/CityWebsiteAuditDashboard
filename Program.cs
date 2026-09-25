@@ -3,28 +3,49 @@ using CityWebsiteAuditDashboard.Data;
 using Microsoft.EntityFrameworkCore;
 using CityWebsiteAuditDashboard.Services.AuthenticatedAuditing;
 using CityWebsiteAuditDashboard.Services.Remediation;
+using CityWebsiteAuditDashboard.Hubs;
+using CityWebsiteAuditDashboard.Services.AuditAgent;
+using Microsoft.AspNetCore.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
 
-builder.Services.AddHttpClient<IWaveAccessibilityService, WaveAccessibilityService>(client =>
-{
-    client.Timeout = TimeSpan.FromSeconds(60);
-});
+// Step 1: an independent Agent connection test.
+// Existing browser ownership remains unchanged.
+builder.Services.AddSignalR();
+
+builder.Services.AddSingleton<AuditAgentConnectionRegistry>();
+
+builder.Services.AddAuthentication()
+    .AddScheme<
+        AuthenticationSchemeOptions,
+        AuditAgentAuthenticationHandler>(
+            AuditAgentAuthenticationHandler.SchemeName,
+            _ => { });
+
+builder.Services.AddHttpClient<
+    IWaveAccessibilityService,
+    WaveAccessibilityService>(client =>
+    {
+        client.Timeout = TimeSpan.FromSeconds(60);
+    });
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(
-        builder.Configuration.GetConnectionString("DefaultConnection")));
+        builder.Configuration.GetConnectionString(
+            "DefaultConnection")));
 
-builder.Services.AddHttpClient<IWebsiteScannerService, WebsiteScannerService>(client =>
-{
-    client.Timeout = TimeSpan.FromSeconds(15);
+builder.Services.AddHttpClient<
+    IWebsiteScannerService,
+    WebsiteScannerService>(client =>
+    {
+        client.Timeout = TimeSpan.FromSeconds(15);
 
-    client.DefaultRequestHeaders.UserAgent.ParseAdd(
-        "CityWebsiteAuditDashboard/1.0");
-});
+        client.DefaultRequestHeaders.UserAgent.ParseAdd(
+            "CityWebsiteAuditDashboard/1.0");
+    });
 
 builder.Services.AddScoped<AccessibilityRemediationService>();
 
@@ -32,7 +53,8 @@ builder.Services.AddScoped<AccessibilityRemediationMatcher>();
 
 builder.Services.AddScoped<AccessibilityRemediationRetestService>();
 
-builder.Services.AddScoped<AccessibilityRemediationWorkflowComparisonService>();
+builder.Services.AddScoped<
+    AccessibilityRemediationWorkflowComparisonService>();
 
 // A singleton is required because the same authenticated Playwright browser
 // must remain alive across separate Start, Scan, and Stop HTTP requests.
@@ -67,16 +89,18 @@ var app = builder.Build();
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
 
 app.UseHttpsRedirection();
 app.UseRouting();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapStaticAssets();
+
+app.MapHub<AuditAgentHub>("/hubs/audit-agent");
 
 app.MapControllerRoute(
     name: "default",
