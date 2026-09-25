@@ -11,7 +11,9 @@ using System.Diagnostics;
 using MigraDoc.DocumentObjectModel;
 using MigraDoc.Rendering;
 
+
 namespace CityWebsiteAuditDashboard.Services.AuthenticatedAuditing;
+
 
 /// <summary>
 /// Manages live authenticated Playwright sessions and saves their audit
@@ -25,10 +27,12 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<AuthenticatedAuditService> _logger;
 
+
     // Browser objects cannot be stored in SQL Server. They remain in memory
     // while the authenticated audit is running.
     private readonly ConcurrentDictionary<Guid, AuthenticatedAuditBrowserSession>
         _sessions = new();
+
 
     /*
     * Keep the proof-of-concept batch small enough to avoid accidentally
@@ -37,6 +41,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
     */
     private const int MaximumAuthenticatedBatchSize = 25;
 
+
     public AuthenticatedAuditService(
         IServiceScopeFactory scopeFactory,
         ILogger<AuthenticatedAuditService> logger)
@@ -44,6 +49,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         _scopeFactory = scopeFactory;
         _logger = logger;
     }
+
 
     public AuthenticatedAuditSessionResult? GetActiveSession()
     {
@@ -63,10 +69,12 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 .OrderByDescending(session => session.StartedAt)
                 .FirstOrDefault();
 
+
         if (session is null)
         {
             return null;
         }
+
 
         return new AuthenticatedAuditSessionResult
         {
@@ -79,16 +87,20 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         };
     }
 
+
     public async Task<AuthenticatedAuditSessionResult> StartSessionAsync(
         AuthenticatedAuditStartRequest request,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
 
+
         string applicationName = request.ApplicationName.Trim();
         string startingUrl = request.StartingUrl.Trim();
 
+
         ValidateStartRequest(applicationName, startingUrl);
+
 
         /*
         * Only one browser session is supported for this local proof of concept.
@@ -102,8 +114,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 "Return to the active session and complete it before starting another.");
         }
 
+
         DateTime startedAt = DateTime.UtcNow;
         Guid sessionId = Guid.NewGuid();
+
 
         // Create the database run before opening the browser so failures
         // during browser startup can still be recorded in the audit history.
@@ -113,35 +127,42 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             startedAt,
             cancellationToken);
 
+
         IPlaywright? playwright = null;
         IBrowser? browser = null;
         IBrowserContext? browserContext = null;
+
 
         try
         {
             playwright = await Playwright.CreateAsync();
 
+
             browser = await playwright.Chromium.LaunchAsync(
                 new BrowserTypeLaunchOptions
                 {
-                /*
-                * Use the workstation's installed Microsoft Edge instead of
-                * Playwright's downloaded Chromium build.
-                *
-                * Managed workstations may restrict unfamiliar browser executables,
-                * while the organization-managed Edge installation is already
-                * approved and configured for the workstation.
-                */
-                Channel = "msedge", 
+                    /*
+                    * Use the workstation's installed Microsoft Edge instead of
+                    * Playwright's downloaded Chromium build.
+                    *
+                    * Managed workstations may restrict unfamiliar browser executables,
+                    * while the organization-managed Edge installation is already
+                    * approved and configured for the workstation.
+                    */
+                    Channel = "msedge",
 
-                // Authentication and workflow navigation are performed manually,
-                // so the browser must remain visible.
-                Headless = false
-            });
+
+                    // Authentication and workflow navigation are performed manually,
+                    // so the browser must remain visible.
+                    Headless = false
+                });
+
 
             browserContext = await browser.NewContextAsync();
 
+
             IPage startingPage = await browserContext.NewPageAsync();
+
 
             await startingPage.GotoAsync(
                 startingUrl,
@@ -150,6 +171,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     WaitUntil = WaitUntilState.DOMContentLoaded,
                     Timeout = 120_000
                 });
+
 
             var session = new AuthenticatedAuditBrowserSession
             {
@@ -165,17 +187,20 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 ActivePage = startingPage
             };
 
+
             if (!_sessions.TryAdd(sessionId, session))
             {
                 throw new InvalidOperationException(
                     "The authenticated browser session could not be registered.");
             }
 
+
             /*
             * The initial page existed before the BrowserContext.Page event handler was
             * registered, so attach its close handler directly.
             */
             RegisterPageCloseTracking(sessionId, startingPage);
+
 
             /*
              * The protected application may open in another tab after login. Register the
@@ -185,6 +210,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             {
                 RegisterPageCloseTracking(sessionId, newPage);
             };
+
 
             /*
             * Detect when the user manually closes Edge or when the browser crashes.
@@ -201,6 +227,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 _ = HandleUnexpectedBrowserDisconnectAsync(sessionId);
             };
 
+
             /*
              * Cover the small possibility that Edge disconnected between registration
              * and attaching the event handler.
@@ -210,6 +237,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 _ = HandleUnexpectedBrowserDisconnectAsync(sessionId);
             }
 
+
             // Ownership of these objects now belongs to the in-memory session.
             // Clearing the local references prevents the catch block from
             // closing a successfully registered browser.
@@ -217,10 +245,12 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             browser = null;
             browserContext = null;
 
+
             _logger.LogInformation(
                 "Started authenticated audit session {SessionId} for run {AuditRunId}.",
                 sessionId,
                 auditRunId);
+
 
             return new AuthenticatedAuditSessionResult
             {
@@ -239,23 +269,28 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 browser,
                 playwright);
 
+
             string status = exception is OperationCanceledException
                 ? "Cancelled"
                 : "Failed";
+
 
             await MarkRunAsUnsuccessfulAsync(
                 auditRunId,
                 status,
                 exception.Message);
 
+
             _logger.LogError(
                 exception,
                 "Authenticated audit run {AuditRunId} failed during browser startup.",
                 auditRunId);
 
+
             throw;
         }
     }
+
 
     public AuthenticatedAuditProgressResult? GetProgress(
         Guid sessionId)
@@ -267,6 +302,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 : null;
     }
 
+
     public async Task<AuthenticatedAuditStepResult> ScanCurrentStepAsync(
     Guid sessionId,
     CancellationToken cancellationToken = default)
@@ -277,12 +313,14 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 "The authenticated audit session was not found or is no longer running.");
         }
 
+
         if (!session.Browser.IsConnected)
         {
             throw new KeyNotFoundException(
                 "The Playwright controlled Edge browser has been closed. " +
                 "The authenticated audit session is no longer available.");
         }
+
 
         if (!session.BrowserContext.Pages.Any(IsAuditablePage))
         {
@@ -291,12 +329,15 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 "The authenticated audit session is no longer available.");
         }
 
+
         // Only one scan or stop operation may use this browser session at a time.
         await session.OperationLock.WaitAsync(cancellationToken);
+
 
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
+
 
             SetProgress(
                 session,
@@ -306,6 +347,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 currentUrl: session.ActivePage?.Url,
                 currentPageNumber: session.NextStepNumber,
                 totalPageCount: null);
+
 
             /*
              * The session may have been removed while this request was waiting for
@@ -317,16 +359,20 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     "The authenticated audit session is no longer running.");
             }
 
+
             int stepNumber = session.NextStepNumber;
             IPage? activePage = null;
             RenderedPageSnapshot? snapshot = null;
+
 
             string currentUrl =
                 session.ActivePage is not null && !session.ActivePage.IsClosed
                     ? session.ActivePage.Url
                     : session.StartingUrl;
 
+
             AuthenticatedAuditStepResult stepResult;
+
 
             try
             {
@@ -334,9 +380,11 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 session.ActivePage = activePage;
                 currentUrl = activePage.Url;
 
+
                 // Bring the selected protected application tab forward so the user
                 // can clearly see which page state is about to be scanned.
                 await activePage.BringToFrontAsync();
+
 
                 SetProgress(
                     session,
@@ -347,9 +395,14 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     currentPageNumber: session.NextStepNumber,
                     totalPageCount: null);
 
+
                 cancellationToken.ThrowIfCancellationRequested();
 
-                await WaitForRenderedPageAsync(activePage);
+
+                await WaitForRenderedPageAsync(
+                    activePage,
+                    cancellationToken);
+
 
                 SetProgress(
                     session,
@@ -360,15 +413,73 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         currentPageNumber: session.NextStepNumber,
                         totalPageCount: null);
 
-                cancellationToken.ThrowIfCancellationRequested();
-
-                snapshot = await CaptureRenderedPageSnapshotAsync(activePage);
 
                 cancellationToken.ThrowIfCancellationRequested();
 
-                // This is a read-only accessibility scan. The service does not click
-                // Next, Submit, Finish, Pay, Certify, or any other workflow control.
-                AxeResult axeResult = await activePage.RunAxe();
+
+                /*
+                 * A-Permits can finish DOMContentLoaded and then replace the
+                 * document again while its client-side navigation is settling.
+                 * If that happens during the snapshot or axe scan, wait for the
+                 * replacement document and retry this read-only scan instead of
+                 * saving a failed state immediately.
+                 */
+                const int maximumTransientScanAttempts = 4;
+                AxeResult? axeResult = null;
+
+                for (int scanAttempt = 1;
+                     scanAttempt <= maximumTransientScanAttempts;
+                     scanAttempt++)
+                {
+                    try
+                    {
+                        snapshot =
+                            await CaptureRenderedPageSnapshotAsync(
+                                activePage);
+
+                        cancellationToken
+                            .ThrowIfCancellationRequested();
+
+                        // This is a read-only accessibility scan. The service does not click
+                        // Next, Submit, Finish, Pay, Certify, or any other workflow control.
+                        axeResult =
+                            await activePage.RunAxe();
+
+                        break;
+                    }
+                    catch (PlaywrightException exception)
+                        when (
+                            IsTransientNavigationPlaywrightException(
+                                exception) &&
+                            scanAttempt < maximumTransientScanAttempts)
+                    {
+                        await Task.Delay(
+                            TimeSpan.FromMilliseconds(1500),
+                            cancellationToken);
+
+                        activePage =
+                            SelectPageForAudit(session);
+
+                        session.ActivePage =
+                            activePage;
+
+                        currentUrl =
+                            activePage.Url;
+
+                        await activePage.BringToFrontAsync();
+
+                        await WaitForRenderedPageAsync(
+                            activePage,
+                            cancellationToken);
+                    }
+                }
+
+                if (axeResult is null)
+                {
+                    throw new PlaywrightException(
+                        "The rendered page changed repeatedly while the accessibility scan was starting.");
+                }
+
 
                 SetProgress(
                     session,
@@ -379,21 +490,27 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     currentPageNumber: session.NextStepNumber,
                     totalPageCount: null);
 
+
                 cancellationToken.ThrowIfCancellationRequested();
+
 
                 int violationRuleCount =
                     axeResult.Violations?.Count() ?? 0;
+
 
                 int affectedElementCount =
                     axeResult.Violations?
                         .Sum(violation => violation.Nodes?.Count() ?? 0)
                     ?? 0;
 
+
                 int needsReviewRuleCount =
                     axeResult.Incomplete?.Count() ?? 0;
 
+
                 int passedRuleCount =
                     axeResult.Passes?.Count() ?? 0;
+
 
                 /*
                  * Convert axe's detailed rule results into our own safe contract.
@@ -402,9 +519,11 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 List<AuthenticatedAuditFindingResult> findings =
                     CreateFindingResults(axeResult);
 
+
                 string stepName = GetStepName(
                     snapshot,
                     stepNumber);
+
 
                 stepResult = new AuthenticatedAuditStepResult
                 {
@@ -445,11 +564,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         currentPageNumber: session.NextStepNumber,
                         totalPageCount: null);
 
+
                 _logger.LogError(
                     exception,
                     "Step {StepNumber} failed for authenticated audit session {SessionId}.",
                     stepNumber,
                     sessionId);
+
 
                 // Preserve a failed scan attempt in the audit history. This makes it
                 // clear that the rendered state was reached even if axe or page
@@ -479,6 +600,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 };
             }
 
+
             SetProgress(
                 session,
                 isScanning: true,
@@ -488,10 +610,12 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 currentPageNumber: session.NextStepNumber,
                 totalPageCount: null);
 
+
             int savedStepId = await SaveAuditStepAsync(
                 session.AuditRunId,
                 stepResult,
                 cancellationToken);
+
 
             SetProgress(
                 session,
@@ -502,8 +626,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 currentPageNumber: session.NextStepNumber,
                 totalPageCount: null);
 
+
             session.LastSavedStepId = savedStepId;
             session.NextStepNumber++;
+
 
             _logger.LogInformation(
                 "Saved authenticated audit step {StepNumber} for run {AuditRunId}. " +
@@ -511,6 +637,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 stepResult.StepNumber,
                 session.AuditRunId,
                 stepResult.ScanSucceeded);
+
 
             return stepResult;
         }
@@ -520,6 +647,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         }
     }
 
+
     public async Task<AuthenticatedAuditBatchResult> ScanBatchAsync(
     Guid sessionId,
     IReadOnlyList<string> urls,
@@ -527,7 +655,9 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
     {
         ArgumentNullException.ThrowIfNull(urls);
 
+
         Stopwatch batchStopwatch = Stopwatch.StartNew();
+
 
         /*
          * Ignore blank entries and trim surrounding spaces before validation.
@@ -540,12 +670,14 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 .Select(url => url.Trim())
                 .ToArray();
 
+
         if (normalizedUrls.Length == 0)
         {
             throw new ArgumentException(
                 "Enter at least one authenticated URL.",
                 nameof(urls));
         }
+
 
         if (normalizedUrls.Length > MaximumAuthenticatedBatchSize)
         {
@@ -554,6 +686,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 $"{MaximumAuthenticatedBatchSize} URLs.",
                 nameof(urls));
         }
+
 
         foreach (string url in normalizedUrls)
         {
@@ -567,16 +700,20 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             }
         }
 
+
         var itemResults =
             new List<AuthenticatedAuditBatchItemResult>(
                 normalizedUrls.Length);
+
 
         foreach (string url in normalizedUrls)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+
             Stopwatch itemStopwatch = Stopwatch.StartNew();
             string? finalUrl = null;
+
 
             try
             {
@@ -591,10 +728,12 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         url,
                         cancellationToken);
 
+
                 AuthenticatedAuditStepResult stepResult =
                     await ScanCurrentStepAsync(
                         sessionId,
                         cancellationToken);
+
 
                 itemResults.Add(
                     new AuthenticatedAuditBatchItemResult
@@ -635,6 +774,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     url,
                     sessionId);
 
+
                 itemResults.Add(
                     new AuthenticatedAuditBatchItemResult
                     {
@@ -647,6 +787,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     });
             }
         }
+
 
         batchStopwatch.Stop();
         return new AuthenticatedAuditBatchResult
@@ -662,6 +803,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         };
     }
 
+
     public async Task<AuthenticatedAuditNavigationAnalysisResult>
     AnalyzeCurrentStateAsync(
         Guid sessionId,
@@ -675,7 +817,9 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 "The authenticated audit session was not found.");
         }
 
+
         await session.OperationLock.WaitAsync(cancellationToken);
+
 
         try
         {
@@ -686,11 +830,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     "The authenticated audit session is no longer active.");
             }
 
+
             if (!session.Browser.IsConnected)
             {
                 throw new InvalidOperationException(
                     "The authenticated browser is no longer connected.");
             }
+
 
             /*
              * Reuse the same page-selection behavior as manual scanning.
@@ -699,9 +845,12 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             IPage activePage =
                 SelectPageForAudit(session);
 
+
             session.ActivePage = activePage;
 
+
             await activePage.BringToFrontAsync();
+
 
             return await AnalyzePageForAutomaticNavigationAsync(
                 activePage);
@@ -711,6 +860,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             session.OperationLock.Release();
         }
     }
+
 
     public bool RequestAutomaticWorkflowStop(
     Guid sessionId)
@@ -723,8 +873,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 "The authenticated audit session was not found.");
         }
 
+
         return session.RequestAutomaticWorkflowStop();
     }
+
 
     public async Task<AuthenticatedAuditAutomaticRunResult>
     RunAutomaticWorkflowAsync(
@@ -740,12 +892,14 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 "The authenticated audit session was not found.");
         }
 
+
         if (!session.TryStartAutomaticWorkflow(
             out CancellationToken sessionCancellationToken))
         {
             throw new InvalidOperationException(
                 "An automatic workflow is already running for this session.");
         }
+
 
         /*
          * Stop when either the dashboard request is canceled or the user
@@ -756,8 +910,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 cancellationToken,
                 sessionCancellationToken);
 
+
         CancellationToken workflowCancellationToken =
             linkedCancellationSource.Token;
+
 
         /*
          * Prevent an invalid or excessive automatic run.
@@ -768,6 +924,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 maximumStateCount,
                 1,
                 25);
+
 
         /*
         * Optional workflow sections often continue displaying
@@ -780,13 +937,16 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         await session.OperationLock.WaitAsync(
             workflowCancellationToken);
 
+
         try
         {
             IPage initialPage =
                 SelectPageForAudit(session);
 
+
             session.ActivePage =
                 initialPage;
+
 
             await initialPage.EvaluateAsync(
                 """
@@ -794,19 +954,23 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             const visitedPrefix =
                 "city-audit-hub-visited:";
 
+
             for (
                 let index =
                     sessionStorage.length - 1;
                 index >= 0;
                 index--) {
 
+
                 const key =
                     sessionStorage.key(index);
+
 
                 if (
                     key &&
                     key.startsWith(
                         visitedPrefix)) {
+
 
                     sessionStorage.removeItem(
                         key);
@@ -820,8 +984,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             session.OperationLock.Release();
         }
 
+
         var cycles =
             new List<AuthenticatedAuditAutomaticCycleResult>();
+
 
         /*
          * Contains only states that have already been scanned.
@@ -832,8 +998,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             new HashSet<string>(
                 StringComparer.Ordinal);
 
+
         int advancedStateCount = 0;
         string? finalUrl = null;
+
 
         try
         {
@@ -842,6 +1010,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 stateIndex++)
             {
                 workflowCancellationToken.ThrowIfCancellationRequested();
+
 
                 /*
                  * Scan the last permitted state, but do not click Next.
@@ -855,83 +1024,106 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             sessionId,
                             workflowCancellationToken);
 
+
                     var limitNavigationResult =
                         new AuthenticatedAuditAutomaticNavigationResult
                         {
                             Status = "MaximumReached",
 
+
                             NavigationAttempted = false,
                             Navigated = false,
 
+
                             RequiresManualInteraction = false,
+
 
                             Message =
                                 "The final permitted state was scanned. " +
                                 "No additional navigation was attempted.",
 
+
                             StopReason =
                                 "The configured maximum state count was reached."
                         };
+
 
                     cycles.Add(
                         new AuthenticatedAuditAutomaticCycleResult
                         {
                             ScanSucceeded = true,
 
+
                             ScannedStepNumber =
                                 finalScanResult.StepNumber,
+
 
                             ScanResult =
                                 finalScanResult,
 
+
                             NavigationResult =
                                 limitNavigationResult,
+
 
                             Message =
                                 "The state was scanned without advancing."
                         });
 
+
                     return new AuthenticatedAuditAutomaticRunResult
                     {
                         Status = "MaximumReached",
 
+
                         ScannedStateCount =
                             cycles.Count,
+
 
                         AdvancedStateCount =
                             advancedStateCount,
 
+
                         MaximumStateCount =
                             safeMaximumStateCount,
 
+
                         ReachedMaximumStateCount = true,
+
 
                         FinalUrl =
                             finalUrl,
+
 
                         Message =
                             $"The automatic workflow stopped after scanning " +
                             $"the maximum of {safeMaximumStateCount} states.",
 
+
                         StopReason =
                             "The safety limit was reached. The browser remains " +
                             "on the final scanned state.",
+
 
                         Cycles =
                             cycles
                     };
                 }
 
+
                 AuthenticatedAuditAutomaticCycleResult cycle =
                     await ScanAndAdvanceAutomaticStepAsync(
                         sessionId,
                         workflowCancellationToken);
 
+
                 cycles.Add(cycle);
+
 
                 AuthenticatedAuditAutomaticNavigationResult?
                     navigation =
                         cycle.NavigationResult;
+
 
                 if (navigation is null)
                 {
@@ -939,40 +1131,60 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     {
                         Status = "Failed",
 
+
                         ScannedStateCount =
                             cycles.Count,
+
 
                         AdvancedStateCount =
                             advancedStateCount,
 
+
                         MaximumStateCount =
                             safeMaximumStateCount,
 
+
                         ReachedMaximumStateCount = false,
+
 
                         FinalUrl =
                             finalUrl,
 
+
                         Message =
                             "The current state was scanned, but no navigation result was returned.",
 
+
                         StopReason =
                             "The automatic cycle returned an incomplete result.",
+
 
                         Cycles =
                             cycles
                     };
                 }
 
+
                 /*
-                * Dynamic workflow pages may render before their validation and
-                * navigation handlers are completely ready. Retry the advance a
-                * few times without rescanning or creating duplicate states.
-                */
-                if (string.Equals(
-                    navigation.Status,
-                    "NoStateChange",
-                    StringComparison.OrdinalIgnoreCase))
+                 * Dynamic BOE workflow pages may need extra time after filling
+                 * fields before their Next/Continue control becomes usable.
+                 *
+                 * A-Permits can temporarily report NoSafeAction even though the
+                 * same page becomes navigable a short time later. Retry both
+                 * NoStateChange and NoSafeAction without rescanning or saving a
+                 * duplicate audit state.
+                 */
+                bool shouldRetryAutomaticAdvance =
+                    string.Equals(
+                        navigation.Status,
+                        "NoStateChange",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(
+                        navigation.Status,
+                        "NoSafeAction",
+                        StringComparison.OrdinalIgnoreCase);
+
+                if (shouldRetryAutomaticAdvance)
                 {
                     const int maximumAdvanceRetries = 3;
 
@@ -981,8 +1193,12 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         retryAttempt <= maximumAdvanceRetries;
                         retryAttempt++)
                     {
+                        /*
+                         * Give client-side validation and dependent controls time
+                         * to settle before running the normal advance logic again.
+                         */
                         await Task.Delay(
-                            TimeSpan.FromMilliseconds(2500),
+                            TimeSpan.FromSeconds(4),
                             workflowCancellationToken);
 
                         AuthenticatedAuditAutomaticNavigationResult
@@ -1011,8 +1227,8 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             };
 
                         /*
-                         * Replace the failed navigation attempt. Do not add another
-                         * scanned state because the page was already scanned.
+                         * Replace the unsuccessful navigation attempt. Do not add
+                         * another scanned state because the page was already saved.
                          */
                         cycles[cycles.Count - 1] =
                             cycle;
@@ -1020,20 +1236,29 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         navigation =
                             retryNavigation;
 
-                        if (!string.Equals(
-                            navigation.Status,
-                            "NoStateChange",
-                            StringComparison.OrdinalIgnoreCase))
+                        bool retryAgain =
+                            string.Equals(
+                                navigation.Status,
+                                "NoStateChange",
+                                StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(
+                                navigation.Status,
+                                "NoSafeAction",
+                                StringComparison.OrdinalIgnoreCase);
+
+                        if (!retryAgain)
                         {
                             break;
                         }
                     }
                 }
 
+
                 finalUrl =
                     navigation.UrlAfter ??
                     navigation.UrlBefore ??
                     finalUrl;
+
 
                 if (!string.IsNullOrWhiteSpace(
                                 navigation.StateSignatureBefore))
@@ -1042,9 +1267,11 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         navigation.StateSignatureBefore);
                 }
 
+
                 if (navigation.Navigated)
                 {
                     advancedStateCount++;
+
 
                     /*
                     * The destination has not been scanned during this cycle yet.
@@ -1061,43 +1288,67 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         {
                             Status = "LoopDetected",
 
+
                             ScannedStateCount =
                                 cycles.Count,
+
 
                             AdvancedStateCount =
                                 advancedStateCount,
 
+
                             MaximumStateCount =
                                 safeMaximumStateCount,
 
+
                             ReachedMaximumStateCount = false,
+
 
                             FinalUrl =
                                 finalUrl,
 
+
                             Message =
                                 "Automatic navigation stopped because the workflow returned to a previously scanned state.",
 
+
                             StopReason =
                                 "A repeated rendered state was detected. The browser remains open for manual review.",
+
 
                             Cycles =
                                 cycles
                         };
                     }
 
+
                     /*
                     * Some multi-step applications update the visible state before their
                     * JavaScript controls and validation logic have finished initializing.
                     * Allow the new rendered state to settle before scanning and filling it.
                     */
-                    await Task.Delay(
-                        TimeSpan.FromSeconds(2),
+                    IPage destinationPage =
+                        SelectPageForAudit(session);
+
+
+                    session.ActivePage =
+                        destinationPage;
+
+
+                    /*
+                     * Wait for the newly reached BOE workflow state to finish
+                     * any redirects/reloads before beginning the next scan.
+                     */
+                    await WaitForRenderedPageAsync(
+                        destinationPage,
                         workflowCancellationToken);
+
 
                     continue;
 
+
                 }
+
 
                 /*
                  * A static page or a state with no additional safe action
@@ -1114,36 +1365,46 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         "NoSafeAction",
                         StringComparison.OrdinalIgnoreCase);
 
+
                 if (completedNormally)
                 {
                     return new AuthenticatedAuditAutomaticRunResult
                     {
                         Status = "Completed",
 
+
                         ScannedStateCount =
                             cycles.Count,
+
 
                         AdvancedStateCount =
                             advancedStateCount,
 
+
                         MaximumStateCount =
                             safeMaximumStateCount,
 
+
                         ReachedMaximumStateCount = false,
+
 
                         FinalUrl =
                             finalUrl,
 
+
                         Message =
                             "The supported workflow states were scanned and no additional safe navigation action was found.",
 
+
                         StopReason =
                             navigation.StopReason,
+
 
                         Cycles =
                             cycles
                     };
                 }
+
 
                 /*
                  * Validation failures, unsupported fields, authentication,
@@ -1154,31 +1415,40 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 {
                     Status = "ManualActionRequired",
 
+
                     ScannedStateCount =
                         cycles.Count,
+
 
                     AdvancedStateCount =
                         advancedStateCount,
 
+
                     MaximumStateCount =
                         safeMaximumStateCount,
 
+
                     ReachedMaximumStateCount = false,
+
 
                     FinalUrl =
                         finalUrl,
 
+
                     Message =
                         "Automatic navigation stopped. The browser remains open so the workflow can continue manually.",
+
 
                     StopReason =
                         navigation.StopReason ??
                         navigation.Message,
 
+
                     Cycles =
                         cycles
                 };
             }
+
 
             /*
              * The loop should normally return from one of the conditions
@@ -1188,25 +1458,33 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             {
                 Status = "MaximumReached",
 
+
                 ScannedStateCount =
                     cycles.Count,
+
 
                 AdvancedStateCount =
                     advancedStateCount,
 
+
                 MaximumStateCount =
                     safeMaximumStateCount,
 
+
                 ReachedMaximumStateCount = true,
+
 
                 FinalUrl =
                     finalUrl,
 
+
                 Message =
                     "The automatic workflow reached its configured state limit.",
 
+
                 StopReason =
                     "The safety limit was reached.",
+
 
                 Cycles =
                     cycles
@@ -1218,26 +1496,34 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             {
                 Status = "StoppedByUser",
 
+
                 ScannedStateCount =
                     cycles.Count,
+
 
                 AdvancedStateCount =
                     advancedStateCount,
 
+
                 MaximumStateCount =
                     safeMaximumStateCount,
 
+
                 ReachedMaximumStateCount = false,
+
 
                 FinalUrl =
                     finalUrl,
+
 
                 Message =
                     "The automatic workflow was stopped. " +
                     "The authenticated browser remains open.",
 
+
                 StopReason =
                     "The user requested that automatic navigation stop.",
+
 
                 Cycles =
                     cycles
@@ -1249,30 +1535,39 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             {
                 Status = "Failed",
 
+
                 ScannedStateCount =
                     cycles.Count,
+
 
                 AdvancedStateCount =
                     advancedStateCount,
 
+
                 MaximumStateCount =
                     safeMaximumStateCount,
 
+
                 ReachedMaximumStateCount = false,
+
 
                 FinalUrl =
                     finalUrl,
 
+
                 Message =
                     "The automatic workflow encountered an unexpected error.",
 
+
                 StopReason =
                     exception.Message,
+
 
                 Cycles =
                     cycles
             };
         }
+
 
         finally
         {
@@ -1284,6 +1579,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             session.FinishAutomaticWorkflow();
         }
     }
+
 
     public async Task<AuthenticatedAuditAutomaticCycleResult>
     ScanAndAdvanceAutomaticStepAsync(
@@ -1299,23 +1595,66 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 sessionId,
                 cancellationToken);
 
-        AuthenticatedAuditAutomaticNavigationResult navigationResult =
-            await AdvanceAutomaticStepAsync(
-                sessionId,
-                cancellationToken);
+
+        AuthenticatedAuditAutomaticNavigationResult? navigationResult =
+            null;
+
+        /*
+         * A BOE page can replace its document a moment after the scan has
+         * completed. If automatic navigation hits that short transition, retry
+         * only the advance operation. The already-saved accessibility state is
+         * not scanned or inserted a second time.
+         */
+        const int maximumTransientAdvanceAttempts = 4;
+
+        for (int advanceAttempt = 1;
+             advanceAttempt <= maximumTransientAdvanceAttempts;
+             advanceAttempt++)
+        {
+            try
+            {
+                navigationResult =
+                    await AdvanceAutomaticStepAsync(
+                        sessionId,
+                        cancellationToken);
+
+                break;
+            }
+            catch (PlaywrightException exception)
+                when (
+                    IsTransientNavigationPlaywrightException(
+                        exception) &&
+                    advanceAttempt < maximumTransientAdvanceAttempts)
+            {
+                await Task.Delay(
+                    TimeSpan.FromMilliseconds(1500),
+                    cancellationToken);
+            }
+        }
+
+        if (navigationResult is null)
+        {
+            throw new PlaywrightException(
+                "The page kept navigating while the automatic advance was being prepared.");
+        }
+
 
         return new AuthenticatedAuditAutomaticCycleResult
         {
             ScanSucceeded = true,
 
+
             ScannedStepNumber =
                 scanResult.StepNumber,
+
 
             ScanResult =
                 scanResult,
 
+
             NavigationResult =
                 navigationResult,
+
 
             Message =
                 navigationResult.Navigated
@@ -1323,6 +1662,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     : "The current state was scanned, but automatic navigation stopped."
         };
     }
+
 
     public async Task<AuthenticatedAuditAutomaticNavigationResult>
     AdvanceAutomaticStepAsync(
@@ -1337,7 +1677,9 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 "The authenticated audit session was not found.");
         }
 
+
         await session.OperationLock.WaitAsync(cancellationToken);
+
 
         try
         {
@@ -1348,25 +1690,42 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     "The authenticated audit session is no longer active.");
             }
 
+
             if (!session.Browser.IsConnected)
             {
                 throw new InvalidOperationException(
                     "The authenticated browser is no longer connected.");
             }
 
+
             IPage activePage =
                 SelectPageForAudit(session);
 
+
             session.ActivePage = activePage;
 
+
             await activePage.BringToFrontAsync();
+
+
+            /*
+             * The previous workflow action may have started a slow navigation,
+             * redirect, or client-side reload. Wait until the replacement
+             * document remains stable before analyzing or filling it.
+             */
+            await WaitForRenderedPageAsync(
+                activePage,
+                cancellationToken);
+
 
             string urlBefore =
                 activePage.Url;
 
+
             AuthenticatedAuditNavigationAnalysisResult analysis =
                 await AnalyzePageForAutomaticNavigationAsync(
                     activePage);
+
 
             /*
              * Unsafe pages such as authentication, CAPTCHA, payment, or file
@@ -1381,28 +1740,36 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 {
                     Status = "ManualActionRequired",
 
+
                     UrlBefore = urlBefore,
                     UrlAfter = activePage.Url,
+
 
                     NavigationAttempted = false,
                     Navigated = false,
 
+
                     RequiresManualInteraction = true,
+
 
                     Message =
                         analysis.RecommendedAction,
+
 
                     StopReason =
                         analysis.StopReason
                 };
             }
 
+
             AuthenticatedAuditFieldFillResult fillResult =
                 await FillSafeFieldsAsync(activePage);
+
 
             await FillSafeFileUploadsAsync(
                 activePage,
                 cancellationToken);
+
 
             if (fillResult.RequiresManualInteraction)
             {
@@ -1410,27 +1777,35 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 {
                     Status = "ManualActionRequired",
 
+
                     UrlBefore = urlBefore,
                     UrlAfter = activePage.Url,
+
 
                     FilledFieldCount =
                         fillResult.FilledFieldCount,
 
+
                     SkippedFieldCount =
                         fillResult.SkippedFieldCount,
+
 
                     NavigationAttempted = false,
                     Navigated = false,
 
+
                     RequiresManualInteraction = true,
+
 
                     Message =
                         "Automatic navigation stopped before clicking anything.",
+
 
                     StopReason =
                         fillResult.StopReason
                 };
             }
+
 
             /*
             * Some JavaScript applications enable their Next button only after
@@ -1442,15 +1817,18 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     const activeElement =
                         document.activeElement;
 
+
                     if (activeElement instanceof HTMLElement) {
                         activeElement.blur();
                     }
                 }
                 """);
 
+
             await Task.Delay(
                 TimeSpan.FromSeconds(2),
                 cancellationToken);
+
 
             /*
             * Some applications populate dependent controls asynchronously.
@@ -1463,38 +1841,48 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             AuthenticatedAuditFieldFillResult delayedFillResult =
                 await FillSafeFieldsAsync(activePage);
 
+
             if (delayedFillResult.RequiresManualInteraction)
             {
                 return new AuthenticatedAuditAutomaticNavigationResult
                 {
                     Status = "ManualActionRequired",
 
+
                     UrlBefore = urlBefore,
                     UrlAfter = activePage.Url,
+
 
                     FilledFieldCount =
                         fillResult.FilledFieldCount +
                         delayedFillResult.FilledFieldCount,
 
+
                     SkippedFieldCount =
                         delayedFillResult.SkippedFieldCount,
+
 
                     NavigationAttempted = false,
                     Navigated = false,
 
+
                     RequiresManualInteraction = true,
+
 
                     Message =
                         "Automatic navigation stopped before clicking anything.",
+
 
                     StopReason =
                         delayedFillResult.StopReason
                 };
             }
 
+
             await Task.Delay(
                 TimeSpan.FromSeconds(1),
                 cancellationToken);
+
 
             /*
              * Only treat it as a static page after attempting to inspect/fill it.
@@ -1521,8 +1909,80 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 };
             }
 
+
             AuthenticatedAuditNextActionResult nextAction =
                 await FindSafeNextActionAsync(activePage);
+
+
+            /*
+             * Some BOE applications temporarily disable or rebuild their
+             * Next/Continue control while client-side validation finishes.
+             *
+             * If the initial page analysis already saw a safe navigation
+             * candidate, do not immediately stop just because the action is
+             * briefly unavailable after fields were filled. Give the page a
+             * bounded amount of time to finish validation and check again.
+             *
+             * This does not click anything during the retries and does not
+             * create another audit state.
+             */
+            if (
+                (!nextAction.Found ||
+                 string.IsNullOrWhiteSpace(
+                     nextAction.Selector)) &&
+                !nextAction.RequiresManualInteraction &&
+                analysis.CandidateNextActionCount > 0)
+            {
+                const int maximumNextActionRetries = 6;
+
+
+                for (int retryAttempt = 1;
+                     retryAttempt <= maximumNextActionRetries;
+                     retryAttempt++)
+                {
+                    await Task.Delay(
+                        TimeSpan.FromMilliseconds(1500),
+                        cancellationToken);
+
+
+                    try
+                    {
+                        nextAction =
+                            await FindSafeNextActionAsync(
+                                activePage);
+                    }
+                    catch (PlaywrightException)
+                    {
+                        /*
+                         * Client-side validation may briefly replace the
+                         * document. Wait for the rendered page to become
+                         * usable again, then retry without failing the run.
+                         */
+                        await WaitForRenderedPageAsync(
+                            activePage,
+                            cancellationToken);
+
+
+                        continue;
+                    }
+
+
+                    if (
+                        nextAction.Found &&
+                        !string.IsNullOrWhiteSpace(
+                            nextAction.Selector))
+                    {
+                        break;
+                    }
+
+
+                    if (nextAction.RequiresManualInteraction)
+                    {
+                        break;
+                    }
+                }
+            }
+
 
             if (!nextAction.Found ||
                 string.IsNullOrWhiteSpace(nextAction.Selector))
@@ -1534,28 +1994,36 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             ? "ManualActionRequired"
                             : "NoSafeAction",
 
+
                     UrlBefore = urlBefore,
                     UrlAfter = activePage.Url,
+
 
                     FilledFieldCount =
                         fillResult.FilledFieldCount,
 
+
                     SkippedFieldCount =
                         fillResult.SkippedFieldCount,
+
 
                     NavigationAttempted = false,
                     Navigated = false,
 
+
                     RequiresManualInteraction =
                         nextAction.RequiresManualInteraction,
 
+
                     Message =
                         "No safe automatic navigation action was selected.",
+
 
                     StopReason =
                         nextAction.StopReason
                 };
             }
+
 
             /*
              * Check a link or form destination before clicking. Automatic
@@ -1569,9 +2037,11 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         document.querySelector(
                             '[data-city-audit-next-action="true"]');
 
+
                     if (!action) {
                         return null;
                     }
+
 
                     if (
                         action instanceof HTMLAnchorElement &&
@@ -1579,12 +2049,15 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         return action.href;
                     }
 
+
                     const form =
                         action.closest("form");
+
 
                     return form?.action || null;
                 }
                 """);
+
 
             if (
                 !string.IsNullOrWhiteSpace(
@@ -1610,31 +2083,40 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     currentUri.Port ==
                         destinationUri.Port;
 
+
                 if (!sameOrigin)
                 {
                     return new AuthenticatedAuditAutomaticNavigationResult
                     {
                         Status = "ManualActionRequired",
 
+
                         UrlBefore = urlBefore,
                         UrlAfter = activePage.Url,
+
 
                         FilledFieldCount =
                             fillResult.FilledFieldCount,
 
+
                         SkippedFieldCount =
                             fillResult.SkippedFieldCount,
+
 
                         ActionText =
                             nextAction.ActionText,
 
+
                         NavigationAttempted = false,
                         Navigated = false,
 
+
                         RequiresManualInteraction = true,
+
 
                         Message =
                             "Automatic navigation did not click the action.",
+
 
                         StopReason =
                             "The selected action would leave the current website origin."
@@ -1642,16 +2124,20 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 }
             }
 
+
             string signatureBefore =
                 await GetAutomaticNavigationStateSignatureAsync(
                     activePage);
+
 
             ILocator actionLocator =
                 activePage.Locator(
                     nextAction.Selector);
 
+
             int matchingActionCount =
                 await actionLocator.CountAsync();
+
 
             if (matchingActionCount != 1)
             {
@@ -1659,70 +2145,175 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 {
                     Status = "ManualActionRequired",
 
+
                     UrlBefore = urlBefore,
                     UrlAfter = activePage.Url,
+
 
                     FilledFieldCount =
                         fillResult.FilledFieldCount,
 
+
                     SkippedFieldCount =
                         fillResult.SkippedFieldCount,
+
 
                     ActionText =
                         nextAction.ActionText,
 
+
                     NavigationAttempted = false,
                     Navigated = false,
 
+
                     RequiresManualInteraction = true,
+
 
                     Message =
                         "The action was not clicked.",
+
 
                     StopReason =
                         "The selected Next action changed or was no longer unique."
                 };
             }
 
+
             await actionLocator.ScrollIntoViewIfNeededAsync();
 
-            await actionLocator.ClickAsync(
-                new LocatorClickOptions
+
+            bool selectedDirectAttachmentSave =
+                await activePage.EvaluateAsync<bool>(
+                    """
+                    () => {
+                        const action =
+                            document.querySelector(
+                                '[data-city-audit-next-action="true"]');
+
+                        if (!action) {
+                            return false;
+                        }
+
+                        const actionText =
+                            [
+                                action.innerText,
+                                action.textContent,
+                                action.getAttribute("aria-label"),
+                                action.getAttribute("title"),
+                                action.getAttribute("value")
+                            ]
+                                .filter(Boolean)
+                                .join(" ")
+                                .replace(/\s+/g, " ")
+                                .trim();
+
+                        const hasSelectedFile =
+                            Array.from(
+                                document.querySelectorAll(
+                                    "input[type='file']"))
+                                .some(input =>
+                                    input.files &&
+                                    input.files.length > 0);
+
+                        return hasSelectedFile &&
+                            /\bsave\b/i.test(actionText) &&
+                            !/\b(next|continue|proceed|advance)\b/i.test(
+                                actionText);
+                    }
+                    """);
+
+
+            if (selectedDirectAttachmentSave)
+            {
+                await activePage.EvaluateAsync(
+                    """
+                    () =>
+                        sessionStorage.setItem(
+                            "city-audit-direct-attachment-saved-pending-next",
+                            window.location.pathname)
+                    """);
+            }
+
+
+            try
+            {
+                await actionLocator.ClickAsync(
+                    new LocatorClickOptions
+                    {
+                        Timeout = 15000,
+
+                        /*
+                         * BOE forms can finish the physical click immediately but take
+                         * much longer to complete the navigation that follows. Do not
+                         * let Playwright's click wait own that navigation timeout here.
+                         * The workflow already performs its own rendered-state polling
+                         * below, which is safer for slow R-Permit and A-Permit pages.
+                         */
+                        NoWaitAfter = true
+                    });
+            }
+            catch
+            {
+                if (selectedDirectAttachmentSave &&
+                    !activePage.IsClosed)
                 {
-                    Timeout = 15000
-                });
+                    try
+                    {
+                        await activePage.EvaluateAsync(
+                            """
+                            () =>
+                                sessionStorage.removeItem(
+                                    "city-audit-direct-attachment-saved-pending-next")
+                            """);
+                    }
+                    catch (PlaywrightException)
+                    {
+                        // The document may already be navigating away.
+                    }
+                }
+
+                throw;
+            }
+
 
             bool renderedStateChanged = false;
+
 
             string signatureAfter =
                 signatureBefore;
 
+
             IPage pageAfter =
                 activePage;
+
 
             /*
              * Poll because many multi-step forms update the DOM without
              * changing the URL or performing a normal page navigation.
              */
             for (int attempt = 0;
-                 attempt < 20;
+                 attempt < 60;
                  attempt++)
             {
                 await Task.Delay(
                     TimeSpan.FromMilliseconds(500),
                     cancellationToken);
 
+
                 try
                 {
                     pageAfter =
                         SelectPageForAudit(session);
 
+
                     session.ActivePage =
                         pageAfter;
+
 
                     signatureAfter =
                         await GetAutomaticNavigationStateSignatureAsync(
                             pageAfter);
+
 
                     if (!string.Equals(
                         signatureBefore,
@@ -1742,7 +2333,9 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 }
             }
 
+
             await pageAfter.BringToFrontAsync();
+
 
             return new AuthenticatedAuditAutomaticNavigationResult
             {
@@ -1751,36 +2344,47 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         ? "Advanced"
                         : "NoStateChange",
 
+
                 UrlBefore = urlBefore,
                 UrlAfter = pageAfter.Url,
+
 
                 StateSignatureBefore =
                     signatureBefore,
 
+
                 StateSignatureAfter =
                     signatureAfter,
+
 
                 FilledFieldCount =
                     fillResult.FilledFieldCount,
 
+
                 SkippedFieldCount =
                     fillResult.SkippedFieldCount,
+
 
                 ActionText =
                     nextAction.ActionText,
 
+
                 NavigationAttempted = true,
+
 
                 Navigated =
                     renderedStateChanged,
 
+
                 RequiresManualInteraction =
                     !renderedStateChanged,
+
 
                 Message =
                     renderedStateChanged
                         ? "The workflow advanced to a new rendered state."
                         : "The action was clicked, but no new rendered state was detected.",
+
 
                 StopReason =
                     renderedStateChanged
@@ -1793,6 +2397,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             session.OperationLock.Release();
         }
     }
+
 
     public async Task<AuthenticatedAuditAutomaticNavigationResult>
     PreviewAutomaticStepAsync(
@@ -1807,7 +2412,9 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 "The authenticated audit session was not found.");
         }
 
+
         await session.OperationLock.WaitAsync(cancellationToken);
+
 
         try
         {
@@ -1818,25 +2425,32 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     "The authenticated audit session is no longer active.");
             }
 
+
             if (!session.Browser.IsConnected)
             {
                 throw new InvalidOperationException(
                     "The authenticated browser is no longer connected.");
             }
 
+
             IPage activePage =
                 SelectPageForAudit(session);
 
+
             session.ActivePage = activePage;
 
+
             await activePage.BringToFrontAsync();
+
 
             string urlBefore =
                 activePage.Url;
 
+
             AuthenticatedAuditNavigationAnalysisResult analysis =
                 await AnalyzePageForAutomaticNavigationAsync(
                     activePage);
+
 
             /*
              * A static page is a normal result. It can be scanned once,
@@ -1850,6 +2464,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         "StaticPage",
                         StringComparison.OrdinalIgnoreCase);
 
+
                 return new AuthenticatedAuditAutomaticNavigationResult
                 {
                     Status =
@@ -1857,29 +2472,37 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             ? "ManualActionRequired"
                             : "StaticPage",
 
+
                     UrlBefore = urlBefore,
                     UrlAfter = activePage.Url,
+
 
                     NavigationAttempted = false,
                     Navigated = false,
 
+
                     RequiresManualInteraction =
                         requiresManualInteraction,
 
+
                     Message =
                         analysis.RecommendedAction,
+
 
                     StopReason =
                         analysis.StopReason
                 };
             }
 
+
             AuthenticatedAuditFieldFillResult fillResult =
                 await FillSafeFieldsAsync(activePage);
+
 
             await FillSafeFileUploadsAsync(
                 activePage,
                 cancellationToken);
+
 
             if (fillResult.RequiresManualInteraction)
             {
@@ -1887,30 +2510,39 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 {
                     Status = "ManualActionRequired",
 
+
                     UrlBefore = urlBefore,
                     UrlAfter = activePage.Url,
+
 
                     FilledFieldCount =
                         fillResult.FilledFieldCount,
 
+
                     SkippedFieldCount =
                         fillResult.SkippedFieldCount,
+
 
                     NavigationAttempted = false,
                     Navigated = false,
 
+
                     RequiresManualInteraction = true,
+
 
                     Message =
                         "The supported fields were inspected, but manual interaction is required.",
+
 
                     StopReason =
                         fillResult.StopReason
                 };
             }
 
+
             AuthenticatedAuditNextActionResult nextAction =
                 await FindSafeNextActionAsync(activePage);
+
 
             if (!nextAction.Found)
             {
@@ -1921,49 +2553,64 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             ? "ManualActionRequired"
                             : "NoSafeAction",
 
+
                     UrlBefore = urlBefore,
                     UrlAfter = activePage.Url,
+
 
                     FilledFieldCount =
                         fillResult.FilledFieldCount,
 
+
                     SkippedFieldCount =
                         fillResult.SkippedFieldCount,
+
 
                     NavigationAttempted = false,
                     Navigated = false,
 
+
                     RequiresManualInteraction =
                         nextAction.RequiresManualInteraction,
 
+
                     Message =
                         "The current fields were processed, but no safe navigation action was selected.",
+
 
                     StopReason =
                         nextAction.StopReason
                 };
             }
 
+
             return new AuthenticatedAuditAutomaticNavigationResult
             {
                 Status = "ReadyToAdvance",
 
+
                 UrlBefore = urlBefore,
                 UrlAfter = activePage.Url,
+
 
                 FilledFieldCount =
                     fillResult.FilledFieldCount,
 
+
                 SkippedFieldCount =
                     fillResult.SkippedFieldCount,
+
 
                 ActionText =
                     nextAction.ActionText,
 
+
                 NavigationAttempted = false,
                 Navigated = false,
 
+
                 RequiresManualInteraction = false,
+
 
                 Message =
                     "The current state is filled and a safe Next action is ready. No button has been clicked yet."
@@ -1974,6 +2621,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             session.OperationLock.Release();
         }
     }
+
 
     public async Task<AuthenticatedAuditFieldFillResult>
     FillCurrentStateAsync(
@@ -1988,7 +2636,9 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 "The authenticated audit session was not found.");
         }
 
+
         await session.OperationLock.WaitAsync(cancellationToken);
+
 
         try
         {
@@ -1999,18 +2649,23 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     "The authenticated audit session is no longer active.");
             }
 
+
             if (!session.Browser.IsConnected)
             {
                 throw new InvalidOperationException(
                     "The authenticated browser is no longer connected.");
             }
 
+
             IPage activePage =
                 SelectPageForAudit(session);
 
+
             session.ActivePage = activePage;
 
+
             await activePage.BringToFrontAsync();
+
 
             return await FillSafeFieldsAsync(activePage);
         }
@@ -2020,12 +2675,14 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         }
     }
 
+
     public async Task StopSessionAsync(
     Guid sessionId,
     bool markLastStepAsFinal,
     CancellationToken cancellationToken = default)
     {
         Stopwatch totalTimer = Stopwatch.StartNew();
+
 
         if (!_sessions.TryGetValue(
                 sessionId,
@@ -2035,17 +2692,23 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 "The authenticated audit session was not found or is no longer running.");
         }
 
+
         Stopwatch lockTimer = Stopwatch.StartNew();
+
 
         await session.OperationLock.WaitAsync(cancellationToken);
 
+
         lockTimer.Stop();
+
 
         _logger.LogInformation(
             "Close browser timing: operation lock took {ElapsedMilliseconds} ms.",
             lockTimer.ElapsedMilliseconds);
 
+
         bool ownsShutdown = false;
+
 
         try
         {
@@ -2054,6 +2717,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 throw new InvalidOperationException(
                     "The authenticated audit session is already stopping.");
             }
+
 
             /*
              * Remove the session so no new scans can use it while shutdown
@@ -2065,8 +2729,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     "The authenticated audit session could not be stopped.");
             }
 
+
             session.IsStopping = true;
             ownsShutdown = true;
+
 
             /*
              * Save the completed status before disconnecting Playwright.
@@ -2076,12 +2742,15 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             {
                 Stopwatch databaseTimer = Stopwatch.StartNew();
 
+
                 await CompleteAuditRunAsync(
                     session.AuditRunId,
                     session.LastSavedStepId,
                     markLastStepAsFinal);
 
+
                 databaseTimer.Stop();
+
 
                 _logger.LogInformation(
                     "Close browser timing: CompleteAuditRunAsync took " +
@@ -2096,6 +2765,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                  */
                 Stopwatch browserShutdownTimer = Stopwatch.StartNew();
 
+
                 try
                 {
                     if (session.Browser is not null)
@@ -2105,6 +2775,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                          */
                         IBrowserContext[] openContexts =
                             session.Browser.Contexts.ToArray();
+
 
                         foreach (IBrowserContext context in openContexts)
                         {
@@ -2122,6 +2793,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             }
                         }
 
+
                         /*
                          * Browser.CloseAsync takes approximately 30 seconds on
                          * this workstation. Use Chromium's CDP Browser.close
@@ -2134,6 +2806,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                 ICDPSession cdpSession =
                                     await session.Browser
                                         .NewBrowserCDPSessionAsync();
+
 
                                 await cdpSession.SendAsync("Browser.close");
                             }
@@ -2165,12 +2838,14 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 {
                     browserShutdownTimer.Stop();
 
+
                     _logger.LogInformation(
                         "Close browser timing: browser shutdown took " +
                         "{ElapsedMilliseconds} ms.",
                         browserShutdownTimer.ElapsedMilliseconds);
                 }
             }
+
 
             _logger.LogInformation(
                 "Stopped authenticated audit session {SessionId} for run " +
@@ -2183,9 +2858,11 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         {
             session.OperationLock.Release();
 
+
             if (ownsShutdown)
             {
                 Stopwatch disposeTimer = Stopwatch.StartNew();
+
 
                 try
                 {
@@ -2206,7 +2883,9 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     // The Playwright resources were already disposed.
                 }
 
+
                 disposeTimer.Stop();
+
 
                 _logger.LogInformation(
                     "Close browser timing: DisposeAsync took " +
@@ -2214,7 +2893,9 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     disposeTimer.ElapsedMilliseconds);
             }
 
+
             totalTimer.Stop();
+
 
             _logger.LogInformation(
                 "Close browser timing: total shutdown took " +
@@ -2222,6 +2903,8 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 totalTimer.ElapsedMilliseconds);
         }
     }
+
+
 
 
     public async Task InterruptAllSessionsAsync(
@@ -2234,14 +2917,17 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         KeyValuePair<Guid, AuthenticatedAuditBrowserSession>[] sessions =
             _sessions.ToArray();
 
+
         foreach (KeyValuePair<Guid, AuthenticatedAuditBrowserSession> entry
                  in sessions)
         {
             Guid sessionId = entry.Key;
             AuthenticatedAuditBrowserSession session = entry.Value;
 
+
             bool lockTaken = false;
             bool ownsShutdown = false;
+
 
             try
             {
@@ -2252,10 +2938,12 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 await session.OperationLock.WaitAsync(cancellationToken);
                 lockTaken = true;
 
+
                 if (session.IsStopping)
                 {
                     continue;
                 }
+
 
                 /*
                  * Another request may have completed this session after the
@@ -2267,20 +2955,24 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         sessionId,
                         out AuthenticatedAuditBrowserSession? removedSession);
 
+
                 if (!removed ||
                     !ReferenceEquals(removedSession, session))
                 {
                     continue;
                 }
 
+
                 session.IsStopping = true;
                 ownsShutdown = true;
+
 
                 await MarkRunAsInterruptedAsync(
                     session.AuditRunId,
                     "The dashboard application stopped before this authenticated " +
                     "audit session was completed. The Playwright browser was " +
                     "closed during application shutdown.");
+
 
                 _logger.LogWarning(
                     "Interrupted authenticated audit session {SessionId} " +
@@ -2294,6 +2986,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 _logger.LogWarning(
                     "Authenticated audit shutdown was cancelled before every " +
                     "browser session could be closed.");
+
 
                 break;
             }
@@ -2316,6 +3009,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     session.OperationLock.Release();
                 }
 
+
                 if (ownsShutdown)
                 {
                     try
@@ -2335,6 +3029,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         }
     }
 
+
     private static IPage SelectPageForAudit(
     AuthenticatedAuditBrowserSession session)
     {
@@ -2342,15 +3037,18 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             .Where(page => !page.IsClosed)
             .ToList();
 
+
         if (openPages.Count == 0)
         {
             throw new InvalidOperationException(
                 "The Playwright browser does not contain an open page.");
         }
 
+
         List<IPage> auditablePages = openPages
             .Where(IsAuditablePage)
             .ToList();
+
 
         if (auditablePages.Count == 0)
         {
@@ -2358,7 +3056,9 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 "No open HTTP or HTTPS application page was found.");
         }
 
+
         IPage? currentPage = session.ActivePage;
+
 
         /*
          * The login page is initially the first page in the browser context.
@@ -2373,10 +3073,12 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             && !currentPage.IsClosed
             && auditablePages.Contains(currentPage);
 
+
         if (currentPageIsStillOpen)
         {
             bool currentPageIsOriginalFirstPage =
                 ReferenceEquals(currentPage, openPages[0]);
+
 
             if (!currentPageIsOriginalFirstPage || auditablePages.Count == 1)
             {
@@ -2384,8 +3086,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             }
         }
 
+
         return auditablePages[^1];
     }
+
 
     private static bool IsAuditablePage(IPage page)
     {
@@ -2394,6 +3098,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             return false;
         }
 
+
         return Uri.TryCreate(
                    page.Url,
                    UriKind.Absolute,
@@ -2401,6 +3106,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                && (parsedUrl.Scheme == Uri.UriSchemeHttp
                    || parsedUrl.Scheme == Uri.UriSchemeHttps);
     }
+
 
     private static string GetWcagTags(IEnumerable<string>? tags)
     {
@@ -2413,11 +3119,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 .OrderBy(tag => tag, StringComparer.OrdinalIgnoreCase));
     }
 
+
     private static string? GetWcagLevel(IEnumerable<string>? tags)
     {
         var tagSet = new HashSet<string>(
             tags ?? Enumerable.Empty<string>(),
             StringComparer.OrdinalIgnoreCase);
+
 
         // Check AA first so AA findings receive the correct staff-facing level.
         if (tagSet.Contains("wcag2aa") ||
@@ -2427,6 +3135,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             return "AA";
         }
 
+
         if (tagSet.Contains("wcag2a") ||
             tagSet.Contains("wcag21a") ||
             tagSet.Contains("wcag22a"))
@@ -2434,15 +3143,18 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             return "A";
         }
 
+
         // Best-practice or non-WCAG rules do not receive an A/AA label.
         return null;
     }
+
 
     private static string BuildElementFixGuidance(
     string ruleId)
     {
         string normalizedRuleId =
             ruleId.Trim().ToLowerInvariant();
+
 
         string guidance =
             normalizedRuleId switch
@@ -2452,108 +3164,254 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     "The label's for attribute must match the control's id. " +
                     "When a visible label is not appropriate, provide an accessible name using aria-label or aria-labelledby.",
 
+
                 "button-name" =>
                     "Give this button an accessible name using visible text, " +
                     "aria-label, or aria-labelledby. The name should clearly describe the button's action.",
+
 
                 "link-name" =>
                     "Add meaningful visible link text or provide an accessible name using aria-label or aria-labelledby. " +
                     "The accessible name should describe the link's destination or purpose.",
 
+
                 "image-alt" =>
                     "Add an alt attribute that describes the image's purpose. " +
                     "Use alt=\"\" only when the image is decorative and should be ignored by assistive technology.",
 
+
                 "input-image-alt" =>
                     "Add an alt attribute that describes the action performed by this image input.",
+
 
                 "select-name" =>
                     "Associate this select control with a visible <label>, or provide an accessible name using " +
                     "aria-label or aria-labelledby.",
 
+
                 "color-contrast" =>
                     "Change this element's foreground or background color until it meets the required WCAG contrast ratio. " +
                     "Normal text generally requires 4.5:1, while large text generally requires 3:1.",
+
 
                 "aria-valid-attr-value" =>
                     "Correct or remove the invalid ARIA attribute value. " +
                     "When the value references another element ID, confirm that the referenced element exists on the page.",
 
+
                 "aria-allowed-attr" =>
                     "Remove the ARIA attribute that is not allowed for this element or change the element's role " +
                     "to one that supports the attribute.",
 
+
                 "aria-required-attr" =>
                     "Add the ARIA attribute required by this element's role and give it an appropriate value.",
+
 
                 "aria-required-children" =>
                     "Add the required child roles inside this element, or change the parent role so that it matches " +
                     "the element's actual structure.",
 
+
                 "aria-required-parent" =>
                     "Place this element inside a parent with the required ARIA role, or change the element's role " +
                     "to match its actual structure.",
 
+
                 "frame-title" =>
                     "Add a concise and meaningful title attribute to this frame describing the content or purpose of the embedded page.",
+
 
                 "duplicate-id-aria" =>
                     "Change this element's id so that every referenced ID on the page is unique. " +
                     "Update any labels or ARIA attributes that reference the old ID.",
 
+
                 "nested-interactive" =>
                     "Remove the interactive control nested inside this element. " +
                     "Use one interactive element, or separate the controls so each can receive focus independently.",
 
+
                 "heading-order" =>
                     "Change this heading level so the page follows a logical hierarchy without skipping heading levels.",
+
 
                 "html-has-lang" =>
                     "Add a valid lang attribute to the page's <html> element, such as lang=\"en\".",
 
+
                 "document-title" =>
                     "Add a meaningful <title> element inside the page's <head> that identifies the page or current workflow step.",
+
 
                 "landmark-one-main" =>
                     "Place the page's primary content inside one <main> element or an element with role=\"main\". " +
                     "Only one main landmark should be present.",
 
+
                 "region" =>
                     "Place this content inside an appropriate landmark such as <main>, <nav>, <header>, <footer>, or an explicitly labeled region.",
+
 
                 _ =>
                     "Review this element using the axe-core failure explanation below. " +
                     "Update the element's HTML, accessible name, role, state, or relationship so the stated requirement is satisfied."
             };
 
+
         return guidance;
     }
 
-    private async Task WaitForRenderedPageAsync(IPage page)
+
+    private static bool IsTransientNavigationPlaywrightException(
+        PlaywrightException exception)
     {
-        try
-        {
-            /*
-             * DOMContentLoaded is used instead of NetworkIdle because protected
-             * applications may keep background requests or connections open.
-             *
-             * This is only a short best-effort wait. The user already controls
-             * when the Scan button is pressed.
-             */
-            await page.WaitForLoadStateAsync(
-                LoadState.DOMContentLoaded,
-                new PageWaitForLoadStateOptions
-                {
-                    Timeout = 10_000
-                });
-        }
-        catch (System.TimeoutException)
-        {
-            _logger.LogWarning(
-                "The page did not report DOMContentLoaded within the expected time. " +
-                "The service will attempt to scan its current rendered state.");
-        }
+        string message =
+            exception.Message ?? string.Empty;
+
+        return
+            message.Contains(
+                "Execution context was destroyed",
+                StringComparison.OrdinalIgnoreCase) ||
+            message.Contains(
+                "most likely because of a navigation",
+                StringComparison.OrdinalIgnoreCase) ||
+            message.Contains(
+                "Cannot find context with specified id",
+                StringComparison.OrdinalIgnoreCase);
     }
+
+
+    private async Task WaitForRenderedPageAsync(
+        IPage page,
+        CancellationToken cancellationToken = default)
+    {
+        const int maximumAttempts = 20;
+        const int requiredStableChecks = 4;
+
+
+        string? previousUrl = null;
+        int stableChecks = 0;
+
+
+        for (int attempt = 0;
+             attempt < maximumAttempts;
+             attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+
+            if (page.IsClosed)
+            {
+                throw new PlaywrightException(
+                    "The browser page was closed while waiting for it to finish rendering.");
+            }
+
+
+            try
+            {
+                /*
+                 * Do not use NetworkIdle here because BOE applications may
+                 * keep background requests open.
+                 */
+                await page.WaitForLoadStateAsync(
+                    LoadState.DOMContentLoaded,
+                    new PageWaitForLoadStateOptions
+                    {
+                        Timeout = 5000
+                    });
+
+
+                string currentUrl =
+                    page.Url;
+
+
+                string readyState =
+                    await page.EvaluateAsync<string>(
+                        "() => document.readyState");
+
+
+                bool documentReady =
+                    string.Equals(
+                        readyState,
+                        "interactive",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(
+                        readyState,
+                        "complete",
+                        StringComparison.OrdinalIgnoreCase);
+
+
+                if (
+                    documentReady &&
+                    string.Equals(
+                        previousUrl,
+                        currentUrl,
+                        StringComparison.Ordinal))
+                {
+                    stableChecks++;
+                }
+                else
+                {
+                    stableChecks =
+                        documentReady
+                            ? 1
+                            : 0;
+                }
+
+
+                previousUrl =
+                    currentUrl;
+
+
+                /*
+                 * Require the same rendered document to remain available
+                 * for several consecutive checks. This protects against
+                 * slow redirects/reloads that temporarily destroy the
+                 * Playwright execution context.
+                 */
+                if (stableChecks >= requiredStableChecks)
+                {
+                    return;
+                }
+            }
+            catch (PlaywrightException exception)
+            {
+                /*
+                 * A navigation can temporarily destroy the JavaScript
+                 * execution context. Reset the stability count and wait
+                 * for the replacement document instead of failing the
+                 * workflow.
+                 */
+                stableChecks = 0;
+                previousUrl = null;
+
+
+                _logger.LogDebug(
+                    exception,
+                    "The page changed while waiting for a stable rendered state. Retrying.");
+            }
+            catch (System.TimeoutException)
+            {
+                stableChecks = 0;
+
+
+                _logger.LogDebug(
+                    "The page did not finish DOMContentLoaded during this stability check. Retrying.");
+            }
+
+
+            await Task.Delay(
+                TimeSpan.FromMilliseconds(500),
+                cancellationToken);
+        }
+
+
+        _logger.LogWarning(
+            "The page did not remain stable within the expected wait period. " +
+            "The service will attempt to continue with the current rendered state.");
+    }
+
 
     private static async Task<RenderedPageSnapshot>
         CaptureRenderedPageSnapshotAsync(IPage page)
@@ -2565,12 +3423,15 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     .replace(/\s+/g, " ")
                     .trim();
 
+
             const isVisible = element => {
                 if (!(element instanceof Element)) {
                     return false;
                 }
 
+
                 const style = window.getComputedStyle(element);
+
 
                 if (
                     style.display === "none" ||
@@ -2580,10 +3441,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     return false;
                 }
 
+
                 const rectangle = element.getBoundingClientRect();
+
 
                 return rectangle.width > 0 && rectangle.height > 0;
             };
+
 
             const firstVisibleText = selector => {
                 for (const element of document.querySelectorAll(selector)) {
@@ -2591,20 +3455,25 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         continue;
                     }
 
+
                     const text = cleanText(element.textContent);
+
 
                     if (text) {
                         return text;
                     }
                 }
 
+
                 return null;
             };
+
 
             const heading = firstVisibleText(
                 "h1, h2, [role='heading'][aria-level='1'], " +
                 "[role='heading'][aria-level='2']"
             );
+
 
             const stepName =
                 firstVisibleText(
@@ -2618,10 +3487,12 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 cleanText(document.title) ||
                 null;
 
+
             const visibleFormCount =
                 Array.from(document.querySelectorAll("form"))
                     .filter(isVisible)
                     .length;
+
 
             const visibleFieldCount =
                 Array.from(
@@ -2632,6 +3503,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 )
                     .filter(isVisible)
                     .length;
+
 
             const visibleButtonCount =
                 Array.from(
@@ -2645,6 +3517,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 )
                     .filter(isVisible)
                     .length;
+
 
             /*
              * Build a structural signature without reading form values.
@@ -2661,11 +3534,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 )
                     .slice(0, 1000);
 
+
             const structuralSignature =
                 signatureElements
                     .map((element, index) => {
                         const tagName =
                             element.tagName.toLowerCase();
+
 
                         const safeText =
                             tagName === "input" ||
@@ -2674,6 +3549,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                 ? ""
                                 : cleanText(element.textContent)
                                     .substring(0, 100);
+
 
                         return [
                             index,
@@ -2690,6 +3566,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     })
                     .join("\n");
 
+
             return {
                 PageTitle: cleanText(document.title) || null,
                 Heading: heading,
@@ -2697,6 +3574,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 VisibleFormCount: visibleFormCount,
                 VisibleFieldCount: visibleFieldCount,
                 VisibleButtonCount: visibleButtonCount,
+
 
                 // Use only the path, not the query string, because query
                 // strings can contain tokens or private application data.
@@ -2708,14 +3586,18 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         }
         """;
 
+
         RenderedPageSnapshot? snapshot =
             await page.EvaluateAsync<RenderedPageSnapshot>(
                 snapshotScript);
+
 
         return snapshot
             ?? throw new InvalidOperationException(
                 "The rendered page information could not be captured.");
     }
+
+
 
 
     private static string GetStepName(
@@ -2727,30 +3609,37 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             return snapshot.StepName;
         }
 
+
         if (!string.IsNullOrWhiteSpace(snapshot?.Heading))
         {
             return snapshot.Heading;
         }
+
 
         if (!string.IsNullOrWhiteSpace(snapshot?.PageTitle))
         {
             return snapshot.PageTitle;
         }
 
+
         return $"Step {stepNumber}";
     }
+
 
     private static string CreateDomFingerprint(
         string? fingerprintSource)
     {
         string source = fingerprintSource ?? string.Empty;
 
+
         byte[] sourceBytes = Encoding.UTF8.GetBytes(source);
         byte[] hashBytes = SHA256.HashData(sourceBytes);
+
 
         // SHA-256 produces a 64-character hexadecimal fingerprint.
         return Convert.ToHexString(hashBytes).ToLowerInvariant();
     }
+
 
     private async Task<int> CreateAuditRunAsync(
         string applicationName,
@@ -2762,8 +3651,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         // than one web request, obtain a fresh scope for each database operation.
         await using AsyncServiceScope scope = _scopeFactory.CreateAsyncScope();
 
+
         ApplicationDbContext dbContext =
             scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
 
         var auditRun = new AuthenticatedAuditRun
         {
@@ -2774,11 +3665,14 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             Status = "Running"
         };
 
+
         dbContext.AuthenticatedAuditRuns.Add(auditRun);
         await dbContext.SaveChangesAsync(cancellationToken);
 
+
         return auditRun.Id;
     }
+
 
     private static async Task<AuthenticatedAuditNavigationAnalysisResult>
     AnalyzePageForAutomaticNavigationAsync(IPage page)
@@ -2796,8 +3690,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     return false;
                 }
 
+
                 const style = window.getComputedStyle(element);
                 const rectangle = element.getBoundingClientRect();
+
 
                 return style.display !== "none" &&
                     style.visibility !== "hidden" &&
@@ -2806,6 +3702,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     !element.hasAttribute("disabled") &&
                     element.getAttribute("aria-disabled") !== "true";
             };
+
 
             function getActionText(element) {
                 return [
@@ -2822,10 +3719,12 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     .trim();
             }
 
+
             const normalizeText = value =>
                 (value ?? "")
                     .replace(/\s+/g, " ")
                     .trim();
+
 
             const isClaimsRefundHub =
                 window.location.pathname
@@ -2836,9 +3735,27 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     normalizeText(
                         document.body?.innerText));
 
+
+            /*
+             * The redesigned R-Permit Application Requirements page uses
+             * "Not Complete" for the current actionable section and
+             * "Not Yet Available" for locked future sections. Required/Optional
+             * are descriptive badges, not workflow progress statuses.
+             */
+            const isRPermitRequirementsHub =
+                window.location.pathname
+                    .toLowerCase()
+                    .includes(
+                        "/rpermits/public/home/applyfornewpermit") &&
+                /application requirements/i.test(
+                    normalizeText(
+                        document.body?.innerText));
+
+
             const visibleForms =
                 Array.from(document.querySelectorAll("form"))
                     .filter(isVisibleAndEnabled);
+
 
             const requiredFields =
                 Array.from(
@@ -2846,6 +3763,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         "input[required], select[required], textarea[required], " +
                         "[aria-required='true']"))
                     .filter(isVisibleAndEnabled);
+
 
             const visibleFormControls =
                 Array.from(
@@ -2855,8 +3773,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         ":not([type='image']), select, textarea"))
                     .filter(isVisibleAndEnabled);
 
+
             const hasVisibleForm =
                 visibleForms.length > 0;
+
 
             const possibleActions =
                 Array.from(
@@ -2870,9 +3790,303 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         "[onclick]"))
                     .filter(isVisibleAndEnabled);
 
+
+            /*
+             * Redesigned R-Permit hub handling.
+             *
+             * Do NOT use the Required/Optional badges to decide which section
+             * is current. A completed row still keeps its Required badge, so
+             * treating Required as progress can reopen an already completed
+             * section.
+             *
+             * Instead, use the right-side progress/status badges to establish
+             * exact visual row bands. Only a row whose progress status is
+             * "Not Complete" is actionable. "Completed on ..." is finished and
+             * "Not Yet Available" is locked. This also means optional sections
+             * are processed automatically as soon as their right-side status
+             * becomes "Not Complete".
+             */
+            const getRPermitRequirementActions = () => {
+                if (!isRPermitRequirementsHub) {
+                    return [];
+                }
+
+                const rowStatusPattern =
+                    /^(not complete|not completed|not yet available|completed(?:\s+on\b.*)?|complete|done)$/i;
+
+                const actionableStatusPattern =
+                    /^(not complete|not completed)$/i;
+
+                const rawStatuses =
+                    Array.from(
+                        document.querySelectorAll("body *"))
+                        .filter(isVisibleAndEnabled)
+                        .map(element => {
+                            const text =
+                                normalizeText(
+                                    element.innerText);
+
+                            const rectangle =
+                                element.getBoundingClientRect();
+
+                            return {
+                                Element: element,
+                                Text: text,
+                                Rectangle: rectangle,
+                                CenterY:
+                                    (rectangle.top +
+                                     rectangle.bottom) / 2,
+                                Area:
+                                    rectangle.width *
+                                    rectangle.height
+                            };
+                        })
+                        .filter(item =>
+                            item.Text.length > 0 &&
+                            item.Text.length <= 100 &&
+                            rowStatusPattern.test(
+                                item.Text))
+                        .sort((left, right) =>
+                            left.Area - right.Area);
+
+                /*
+                 * The same visible badge text can appear through nested parent
+                 * elements. Keep only the smallest representation at each
+                 * vertical position.
+                 */
+                const uniqueStatuses = [];
+
+                for (const item of rawStatuses) {
+                    const duplicate =
+                        uniqueStatuses.some(existing =>
+                            Math.abs(
+                                existing.CenterY -
+                                item.CenterY) < 4);
+
+                    if (!duplicate) {
+                        uniqueStatuses.push(item);
+                    }
+                }
+
+                const orderedStatuses =
+                    uniqueStatuses.sort((left, right) =>
+                        left.CenterY -
+                        right.CenterY);
+
+                const results = [];
+
+                for (let statusIndex = 0;
+                     statusIndex < orderedStatuses.length;
+                     statusIndex++) {
+                    const statusItem =
+                        orderedStatuses[statusIndex];
+
+                    if (!actionableStatusPattern.test(
+                        statusItem.Text)) {
+                        continue;
+                    }
+
+                    const previousStatus =
+                        statusIndex > 0
+                            ? orderedStatuses[
+                                statusIndex - 1]
+                            : null;
+
+                    const nextStatus =
+                        statusIndex <
+                            orderedStatuses.length - 1
+                            ? orderedStatuses[
+                                statusIndex + 1]
+                            : null;
+
+                    /*
+                     * Bound this row by the midpoints to the status badge above
+                     * and below it. This prevents Owner Information from ever
+                     * being confused with the completed Applicant Information
+                     * row immediately above it.
+                     */
+                    const rowTop =
+                        previousStatus
+                            ? (previousStatus.CenterY +
+                               statusItem.CenterY) / 2
+                            : statusItem.CenterY - 55;
+
+                    const rowBottom =
+                        nextStatus
+                            ? (statusItem.CenterY +
+                               nextStatus.CenterY) / 2
+                            : statusItem.CenterY + 55;
+
+                    const statusRectangle =
+                        statusItem.Rectangle;
+
+                    const alignedActions =
+                        possibleActions
+                            .map(element => {
+                                const rectangle =
+                                    element.getBoundingClientRect();
+
+                                const centerY =
+                                    (rectangle.top +
+                                     rectangle.bottom) / 2;
+
+                                const actionText =
+                                    normalizeText(
+                                        getActionText(element));
+
+                                const primaryText =
+                                    normalizeText(
+                                        element.innerText ||
+                                        element.textContent ||
+                                        element.getAttribute(
+                                            "aria-label") ||
+                                        element.getAttribute(
+                                            "title") ||
+                                        "");
+
+                                const insideThisRow =
+                                    centerY > rowTop &&
+                                    centerY < rowBottom;
+
+                                const appearsBeforeStatus =
+                                    rectangle.left <
+                                    statusRectangle.left - 8;
+
+                                const isStatusOrBadge =
+                                    /^(not complete|not completed|not yet available|required|optional|completed(?:\s+on\b.*)?|complete|done)$/i.test(
+                                        primaryText);
+
+                                const isUnsafe =
+                                    /\b(submit|finalize|certify|pay|payment|purchase|checkout|place order|logout|sign out)\b/i.test(
+                                        actionText);
+
+                                if (
+                                    !insideThisRow ||
+                                    !appearsBeforeStatus ||
+                                    !actionText ||
+                                    isStatusOrBadge ||
+                                    isUnsafe) {
+                                    return null;
+                                }
+
+                                const tagName =
+                                    element.tagName
+                                        .toLowerCase();
+
+                                const role =
+                                    (element.getAttribute(
+                                        "role") || "")
+                                        .toLowerCase();
+
+                                let score = 0;
+
+                                if (tagName === "a") {
+                                    score += 500;
+                                }
+
+                                if (tagName === "button") {
+                                    score += 480;
+                                }
+
+                                if (role === "button" ||
+                                    role === "link") {
+                                    score += 450;
+                                }
+
+                                if (element.hasAttribute(
+                                    "onclick")) {
+                                    score += 420;
+                                }
+
+                                if (
+                                    !/\b(required|optional|not complete|not completed|not yet available|completed)\b/i.test(
+                                        primaryText)) {
+                                    score += 300;
+                                }
+
+                                score -=
+                                    Math.min(
+                                        200,
+                                        Math.abs(
+                                            centerY -
+                                            statusItem.CenterY) * 8);
+
+                                return {
+                                    Element: element,
+                                    Score: score
+                                };
+                            })
+                            .filter(candidate =>
+                                candidate !== null)
+                            .sort((left, right) =>
+                                right.Score -
+                                left.Score);
+
+                    if (alignedActions.length > 0) {
+                        results.push(
+                            alignedActions[0].Element);
+                    }
+                }
+
+                return results;
+            };
+
+
+            const rPermitRequirementActions =
+                getRPermitRequirementActions();
+
+
+            /*
+             * A-Permits keeps a clickable "Start" breadcrumb visible after an
+             * application has begun. That breadcrumb must never be treated as
+             * forward navigation. The true initial action is the exact
+             * "Start Application" control on the base NewApplication URL.
+             */
+            const getPrimaryActionText = element =>
+                normalizeText(
+                    element.innerText ||
+                    element.textContent ||
+                    element.getAttribute("value") ||
+                    element.getAttribute("aria-label") ||
+                    "");
+
+
+            const currentUrl =
+                new URL(window.location.href);
+
+
+            const normalizedPath =
+                currentUrl.pathname
+                    .toLowerCase()
+                    .replace(/\/+$/, "");
+
+
+            const hasExistingAPermitReference =
+                Array.from(
+                    currentUrl.searchParams.keys())
+                    .some(key =>
+                        key.toLowerCase() === "erefno");
+
+
+            const isAPermitInitialStartPage =
+                normalizedPath.endsWith(
+                    "/apermits/public/home/newapplication") &&
+                !hasExistingAPermitReference;
+
+
+            const aPermitInitialStartAction =
+                isAPermitInitialStartPage
+                    ? possibleActions.find(element =>
+                        /^start application$/i.test(
+                            getPrimaryActionText(element))) ??
+                      null
+                    : null;
+
+
             const isRepeatedDecisionWord = (
                 element,
                 expectedWord) => {
+
 
             const words =
                 normalizeText(
@@ -2880,6 +4094,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     .toLowerCase()
                     .split(/\s+/)
                     .filter(Boolean);
+
 
                 /*
                 * Handles duplicated accessible text such as
@@ -2890,11 +4105,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     word === expectedWord);
             };
 
+
             const yesDecisionAction =
                 possibleActions.find(element =>
                 isRepeatedDecisionWord(
                     element,
                     "yes"));
+
 
             const noDecisionAction =
                 possibleActions.find(element =>
@@ -2902,18 +4119,22 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     element,
                     "no"));
 
+
             const hasBinaryDecision =
                 yesDecisionAction !== undefined &&
             noDecisionAction !== undefined;
 
+
             const fileWorkflowActionPattern =
                 /\b(upload(?:\s+file)?|add\s+attachment|attach\s+file|add\s+file)\b/i;
+
 
             const uploadActions =
                 possibleActions.filter(element =>
                     fileWorkflowActionPattern.test(
                         normalizeText(
                             getActionText(element))));
+
 
             const getWorkflowHub = () => {
                 /*
@@ -2922,34 +4143,52 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 * alignment instead of requiring a shared DOM container.
                 */
             const statusPattern =
-                /^(not completed|incomplete|not started|pending|optional|required|needs attention|completed(?:\s+on\b.*)?|complete|done|n\/a|not applicable)$/i;
+                /^(not complete|not completed|not yet available|incomplete|not started|pending|optional|required|needs attention|completed(?:\s+on\b.*)?|complete|done|n\/a|not applicable)$/i;
+
 
             const progressStatusPattern =
-                /^(not completed|incomplete|not started|pending|needs attention|completed(?:\s+on\b.*)?|complete|done)$/i;
+                /^(not complete|not completed|incomplete|not started|pending|needs attention|completed(?:\s+on\b.*)?|complete|done)$/i;
+
 
             const completedPattern =
                 /^(completed(?:\s+on\b.*)?|complete|done)$/i;
 
+
             const notCompletedPattern =
-                /^(not completed|incomplete|not started|pending|needs attention)$/i;
+                /^(not complete|not completed|incomplete|not started|pending|needs attention)$/i;
+
 
             const optionalPattern =
                 /^optional$/i;
 
+
             const requiredPattern =
                 /^required$/i;
 
+
             const excludedPattern =
-                /^(n\/a|not applicable)$/i;
+                /^(not yet available|n\/a|not applicable)$/i;
+
+
+            /*
+             * On the redesigned R-Permit hub, Required/Optional are badges.
+             * Only the right-side availability/progress labels determine which
+             * section can be entered.
+             */
+            const rPermitStatusPattern =
+                /^(not complete|not completed|not yet available|completed(?:\s+on\b.*)?|complete|done)$/i;
+
 
             const hubUnsafePattern =
                 /\b(submit|finalize|certify|pay|payment|purchase|checkout|place order|logout|sign out)\b/i;
+
 
             const visibleElements =
                 Array.from(
                     document.querySelectorAll(
                         "body *"))
                     .filter(isVisibleAndEnabled);
+
 
             /*
              * Prefer the deepest element that contains each status.
@@ -2963,8 +4202,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             normalizeText(
                                 element.innerText);
 
+
                         const rectangle =
                             element.getBoundingClientRect();
+
 
                         return {
                             Element: element,
@@ -2979,11 +4220,18 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         item.Text.length > 0 &&
                         item.Text.length <= 80 &&
                         statusPattern.test(
-                            item.Text))
+                            item.Text) &&
+                        (
+                            !isRPermitRequirementsHub ||
+                            rPermitStatusPattern.test(
+                                item.Text)
+                        ))
                     .sort((left, right) =>
                         left.Area - right.Area);
 
+
             const statusItems = [];
+
 
             for (const item of rawStatusItems) {
                 const centerY =
@@ -2992,6 +4240,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         item.Rectangle.bottom
                     ) / 2;
 
+
                 const duplicate =
                     statusItems.some(existing => {
                         const existingCenterY =
@@ -2999,6 +4248,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                 existing.Rectangle.top +
                                 existing.Rectangle.bottom
                             ) / 2;
+
 
                         return (
                             existing.Text
@@ -3011,10 +4261,12 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                 centerY) < 4;
                     });
 
+
                 if (!duplicate) {
                     statusItems.push(item);
                 }
             }
+
 
             const rows =
                 statusItems
@@ -3022,11 +4274,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         const statusRectangle =
                             statusItem.Rectangle;
 
+
                         const statusCenterY =
                             (
                                 statusRectangle.top +
                                 statusRectangle.bottom
                             ) / 2;
+
 
                         const possibleRowActions =
                             visibleElements
@@ -3037,15 +4291,18 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                         return null;
                                     }
 
+
                                     const rectangle =
                                         element
                                             .getBoundingClientRect();
+
 
                                     const centerY =
                                         (
                                             rectangle.top +
                                             rectangle.bottom
                                         ) / 2;
+
 
                                     const verticallyAligned =
                                         rectangle.bottom >=
@@ -3060,15 +4317,18 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                                 statusRectangle.height *
                                                     1.5);
 
+
                                     const appearsBeforeStatus =
                                         rectangle.left <
                                             statusRectangle.left - 4;
+
 
                                     if (
                                         !verticallyAligned ||
                                         !appearsBeforeStatus) {
                                         return null;
                                     }
+
 
                                     const actionText =
                                         normalizeText(
@@ -3077,6 +4337,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                             element.getAttribute(
                                                 "alt") ||
                                             element.innerText);
+
 
                                     if (
                                         actionText &&
@@ -3089,9 +4350,11 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                         return null;
                                     }
 
+
                                     const tagName =
                                         element.tagName
                                             .toLowerCase();
+
 
                                     const inputType =
                                         element instanceof
@@ -3101,11 +4364,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                             ).toLowerCase()
                                             : "";
 
+
                                     const role =
                                         (
                                             element.getAttribute(
                                                 "role") || ""
                                         ).toLowerCase();
+
 
                                     const cursor =
                                         window
@@ -3113,11 +4378,14 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                                 element)
                                             .cursor;
 
+
                                     const isAnchor =
                                         tagName === "a";
 
+
                                     const isButton =
                                         tagName === "button";
+
 
                                     const isActionInput =
                                         tagName === "input" &&
@@ -3127,24 +4395,30 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                             inputType === "image"
                                         );
 
+
                                     const hasActionRole =
                                         role === "button" ||
                                         role === "link";
+
 
                                     const hasClickAttribute =
                                         element.hasAttribute(
                                             "onclick");
 
+
                                     const hasPointerCursor =
                                         cursor === "pointer";
 
+
                                     const isKeyboardAction =
                                         element.tabIndex >= 0;
+
 
                                     const isMeaningfulLeafText =
                                         element.children.length === 0 &&
                                         actionText.length >= 2 &&
                                         actionText.length <= 160;
+
 
                                     const isPossibleAction =
                                         isAnchor ||
@@ -3156,47 +4430,59 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                         isKeyboardAction ||
                                         isMeaningfulLeafText;
 
+
                                     if (!isPossibleAction) {
                                         return null;
                                     }
 
+
                                     let score = 0;
+
 
                                     if (isAnchor) {
                                         score += 400;
                                     }
 
+
                                     if (isButton) {
                                         score += 390;
                                     }
+
 
                                     if (isActionInput) {
                                         score += 380;
                                     }
 
+
                                     if (hasActionRole) {
                                         score += 350;
                                     }
+
 
                                     if (hasClickAttribute) {
                                         score += 330;
                                     }
 
+
                                     if (hasPointerCursor) {
                                         score += 300;
                                     }
+
 
                                     if (isKeyboardAction) {
                                         score += 280;
                                     }
 
+
                                     if (isMeaningfulLeafText) {
                                         score += 150;
                                     }
 
+
                                     if (actionText.length > 0) {
                                         score += 30;
                                     }
+
 
                                     /*
                                      * Prefer elements centered on the same
@@ -3209,6 +4495,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                                 centerY -
                                                 statusCenterY) * 4);
 
+
                                     /*
                                      * Prefer the section label over a distant
                                      * decorative element when both are usable.
@@ -3219,10 +4506,12 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                             statusRectangle.left -
                                             rectangle.right);
 
+
                                     score -=
                                         Math.min(
                                             60,
                                             horizontalGap / 15);
+
 
                                     return {
                                         Element: element,
@@ -3237,64 +4526,82 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                     right.Score -
                                     left.Score);
 
+
                         const selectedAction =
                             possibleRowActions[0];
+
 
                         if (!selectedAction) {
                             return null;
                         }
 
+
                         const statusText =
                             statusItem.Text;
+
 
                         const actionLabel =
                             selectedAction.ActionText ||
                             "Workflow section";
 
+
                         const isNotCompleted =
                             notCompletedPattern.test(
                                 statusText);
+
 
                         const isOptional =
                             optionalPattern.test(
                                 statusText);
 
+
                         const isRequired =
                             requiredPattern.test(
                                 statusText);
+
 
                         const isCompletedOnly =
                             completedPattern.test(
                                 statusText) &&
                             !isNotCompleted;
 
+
                         const isExcluded =
                             excludedPattern.test(
                                 statusText);
+
 
                         return {
                             Element:
                                 selectedAction.Element,
 
+
                             ContainerText:
                                 `${actionLabel} ${statusText}`,
+
 
                             IsNotCompleted:
                                 isNotCompleted,
 
+
                             IsOptional:
                                 isOptional,
+
 
                             IsRequired:
                                 isRequired,
 
+
                             IsCompletedOnly:
                                 isCompletedOnly,
+
 
                             IsExcluded:
                                 isExcluded,
 
+
                             IsUnsafe: false,
+
 
                             Score:
                                 selectedAction.Score
@@ -3302,6 +4609,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     })
                     .filter(row =>
                         row !== null);
+
 
             /*
              * Requiring an actual progress state prevents ordinary
@@ -3313,10 +4621,12 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     progressStatusPattern.test(
                         item.Text));
 
+
             return {
                 IsHub:
                     rows.length >= 2 &&
                     hasProgressStatus,
+
 
                 Candidates:
                     rows.filter(candidate =>
@@ -3331,21 +4641,29 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             };
             };
 
+
             const workflowHub =
-            getWorkflowHub();
+                isRPermitRequirementsHub
+                    ? { IsHub: false, Candidates: [] }
+                    : getWorkflowHub();
+
 
             const hasWorkflowControls =
             visibleFormControls.length > 0 ||
             requiredFields.length > 0 ||
             hasBinaryDecision ||
             uploadActions.length > 0 ||
+            rPermitRequirementActions.length > 0 ||
             workflowHub.IsHub ||
-            isClaimsRefundHub;
+            isClaimsRefundHub ||
+            aPermitInitialStartAction !== null;
+
 
             const findClaimsRefundHubAction =
                 row => {
                     const rowText =
                         normalizeText(row.innerText);
+
 
                     if (
                         /submit application/i.test(
@@ -3354,6 +4672,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             rowText)) {
                         return null;
                     }
+
 
                     const rowActions =
                         Array.from(
@@ -3365,6 +4684,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                 "[role='button']"))
                             .filter(
                                 isVisibleAndEnabled);
+
 
                     /*
                     * The first row should only be selected while
@@ -3380,11 +4700,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             null;
                     }
 
+
                     if (
                         !/not completed/i.test(
                             rowText)) {
                         return null;
                     }
+
 
                     return (
                         rowActions.find(
@@ -3404,6 +4726,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     );
                 };
 
+
             const claimsRefundHubActions =
                 isClaimsRefundHub
                     ? Array.from(
@@ -3412,16 +4735,26 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         .filter(action => action !== null)
                     : [];
 
+
+            /*
+             * Do not include generic Start/Begin here. A-Permits keeps a
+             * persistent Start breadcrumb on later steps. The legitimate
+             * initial Start Application action is handled explicitly below,
+             * while workflow-hub Start/Begin actions retain their own logic.
+             */
             const safeNextPattern =
-                /\b(next|continue|proceed|start|begin|advance)\b/i;
+                /\b(next|continue|proceed|advance)\b/i;
+
 
             const unsafeActionPattern =
                 /\b(submit|finalize|certify|pay|payment|purchase|checkout|place order|sign|signature|send application)\b/i;
+
 
             const normalNextActions =
                 possibleActions.filter(element => {
                 const actionText =
                     getActionText(element);
+
 
                 const isFormAssociatedAction =
                     element.closest("form") !== null ||
@@ -3436,6 +4769,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         element.form !== null
                     );
 
+
                 return hasWorkflowControls &&
                     safeNextPattern.test(
                         actionText) &&
@@ -3447,11 +4781,23 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     );
             });
 
+
             let candidateNextActions = [];
 
-            if (isClaimsRefundHub) {
+
+            if (aPermitInitialStartAction) {
+            candidateNextActions =
+                [aPermitInitialStartAction];
+            }
+            else if (isClaimsRefundHub) {
             candidateNextActions =
                 claimsRefundHubActions;
+            }
+            else if (
+                isRPermitRequirementsHub &&
+                rPermitRequirementActions.length > 0) {
+            candidateNextActions =
+                rPermitRequirementActions;
             }
             else if (workflowHub.IsHub) {
                 const hubStartAction =
@@ -3459,11 +4805,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     const text =
                         getActionText(element);
 
+
                     return /\b(start|begin)\b/i.test(
                         text) &&
                         !unsafeActionPattern.test(
                             text);
                 });
+
 
                 if (hubStartAction) {
                     candidateNextActions =
@@ -3477,6 +4825,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 }
             }
 
+
             else if (hasBinaryDecision) {
                 /*
                 * Prefer No as the conservative automatic choice.
@@ -3484,6 +4833,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 candidateNextActions =
                     [noDecisionAction];
             }
+
 
             else if (uploadActions.length > 0) {
             candidateNextActions =
@@ -3494,6 +4844,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 normalNextActions;
             }
 
+
             const hasCaptcha =
                 document.querySelector(
                 "iframe[src*='recaptcha'], " +
@@ -3502,15 +4853,18 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 "[class*='captcha' i], " +
                 "input[name*='captcha' i]") !== null;
 
+
             const hasFileUpload =
                 document.querySelector(
                 "input[type='file']") !== null;
+
 
             const hasPasswordField =
                 Array.from(
                 document.querySelectorAll(
                     "input[type='password']"))
                 .some(isVisibleAndEnabled);
+
 
             const hasPaymentField =
                 document.querySelector(
@@ -3520,12 +4874,15 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 "input[name*='cardnumber' i], " +
                 "input[name*='creditcard' i]") !== null;
 
+
             let stopReason = null;
+
 
             if (hasCaptcha) {
                 stopReason =
                     "CAPTCHA detected. Manual interaction is required.";
             }
+
 
             else if (hasPaymentField) {
                 stopReason =
@@ -3536,7 +4893,9 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     "Authentication fields detected. Sign in manually first.";
             }
 
+
             let pageType = "StaticPage";
+
 
             if (stopReason) {
                 pageType = "Unsupported";
@@ -3552,7 +4911,9 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 pageType = "Form";
             }
 
+
             let recommendedAction;
+
 
             if (stopReason) {
                 recommendedAction = "Continue manually.";
@@ -3572,6 +4933,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     "Scan this page once and stop normally.";
             }
 
+
             return {
                 PageType: pageType,
                 FormCount: visibleForms.length,
@@ -3589,6 +4951,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         """);
     }
 
+
     private static async Task<AuthenticatedAuditNextActionResult>
     FindSafeNextActionAsync(IPage page)
     {
@@ -3598,6 +4961,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             () => JSON.stringify((() => {
                 const markerAttribute =
                     "data-city-audit-next-action";
+
 
                 /*
                  * Remove an old marker in case this page was analyzed
@@ -3610,16 +4974,20 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         element.removeAttribute(
                             markerAttribute));
 
+
                 const isVisibleAndEnabled = element => {
                     if (!(element instanceof HTMLElement)) {
                         return false;
                     }
 
+
                     const style =
                         window.getComputedStyle(element);
 
+
                     const rectangle =
                         element.getBoundingClientRect();
+
 
                     return style.display !== "none" &&
                         style.visibility !== "hidden" &&
@@ -3629,6 +4997,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         element.getAttribute("aria-disabled") !==
                             "true";
                 };
+
 
                 /*
                 * A visible final-action button means the workflow has reached a
@@ -3640,11 +5009,14 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         return false;
                     }
 
+
                     const style =
                         window.getComputedStyle(element);
 
+
                     const rectangle =
                         element.getBoundingClientRect();
+
 
                     return (
                         style.display !== "none" &&
@@ -3654,10 +5026,12 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     );
                 };
 
+
                 const normalizeText = value =>
                     (value ?? "")
                         .replace(/\s+/g, " ")
                         .trim();
+
 
                 const isClaimsRefundHub =
                     window.location.pathname
@@ -3667,6 +5041,23 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     /application requirements/i.test(
                         normalizeText(
                             document.body?.innerText));
+
+
+                /*
+                 * The redesigned R-Permit Application Requirements page uses
+                 * "Not Complete" for the current actionable section and
+                 * "Not Yet Available" for locked future sections. Required/Optional
+                 * are descriptive badges, not workflow progress statuses.
+                 */
+                const isRPermitRequirementsHub =
+                    window.location.pathname
+                        .toLowerCase()
+                        .includes(
+                            "/rpermits/public/home/applyfornewpermit") &&
+                    /application requirements/i.test(
+                        normalizeText(
+                            document.body?.innerText));
+
 
                 if (isClaimsRefundHub) {
                     const hubCandidates =
@@ -3678,9 +5069,11 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                     return null;
                                 }
 
+
                                 const rowText =
                                     normalizeText(
                                         row.innerText);
+
 
                                 if (
                                     /submit application/i.test(
@@ -3689,6 +5082,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                         rowText)) {
                                     return null;
                                 }
+
 
                                 const rowActions =
                                     Array.from(
@@ -3701,7 +5095,9 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                         .filter(
                                             isVisibleAndEnabled);
 
+
                                 let selectedAction = null;
+
 
                                 if (
                                     /start a new claim/i.test(
@@ -3734,6 +5130,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                         null;
                                 }
 
+
                                 return selectedAction
                                     ? {
                                         Element:
@@ -3751,9 +5148,11 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         const selected =
                             hubCandidates[0];
 
+
                         selected.Element.setAttribute(
                             markerAttribute,
                             "true");
+
 
                         return {
                             Found: true,
@@ -3770,6 +5169,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     }
                 }
 
+
                 function getActionText(element) {
                     return [
                         element.innerText,
@@ -3785,11 +5185,21 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         .trim();
                 }
 
+
+                /*
+                 * Start/Begin are intentionally excluded from the generic action
+                 * selector. Multi-step applications such as A-Permits keep a
+                 * visible "Start" progress-step link on later pages; treating
+                 * that link as a forward action sends the workflow back to step 1.
+                 * Legitimate workflow-hub Start/Begin actions are handled above.
+                 */
                 const safePattern =
-                    /\b(next|continue|proceed|start|begin|advance|save)\b/i;
+                    /\b(next|continue|proceed|advance|save)\b/i;
+
 
                 const unsafePattern =
                     /\b(submit|finalize|certify|pay|payment|purchase|checkout|place order|sign|signature|send application|complete application|finish)\b/i;
+
 
                 const actions =
                     Array.from(
@@ -3803,9 +5213,363 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             "[onclick]"))
                         .filter(isVisibleAndEnabled);
 
+
+                /*
+                 * Redesigned R-Permit requirements hub.
+                 *
+                 * A completed row STILL shows its Required/Optional badge. Never
+                 * use those badges as progress. Build exact visual row bands from
+                 * the right-side status column and click only the section whose
+                 * status is "Not Complete". Optional rows are treated exactly the
+                 * same way once they unlock and become "Not Complete".
+                 */
+                if (isRPermitRequirementsHub) {
+                    const rowStatusPattern =
+                        /^(not complete|not completed|not yet available|completed(?:\s+on\b.*)?|complete|done)$/i;
+
+                    const actionableStatusPattern =
+                        /^(not complete|not completed)$/i;
+
+                    const rawStatuses =
+                        Array.from(
+                            document.querySelectorAll(
+                                "body *"))
+                            .filter(isVisibleAndEnabled)
+                            .map(element => {
+                                const text =
+                                    normalizeText(
+                                        element.innerText);
+
+                                const rectangle =
+                                    element.getBoundingClientRect();
+
+                                return {
+                                    Element: element,
+                                    Text: text,
+                                    Rectangle: rectangle,
+                                    CenterY:
+                                        (rectangle.top +
+                                         rectangle.bottom) / 2,
+                                    Area:
+                                        rectangle.width *
+                                        rectangle.height
+                                };
+                            })
+                            .filter(item =>
+                                item.Text.length > 0 &&
+                                item.Text.length <= 100 &&
+                                rowStatusPattern.test(
+                                    item.Text))
+                            .sort((left, right) =>
+                                left.Area -
+                                right.Area);
+
+                    const uniqueStatuses = [];
+
+                    for (const item of rawStatuses) {
+                        const duplicate =
+                            uniqueStatuses.some(existing =>
+                                Math.abs(
+                                    existing.CenterY -
+                                    item.CenterY) < 4);
+
+                        if (!duplicate) {
+                            uniqueStatuses.push(item);
+                        }
+                    }
+
+                    const orderedStatuses =
+                        uniqueStatuses.sort((left, right) =>
+                            left.CenterY -
+                            right.CenterY);
+
+                    const matchedActions = [];
+
+                    for (let statusIndex = 0;
+                         statusIndex < orderedStatuses.length;
+                         statusIndex++) {
+                        const statusItem =
+                            orderedStatuses[statusIndex];
+
+                        if (!actionableStatusPattern.test(
+                            statusItem.Text)) {
+                            continue;
+                        }
+
+                        const previousStatus =
+                            statusIndex > 0
+                                ? orderedStatuses[
+                                    statusIndex - 1]
+                                : null;
+
+                        const nextStatus =
+                            statusIndex <
+                                orderedStatuses.length - 1
+                                ? orderedStatuses[
+                                    statusIndex + 1]
+                                : null;
+
+                        const rowTop =
+                            previousStatus
+                                ? (previousStatus.CenterY +
+                                   statusItem.CenterY) / 2
+                                : statusItem.CenterY - 55;
+
+                        const rowBottom =
+                            nextStatus
+                                ? (statusItem.CenterY +
+                                   nextStatus.CenterY) / 2
+                                : statusItem.CenterY + 55;
+
+                        const statusRectangle =
+                            statusItem.Rectangle;
+
+                        const alignedActions =
+                            actions
+                                .map(element => {
+                                    const rectangle =
+                                        element.getBoundingClientRect();
+
+                                    const centerY =
+                                        (rectangle.top +
+                                         rectangle.bottom) / 2;
+
+                                    const actionText =
+                                        normalizeText(
+                                            getActionText(element));
+
+                                    const primaryText =
+                                        normalizeText(
+                                            element.innerText ||
+                                            element.textContent ||
+                                            element.getAttribute(
+                                                "aria-label") ||
+                                            element.getAttribute(
+                                                "title") ||
+                                            "");
+
+                                    const insideThisRow =
+                                        centerY > rowTop &&
+                                        centerY < rowBottom;
+
+                                    const appearsBeforeStatus =
+                                        rectangle.left <
+                                        statusRectangle.left - 8;
+
+                                    const isStatusOrBadge =
+                                        /^(not complete|not completed|not yet available|required|optional|completed(?:\s+on\b.*)?|complete|done)$/i.test(
+                                            primaryText);
+
+                                    const isUnsafe =
+                                        unsafePattern.test(
+                                            actionText);
+
+                                    if (
+                                        !insideThisRow ||
+                                        !appearsBeforeStatus ||
+                                        !actionText ||
+                                        isStatusOrBadge ||
+                                        isUnsafe) {
+                                        return null;
+                                    }
+
+                                    const tagName =
+                                        element.tagName
+                                            .toLowerCase();
+
+                                    const role =
+                                        (element.getAttribute(
+                                            "role") || "")
+                                            .toLowerCase();
+
+                                    let score = 0;
+
+                                    if (tagName === "a") {
+                                        score += 500;
+                                    }
+
+                                    if (tagName === "button") {
+                                        score += 480;
+                                    }
+
+                                    if (role === "button" ||
+                                        role === "link") {
+                                        score += 450;
+                                    }
+
+                                    if (element.hasAttribute(
+                                        "onclick")) {
+                                        score += 420;
+                                    }
+
+                                    if (
+                                        !/\b(required|optional|not complete|not completed|not yet available|completed)\b/i.test(
+                                            primaryText)) {
+                                        score += 300;
+                                    }
+
+                                    score -=
+                                        Math.min(
+                                            200,
+                                            Math.abs(
+                                                centerY -
+                                                statusItem.CenterY) * 8);
+
+                                    return {
+                                        Element: element,
+                                        ActionText:
+                                            primaryText ||
+                                            actionText,
+                                        Score: score
+                                    };
+                                })
+                                .filter(candidate =>
+                                    candidate !== null)
+                                .sort((left, right) =>
+                                    right.Score -
+                                    left.Score);
+
+                        if (alignedActions.length > 0) {
+                            matchedActions.push(
+                                alignedActions[0]);
+                        }
+                    }
+
+                    if (matchedActions.length > 0) {
+                        const selected =
+                            matchedActions[0];
+
+                        selected.Element.setAttribute(
+                            markerAttribute,
+                            "true");
+
+                        return {
+                            Found: true,
+                            ActionText:
+                                selected.ActionText ||
+                                "R-Permit workflow section",
+                            Selector:
+                                `[${markerAttribute}="true"]`,
+                            CandidateCount:
+                                matchedActions.length,
+                            RequiresManualInteraction:
+                                false,
+                            StopReason: null
+                        };
+                    }
+
+                    /*
+                     * Never fall through to the generic hub matcher on this
+                     * page. The generic matcher intentionally understands
+                     * Required/Optional badges for older workflows, but those
+                     * words are NOT progress statuses in redesigned R-Permit.
+                     */
+                    return {
+                        Found: false,
+                        ActionText: null,
+                        Selector: null,
+                        CandidateCount: 0,
+                        RequiresManualInteraction: false,
+                        StopReason:
+                            "No unlocked R-Permit section marked Not Complete was detected."
+                    };
+                }
+
+
+                /*
+                 * Handle the real A-Permit starting control before evaluating
+                 * the persistent "Complete Application" link as an unsafe
+                 * action. This exception is deliberately narrow:
+                 *
+                 *   - exact A-Permit NewApplication path
+                 *   - no erefNo yet (the permit has not started)
+                 *   - exact visible text "Start Application"
+                 *
+                 * Once an application has an erefNo, generic Start/Begin
+                 * controls remain excluded so the breadcrumb cannot send the
+                 * workflow back to Step 1.
+                 */
+                const getPrimaryActionText = element =>
+                    normalizeText(
+                        element.innerText ||
+                        element.textContent ||
+                        element.getAttribute("value") ||
+                        element.getAttribute("aria-label") ||
+                        "");
+
+
+                const currentUrl =
+                    new URL(window.location.href);
+
+
+                const normalizedPath =
+                    currentUrl.pathname
+                        .toLowerCase()
+                        .replace(/\/+$/, "");
+
+
+                const hasExistingAPermitReference =
+                    Array.from(
+                        currentUrl.searchParams.keys())
+                        .some(key =>
+                            key.toLowerCase() === "erefno");
+
+
+                const isAPermitInitialStartPage =
+                    normalizedPath.endsWith(
+                        "/apermits/public/home/newapplication") &&
+                    !hasExistingAPermitReference;
+
+
+                /*
+                 * A-Permits keeps a persistent Complete Application control on
+                 * intermediate steps. getActionText() intentionally combines
+                 * several text sources and can therefore produce duplicated text
+                 * such as "Complete Application Complete Application". Use the
+                 * single primary visible label here so that control is reliably
+                 * recognized and ignored until the real final workflow state.
+                 */
+                const isAPermitPersistentCompleteApplicationAction =
+                    element =>
+                        normalizedPath.endsWith(
+                            "/apermits/public/home/newapplication") &&
+                        /^complete application$/i.test(
+                            getPrimaryActionText(element));
+
+
+                const aPermitInitialStartAction =
+                    isAPermitInitialStartPage
+                        ? actions.find(element =>
+                            /^start application$/i.test(
+                                getPrimaryActionText(element))) ??
+                          null
+                        : null;
+
+
+                if (aPermitInitialStartAction) {
+                    aPermitInitialStartAction.setAttribute(
+                        markerAttribute,
+                        "true");
+
+
+                    return {
+                        Found: true,
+                        ActionText:
+                            getPrimaryActionText(
+                                aPermitInitialStartAction),
+                        Selector:
+                            `[${markerAttribute}="true"]`,
+                        CandidateCount: 1,
+                        RequiresManualInteraction: false,
+                        StopReason: null
+                    };
+                }
+
+
                 const isRepeatedDecisionWord = (
                     element,
                 expectedWord) => {
+
 
                     const words =
                         normalizeText(
@@ -3814,10 +5578,12 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         .split(/\s+/)
                         .filter(Boolean);
 
+
                     return words.length > 0 &&
                         words.every(word =>
                         word === expectedWord);
                 };
+
 
                 const yesDecisionAction =
                     actions.find(element =>
@@ -3825,15 +5591,18 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         element,
                         "yes"));
 
+
                 const noDecisionAction =
                     actions.find(element =>
                     isRepeatedDecisionWord(
                         element,
                         "no"));
 
+
                 if (
                     yesDecisionAction &&
                 noDecisionAction) {
+
 
                 /*
                  * Find the smallest shared container so safety checks
@@ -3842,21 +5611,26 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     let decisionContainer =
                         noDecisionAction;
 
+
                     while (
                         decisionContainer &&
                     !decisionContainer.contains(
                         yesDecisionAction)) {
 
+
                     decisionContainer =
                         decisionContainer.parentElement;
                     }
+
 
                     const decisionContext =
                         normalizeText(
                         decisionContainer?.innerText);
 
+
                     const unsafeDecisionPattern =
                         /\b(certify|attest|authorize|consent|agree|terms(?: and conditions)?|signature|payment|purchase|checkout|submit|finalize|pay)\b/i;
+
 
                     /*
                     * Do not automatically answer legal, financial,
@@ -3866,9 +5640,11 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         !unsafeDecisionPattern.test(
                         decisionContext)) {
 
+
                         noDecisionAction.setAttribute(
                         markerAttribute,
                         "true");
+
 
                         return {
                             Found: true,
@@ -3882,18 +5658,22 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     }
                 }
 
+
                 const fileInputs =
                     Array.from(
                     document.querySelectorAll(
                         "input[type='file']"));
+
 
                 const hasSelectedFile =
                     fileInputs.some(input =>
                     input.files &&
                     input.files.length > 0);
 
+
                const fileWorkflowActionPattern =
                 /\b(upload(?:\s+file)?|add\s+attachment|attach\s+file|add\s+file)\b/i;
+
 
                 const uploadCandidates =
                     actions.filter(element => {
@@ -3901,16 +5681,19 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             normalizeText(
                                 getActionText(element));
 
+
                         return fileWorkflowActionPattern.test(
                             text) &&
                             !unsafePattern.test(text);
                     });
+
 
                 const uploadFileAction =
                     uploadCandidates.find(element => {
                     const text =
                         normalizeText(
                             getActionText(element));
+
 
                     /*
                      * This also matches duplicated text such as
@@ -3921,11 +5704,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     }) ??
                     null;
 
+
                 const outerUploadAction =
                     uploadCandidates.find(element => {
                         const text =
                             normalizeText(
                                 getActionText(element));
+
 
                         /*
                         * Opens the file workflow, but does not select
@@ -3940,15 +5725,19 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     }) ??
                     null;
 
+
                 const uploadStateKey =
                     "city-audit-upload-return-pending";
+
 
                 const uploadReturnPath =
                     sessionStorage.getItem(
                     uploadStateKey);
 
+
                 const uploadWasSubmitted =
                     uploadReturnPath !== null;
+
 
                 /*
                 * If the upload automatically navigated somewhere else,
@@ -3960,9 +5749,11 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     uploadReturnPath !==
                         window.location.pathname) {
 
+
                     sessionStorage.removeItem(
                         uploadStateKey);
                 }
+
 
                 const backAction =
                     actions.find(element => {
@@ -3970,34 +5761,127 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         normalizeText(
                             getActionText(element));
 
+
                     return /\b(back|return)\b/i.test(
                         text) &&
                         !unsafePattern.test(text);
                     }) ??
                     null;
 
+
+                const saveAction =
+                    actions.find(element => {
+                    const text =
+                        normalizeText(
+                            getActionText(element));
+
+
+                    return /\bsave\b/i.test(
+                        text) &&
+                        !unsafePattern.test(text);
+                    }) ??
+                    null;
+
+
+                /*
+                 * A-Permits uses a direct file input on the attachment step.
+                 * The selected file must be saved before Next step is clicked.
+                 * Keep that state in sessionStorage so a retry does not upload
+                 * the same test document again before advancing.
+                 */
+                const directAttachmentSaveKey =
+                    "city-audit-direct-attachment-saved-pending-next";
+
+
+                const directAttachmentSavedPendingNext =
+                    sessionStorage.getItem(
+                        directAttachmentSaveKey) ===
+                    window.location.pathname;
+
+
+                const uploadSkipOnceKey =
+                    "city-audit-upload-skip-once";
+
+
+                const skipUploadWorkflowOnce =
+                    sessionStorage.getItem(
+                        uploadSkipOnceKey) ===
+                    window.location.pathname;
+
+
+                if (skipUploadWorkflowOnce) {
+                    sessionStorage.removeItem(
+                        uploadSkipOnceKey);
+                }
+
+
                 let selectedUploadAction = null;
 
+
+                /*
+                 * A-Permits exposes the file input and Save button directly on
+                 * the attachment step. Save must happen before Next step even
+                 * though both controls are visible at the same time.
+                 */
+                if (
+                    hasSelectedFile &&
+                    saveAction &&
+                    !directAttachmentSavedPendingNext) {
+
+
+                selectedUploadAction =
+                    saveAction;
+                }
                 /*
                 * The test file has been assigned. Click the modal's
                 * Upload File button and remember that the upload
                 * action was attempted on this page.
                 */
-                if (
+                else if (
                     hasSelectedFile &&
                 uploadFileAction) {
+
 
                 sessionStorage.setItem(
                     uploadStateKey,
                     window.location.pathname);
 
+
                 selectedUploadAction =
                     uploadFileAction;
                 }
                 /*
-                * Upload File was clicked and the modal is now gone.
-                * Return to the workflow hub so the next unfinished
-                * or optional section can be processed.
+                * Some attachment pages require the uploaded file to be saved
+                * before the workflow can continue. Prefer that Save action
+                * over returning to the previous page.
+                */
+                else if (
+                    uploadWasSubmitted &&
+                    uploadReturnPath ===
+                        window.location.pathname &&
+                    !uploadFileAction &&
+                    saveAction) {
+
+
+                sessionStorage.removeItem(
+                    uploadStateKey);
+
+
+                /*
+                 * Skip reopening the upload control on the very next action
+                 * check so the normal Next/Continue action can be selected.
+                 */
+                sessionStorage.setItem(
+                    uploadSkipOnceKey,
+                    window.location.pathname);
+
+
+                selectedUploadAction =
+                    saveAction;
+                }
+                /*
+                * If this upload workflow has no Save action, preserve the
+                * existing return-to-hub behavior used by other applications.
                 */
                 else if (
                     uploadWasSubmitted &&
@@ -4006,8 +5890,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     !uploadFileAction &&
                     backAction) {
 
+
                 sessionStorage.removeItem(
                     uploadStateKey);
+
 
                 selectedUploadAction =
                     backAction;
@@ -4016,17 +5902,21 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 * The upload modal has not opened yet.
                 */
                 else if (
+                    !skipUploadWorkflowOnce &&
                     !uploadFileAction &&
                 outerUploadAction) {
+
 
                 selectedUploadAction =
                     outerUploadAction;
                 }
 
+
                 if (selectedUploadAction) {
                     selectedUploadAction.setAttribute(
                     markerAttribute,
                     "true");
+
 
                     return {
                         Found: true,
@@ -4049,6 +5939,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     };
                 }
 
+
                 const getWorkflowHub = () => {
                     /*
                     * Workflow hubs often display the section action and its
@@ -4056,34 +5947,52 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     * alignment instead of requiring a shared DOM container.
                     */
                 const statusPattern =
-                    /^(not completed|incomplete|not started|pending|optional|required|needs attention|completed(?:\s+on\b.*)?|complete|done|n\/a|not applicable)$/i;
+                    /^(not complete|not completed|not yet available|incomplete|not started|pending|optional|required|needs attention|completed(?:\s+on\b.*)?|complete|done|n\/a|not applicable)$/i;
+
 
                 const progressStatusPattern =
-                    /^(not completed|incomplete|not started|pending|needs attention|completed(?:\s+on\b.*)?|complete|done)$/i;
+                    /^(not complete|not completed|incomplete|not started|pending|needs attention|completed(?:\s+on\b.*)?|complete|done)$/i;
+
 
                 const completedPattern =
                     /^(completed(?:\s+on\b.*)?|complete|done)$/i;
 
+
                 const notCompletedPattern =
-                    /^(not completed|incomplete|not started|pending|needs attention)$/i;
+                    /^(not complete|not completed|incomplete|not started|pending|needs attention)$/i;
+
 
                 const optionalPattern =
                     /^optional$/i;
 
+
                 const requiredPattern =
                     /^required$/i;
 
+
                 const excludedPattern =
-                    /^(n\/a|not applicable)$/i;
+                    /^(not yet available|n\/a|not applicable)$/i;
+
+
+                /*
+                 * On the redesigned R-Permit hub, Required/Optional are badges.
+                 * Only the right-side availability/progress labels determine which
+                 * section can be entered.
+                 */
+                const rPermitStatusPattern =
+                    /^(not complete|not completed|not yet available|completed(?:\s+on\b.*)?|complete|done)$/i;
+
 
                 const hubUnsafePattern =
                     /\b(submit|finalize|certify|pay|payment|purchase|checkout|place order|logout|sign out)\b/i;
+
 
                 const visibleElements =
                     Array.from(
                         document.querySelectorAll(
                             "body *"))
                         .filter(isVisibleAndEnabled);
+
 
                 /*
                  * Prefer the deepest element that contains each status.
@@ -4097,8 +6006,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                 normalizeText(
                                     element.innerText);
 
+
                             const rectangle =
                                 element.getBoundingClientRect();
+
 
                             return {
                                 Element: element,
@@ -4113,11 +6024,18 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             item.Text.length > 0 &&
                             item.Text.length <= 80 &&
                             statusPattern.test(
-                                item.Text))
+                                item.Text) &&
+                            (
+                                !isRPermitRequirementsHub ||
+                                rPermitStatusPattern.test(
+                                    item.Text)
+                            ))
                         .sort((left, right) =>
                             left.Area - right.Area);
 
+
                 const statusItems = [];
+
 
                 for (const item of rawStatusItems) {
                     const centerY =
@@ -4126,6 +6044,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             item.Rectangle.bottom
                         ) / 2;
 
+
                     const duplicate =
                         statusItems.some(existing => {
                             const existingCenterY =
@@ -4133,6 +6052,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                     existing.Rectangle.top +
                                     existing.Rectangle.bottom
                                 ) / 2;
+
 
                             return (
                                 existing.Text
@@ -4145,10 +6065,12 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                     centerY) < 4;
                         });
 
+
                     if (!duplicate) {
                         statusItems.push(item);
                     }
                 }
+
 
                 const rows =
                     statusItems
@@ -4156,11 +6078,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             const statusRectangle =
                                 statusItem.Rectangle;
 
+
                             const statusCenterY =
                                 (
                                     statusRectangle.top +
                                     statusRectangle.bottom
                                 ) / 2;
+
 
                             const possibleRowActions =
                                 visibleElements
@@ -4171,15 +6095,18 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                             return null;
                                         }
 
+
                                         const rectangle =
                                             element
                                                 .getBoundingClientRect();
+
 
                                         const centerY =
                                             (
                                                 rectangle.top +
                                                 rectangle.bottom
                                             ) / 2;
+
 
                                         const verticallyAligned =
                                             rectangle.bottom >=
@@ -4194,15 +6121,18 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                                     statusRectangle.height *
                                                         1.5);
 
+
                                         const appearsBeforeStatus =
                                             rectangle.left <
                                                 statusRectangle.left - 4;
+
 
                                         if (
                                             !verticallyAligned ||
                                             !appearsBeforeStatus) {
                                             return null;
                                         }
+
 
                                         const actionText =
                                             normalizeText(
@@ -4211,6 +6141,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                                 element.getAttribute(
                                                     "alt") ||
                                                 element.innerText);
+
 
                                         if (
                                             actionText &&
@@ -4223,9 +6154,11 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                             return null;
                                         }
 
+
                                         const tagName =
                                             element.tagName
                                                 .toLowerCase();
+
 
                                         const inputType =
                                             element instanceof
@@ -4235,11 +6168,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                                 ).toLowerCase()
                                                 : "";
 
+
                                         const role =
                                             (
                                                 element.getAttribute(
                                                     "role") || ""
                                             ).toLowerCase();
+
 
                                         const cursor =
                                             window
@@ -4247,11 +6182,14 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                                     element)
                                                 .cursor;
 
+
                                         const isAnchor =
                                             tagName === "a";
 
+
                                         const isButton =
                                             tagName === "button";
+
 
                                         const isActionInput =
                                             tagName === "input" &&
@@ -4261,24 +6199,30 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                                 inputType === "image"
                                             );
 
+
                                         const hasActionRole =
                                             role === "button" ||
                                             role === "link";
+
 
                                         const hasClickAttribute =
                                             element.hasAttribute(
                                                 "onclick");
 
+
                                         const hasPointerCursor =
                                             cursor === "pointer";
 
+
                                         const isKeyboardAction =
                                             element.tabIndex >= 0;
+
 
                                         const isMeaningfulLeafText =
                                             element.children.length === 0 &&
                                             actionText.length >= 2 &&
                                             actionText.length <= 160;
+
 
                                         const isPossibleAction =
                                             isAnchor ||
@@ -4290,47 +6234,59 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                             isKeyboardAction ||
                                             isMeaningfulLeafText;
 
+
                                         if (!isPossibleAction) {
                                             return null;
                                         }
 
+
                                         let score = 0;
+
 
                                         if (isAnchor) {
                                             score += 400;
                                         }
 
+
                                         if (isButton) {
                                             score += 390;
                                         }
+
 
                                         if (isActionInput) {
                                             score += 380;
                                         }
 
+
                                         if (hasActionRole) {
                                             score += 350;
                                         }
+
 
                                         if (hasClickAttribute) {
                                             score += 330;
                                         }
 
+
                                         if (hasPointerCursor) {
                                             score += 300;
                                         }
+
 
                                         if (isKeyboardAction) {
                                             score += 280;
                                         }
 
+
                                         if (isMeaningfulLeafText) {
                                             score += 150;
                                         }
 
+
                                         if (actionText.length > 0) {
                                             score += 30;
                                         }
+
 
                                         /*
                                          * Prefer elements centered on the same
@@ -4343,6 +6299,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                                     centerY -
                                                     statusCenterY) * 4);
 
+
                                         /*
                                          * Prefer the section label over a distant
                                          * decorative element when both are usable.
@@ -4353,10 +6310,12 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                                 statusRectangle.left -
                                                 rectangle.right);
 
+
                                         score -=
                                             Math.min(
                                                 60,
                                                 horizontalGap / 15);
+
 
                                         return {
                                             Element: element,
@@ -4371,64 +6330,82 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                         right.Score -
                                         left.Score);
 
+
                             const selectedAction =
                                 possibleRowActions[0];
+
 
                             if (!selectedAction) {
                                 return null;
                             }
 
+
                             const statusText =
                                 statusItem.Text;
+
 
                             const actionLabel =
                                 selectedAction.ActionText ||
                                 "Workflow section";
 
+
                             const isNotCompleted =
                                 notCompletedPattern.test(
                                     statusText);
+
 
                             const isOptional =
                                 optionalPattern.test(
                                     statusText);
 
+
                             const isRequired =
                                 requiredPattern.test(
                                     statusText);
+
 
                             const isCompletedOnly =
                                 completedPattern.test(
                                     statusText) &&
                                 !isNotCompleted;
 
+
                             const isExcluded =
                                 excludedPattern.test(
                                     statusText);
+
 
                             return {
                                 Element:
                                     selectedAction.Element,
 
+
                                 ContainerText:
                                     `${actionLabel} ${statusText}`,
+
 
                                 IsNotCompleted:
                                     isNotCompleted,
 
+
                                 IsOptional:
                                     isOptional,
+
 
                                 IsRequired:
                                     isRequired,
 
+
                                 IsCompletedOnly:
                                     isCompletedOnly,
+
 
                                 IsExcluded:
                                     isExcluded,
 
+
                                 IsUnsafe: false,
+
 
                                 Score:
                                     selectedAction.Score
@@ -4436,6 +6413,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         })
                         .filter(row =>
                             row !== null);
+
 
                 /*
                  * Requiring an actual progress state prevents ordinary
@@ -4447,10 +6425,12 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         progressStatusPattern.test(
                             item.Text));
 
+
                 return {
                     IsHub:
                         rows.length >= 2 &&
                         hasProgressStatus,
+
 
                     Candidates:
                         rows.filter(candidate =>
@@ -4465,8 +6445,12 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     };
                 };
 
+
                 const workflowHub =
-                    getWorkflowHub();
+                    isRPermitRequirementsHub
+                        ? { IsHub: false, Candidates: [] }
+                        : getWorkflowHub();
+
 
                 if (workflowHub.IsHub) {
                 /*
@@ -4480,13 +6464,16 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         !unsafePattern.test(
                             getActionText(action)));
 
+
                 const visitedKey =
                     `city-audit-hub-visited:` +
                     `${window.location.origin}` +
                     `${window.location.pathname}` +
                     `${window.location.search}`;
 
+
                 let visitedOptionalActions = [];
+
 
                 try {
                     visitedOptionalActions =
@@ -4498,12 +6485,15 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     visitedOptionalActions = [];
                 }
 
+
                 const getCandidateKey =
                     candidate => {
                         const element =
                             candidate.Element;
 
+
                         let destination = "";
+
 
                         if (
                             element instanceof
@@ -4511,6 +6501,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             destination =
                                 element.href;
                         }
+
 
                         return (
                             destination +
@@ -4520,6 +6511,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         );
                     };
 
+
                 const availableCandidates =
                     workflowHub.Candidates.filter(
                     candidate =>
@@ -4528,6 +6520,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             getCandidateKey(
                                 candidate)));
 
+
                 const selectedCandidate =
                     availableCandidates.find(
                     candidate =>
@@ -4535,13 +6528,16 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     availableCandidates[0] ??
                     null;
 
+
                 if (
                     startAction ||
                     selectedCandidate) {
 
+
                     const selectedElement =
                         startAction ??
                         selectedCandidate.Element;
+
 
                     const selectedText =
                         startAction
@@ -4550,13 +6546,16 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             : selectedCandidate
                                 .ContainerText;
 
+
                     if (
                         !startAction &&
                         selectedCandidate.IsOptional) {
 
+
                         visitedOptionalActions.push(
                             getCandidateKey(
                                 selectedCandidate));
+
 
                         sessionStorage.setItem(
                             visitedKey,
@@ -4564,9 +6563,11 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                 visitedOptionalActions));
                     }
 
+
                     selectedElement.setAttribute(
                         markerAttribute,
                         "true");
+
 
                     return {
                         Found: true,
@@ -4583,6 +6584,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         };
                     }
                 }
+
 
                 const finalActionPattern =
                     /\b(submit|finalize|certify|pay|payment|purchase|checkout|place order|complete application|finish application)\b/i;
@@ -4604,15 +6606,21 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         }
             
                         const actionText =
-                            (
-                                element.textContent ||
-                                element.value ||
-                                element.getAttribute("aria-label") ||
-                                ""
-                            )
-                                .replace(/\s+/g, " ")
-                                .trim();
-            
+                            getPrimaryActionText(element);
+
+                        /*
+                         * Ignore A-Permits' persistent Complete Application
+                         * navigation control on intermediate states. The actual
+                         * Submit/Finalize/Pay/Certify/Finish actions remain
+                         * protected by finalActionPattern.
+                         */
+                        if (
+                            isAPermitPersistentCompleteApplicationAction(
+                                element))
+                        {
+                            return false;
+                        }
+
                         return finalActionPattern.test(
                             actionText);
                     });
@@ -4640,18 +6648,39 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 }
                 
                 const unsafeVisibleAction =
-                    actions.find(element =>
-                        unsafePattern.test(
-                            getActionText(element)));
+                    actions.find(element => {
+                        /*
+                         * Use the primary label instead of getActionText().
+                         * getActionText() can duplicate innerText/textContent,
+                         * which caused the persistent A-Permit Complete Application
+                         * control to be misclassified as a final action whenever
+                         * Next step was temporarily disabled during validation.
+                         */
+                        if (
+                            isAPermitPersistentCompleteApplicationAction(
+                                element))
+                        {
+                            return false;
+                        }
+
+                        const actionText =
+                            getPrimaryActionText(element);
+
+                        return unsafePattern.test(
+                            actionText);
+                    });
+
 
                 const candidates =
                     actions.filter(element => {
                         const text =
                             getActionText(element);
 
+
                         return safePattern.test(text) &&
                             !unsafePattern.test(text);
                     });
+
 
                 if (candidates.length === 0) {
                     return {
@@ -4668,20 +6697,54 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     };
                 }
 
+
                 /*
-                 * Prefer an actual button before a link or generic
-                 * role=button element.
+                 * Upload-specific handling above gets the first opportunity to
+                 * choose Save. After that, prefer a forward action so the
+                 * workflow can continue instead of repeatedly clicking Save.
+                 */
+                const forwardCandidates =
+                    candidates.filter(element =>
+                        /\b(next|continue|proceed|advance)\b/i.test(
+                            getActionText(element)));
+
+
+                const preferredCandidates =
+                    forwardCandidates.length > 0
+                        ? forwardCandidates
+                        : candidates;
+
+
+                /*
+                 * Within the preferred action group, keep the existing
+                 * preference for real buttons before links or generic roles.
                  */
                 const selected =
-                    candidates.find(element =>
+                    preferredCandidates.find(element =>
                 element instanceof HTMLButtonElement) ??
-                    candidates.find(element =>
+                    preferredCandidates.find(element =>
                 element instanceof HTMLInputElement) ??
-                    candidates[0];
+                    preferredCandidates[0];
+
+
+                /*
+                 * Once the direct attachment Save has completed, the next
+                 * forward action is the intended continuation. Clear the flag
+                 * only when that forward action has actually been selected.
+                 */
+                if (
+                    directAttachmentSavedPendingNext &&
+                    /\b(next|continue|proceed|advance)\b/i.test(
+                        getActionText(selected))) {
+                    sessionStorage.removeItem(
+                        directAttachmentSaveKey);
+                }
+
 
                 selected.setAttribute(
                     markerAttribute,
                     "true");
+
 
                 return {
                     Found: true,
@@ -4698,66 +6761,102 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             })())
             """);
 
+
         AuthenticatedAuditNextActionResult? result =
             System.Text.Json.JsonSerializer.Deserialize<
                 AuthenticatedAuditNextActionResult>(
                     resultJson);
+
 
         return result ??
             throw new InvalidOperationException(
                 "The next-action analysis result could not be read.");
     }
 
+
     private static async Task FillSafeFileUploadsAsync(
         IPage page,
         CancellationToken cancellationToken)
     {
+        /*
+         * A direct attachment Save may leave the browser on the same workflow
+         * page. Do not immediately assign another test file while the next
+         * automatic action is supposed to be Next/Continue.
+         */
+        bool directAttachmentSavedPendingNext =
+            await page.EvaluateAsync<bool>(
+                """
+                () =>
+                    sessionStorage.getItem(
+                        "city-audit-direct-attachment-saved-pending-next") ===
+                    window.location.pathname
+                """);
+
+
+        if (directAttachmentSavedPendingNext)
+        {
+            return;
+        }
+
+
         ILocator fileInputs =
             page.Locator("input[type='file']");
 
+
         int fileInputCount =
             await fileInputs.CountAsync();
+
 
         if (fileInputCount == 0)
         {
             return;
         }
 
+
         string testFileDirectory =
             Path.Combine(
                 Path.GetTempPath(),
                 "CityWebsiteAuditDashboard");
 
+
         Directory.CreateDirectory(
             testFileDirectory);
+
 
         string testPdfPath =
             Path.Combine(
                 testFileDirectory,
                 "accessibility-audit-test.pdf");
 
+
         string testPngPath =
             Path.Combine(
                 testFileDirectory,
                 "accessibility-audit-test.png");
+
 
         if (!File.Exists(testPdfPath))
         {
             var document =
                 new Document();
 
+
             Style normalStyle =
                 document.Styles[
                     StyleNames.Normal]!;
 
+
             normalStyle.Font.Name =
                 "Arial";
+
 
             Section section =
                 document.AddSection();
 
+
             section.AddParagraph(
                 "Accessibility audit test document.");
+
 
             var renderer =
                 new PdfDocumentRenderer
@@ -4765,20 +6864,25 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     Document = document
                 };
 
+
             renderer.RenderDocument();
+
 
             using var stream =
                 new MemoryStream();
 
+
             renderer.PdfDocument.Save(
                 stream,
                 closeStream: false);
+
 
             await File.WriteAllBytesAsync(
                 testPdfPath,
                 stream.ToArray(),
                 cancellationToken);
         }
+
 
         if (!File.Exists(testPngPath))
         {
@@ -4791,11 +6895,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     "CAQAAAC1HAwCAAAAC0lEQVR42mP8/x8A" +
                     "AusB9Wl1x0sAAAAASUVORK5CYII=");
 
+
             await File.WriteAllBytesAsync(
                 testPngPath,
                 pngBytes,
                 cancellationToken);
         }
+
 
         for (
             int index = 0;
@@ -4805,13 +6911,16 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             cancellationToken
                 .ThrowIfCancellationRequested();
 
+
             ILocator fileInput =
                 fileInputs.Nth(index);
+
 
             if (await fileInput.IsDisabledAsync())
             {
                 continue;
             }
+
 
             int selectedFileCount =
                 await fileInput.EvaluateAsync<int>(
@@ -4820,10 +6929,12 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     element.files?.length ?? 0
                 """);
 
+
             if (selectedFileCount > 0)
             {
                 continue;
             }
+
 
             string accept =
                 (
@@ -4833,10 +6944,12 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 )
                     .ToLowerInvariant();
 
+
             bool unrestricted =
                 string.IsNullOrWhiteSpace(accept) ||
                 accept.Contains("*/*") ||
                 accept.Contains("application/*");
+
 
             bool acceptsPdf =
                 unrestricted ||
@@ -4844,11 +6957,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 accept.Contains(
                     "application/pdf");
 
+
             bool acceptsPng =
                 unrestricted ||
                 accept.Contains(".png") ||
                 accept.Contains("image/png") ||
                 accept.Contains("image/*");
+
 
             string? selectedTestFile =
                 acceptsPdf
@@ -4856,6 +6971,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     : acceptsPng
                         ? testPngPath
                         : null;
+
 
             /*
              * Do not force an unsupported extension into a
@@ -4866,6 +6982,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 continue;
             }
 
+
             /*
              * Playwright assigns the file directly. Windows
              * File Explorer does not open.
@@ -4874,6 +6991,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 selectedTestFile);
         }
     }
+
 
     private static async Task<string>
     GetAutomaticNavigationStateSignatureAsync(IPage page)
@@ -4892,22 +7010,27 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     .replace(/\s+/g, " ")
                     .trim();
 
+
             const isVisible = element => {
                 if (!(element instanceof HTMLElement)) {
                     return false;
                 }
 
+
                 const style =
                     window.getComputedStyle(element);
 
+
                 const rectangle =
                     element.getBoundingClientRect();
+
 
                 return style.display !== "none" &&
                     style.visibility !== "hidden" &&
                     rectangle.width > 0 &&
                     rectangle.height > 0;
             };
+
 
             const headings =
                 Array.from(
@@ -4920,6 +7043,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     .filter(Boolean)
                     .slice(0, 20);
 
+
             const fields =
                 Array.from(
                     document.querySelectorAll(
@@ -4930,14 +7054,17 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         id:
                             element.id ?? "",
 
+
                         name:
                             element.getAttribute(
                                 "name") ?? "",
+
 
                         type:
                             element.getAttribute(
                                 "type") ??
                             element.tagName,
+
 
                         label:
                             normalize(
@@ -4945,6 +7072,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                     "aria-label"))
                     }))
                     .slice(0, 100);
+
 
             const actions =
                 Array.from(
@@ -4967,21 +7095,38 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     .filter(Boolean)
                     .slice(0, 100);
 
+
             /*
              * Read workflow statuses directly from text nodes.
              * This supports tables, cards, columns and custom layouts
              * without depending on a specific website's HTML.
              */
             const statusPattern =
-                /^(not completed|incomplete|not started|pending|optional|required|needs attention|completed(?:\s+on\b.*)?|complete|done|n\/a|not applicable)$/i;
+                /^(not complete|not completed|not yet available|incomplete|not started|pending|optional|required|needs attention|completed(?:\s+on\b.*)?|complete|done|n\/a|not applicable)$/i;
+
 
             const canonicalizeStatus =
                 text => {
+                    if (
+                        /^not complete\b/i.test(
+                            text)) {
+                        return "not complete";
+                    }
+
+
                     if (
                         /^not completed\b/i.test(
                             text)) {
                         return "not completed";
                     }
+
+
+                    if (
+                        /^not yet available\b/i.test(
+                            text)) {
+                        return "not yet available";
+                    }
+
 
                     if (
                         /^incomplete\b/i.test(
@@ -4989,11 +7134,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         return "incomplete";
                     }
 
+
                     if (
                         /^not started\b/i.test(
                             text)) {
                         return "not started";
                     }
+
 
                     if (
                         /^pending\b/i.test(
@@ -5001,11 +7148,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         return "pending";
                     }
 
+
                     if (
                         /^optional\b/i.test(
                             text)) {
                         return "optional";
                     }
+
 
                     if (
                         /^required\b/i.test(
@@ -5013,11 +7162,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         return "required";
                     }
 
+
                     if (
                         /^needs attention\b/i.test(
                             text)) {
                         return "needs attention";
                     }
+
 
                     if (
                         /^(completed|complete|done)\b/i.test(
@@ -5025,16 +7176,20 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         return "completed";
                     }
 
+
                     if (
                         /^(n\/a|not applicable)\b/i.test(
                             text)) {
                         return "not applicable";
                     }
 
+
                     return text.toLowerCase();
                 };
 
+
             const workflowStatuses = [];
+
 
             if (document.body) {
                 const walker =
@@ -5042,12 +7197,15 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         document.body,
                         NodeFilter.SHOW_TEXT);
 
+
                 while (walker.nextNode()) {
                     const textNode =
                         walker.currentNode;
 
+
                     const parent =
                         textNode.parentElement;
+
 
                     if (
                         !parent ||
@@ -5055,9 +7213,11 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         continue;
                     }
 
+
                     const text =
                         normalize(
                             textNode.nodeValue);
+
 
                     if (
                         !text ||
@@ -5066,26 +7226,75 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         continue;
                     }
 
+
                     workflowStatuses.push(
                         canonicalizeStatus(text));
                 }
             }
 
+
+            /*
+             * Do not include the full query string in the state signature.
+             * A-Permits rewrites encrypted/reference parameters while moving
+             * between steps, which made the same rendered step look unique on
+             * every revisit and prevented loop detection. Keep only structural
+             * navigation parameters that identify the workflow position.
+             */
+            const currentUrl =
+                new URL(window.location.href);
+
+
+            const structuralParameterNames =
+                new Set([
+                    "step",
+                    "page",
+                    "tab",
+                    "section",
+                    "stage",
+                    "screen",
+                    "currentstep"
+                ]);
+
+
+            const structuralParameters =
+                Array.from(currentUrl.searchParams.entries())
+                    .filter(([name]) =>
+                        structuralParameterNames.has(
+                            name.toLowerCase()))
+                    .sort(([leftName], [rightName]) =>
+                        leftName.localeCompare(rightName))
+                    .map(([name, value]) =>
+                        `${name.toLowerCase()}=${value}`)
+                    .join("&");
+
+
+            const stableUrl =
+                currentUrl.pathname +
+                (structuralParameters
+                    ? `?${structuralParameters}`
+                    : "");
+
+
             return JSON.stringify({
                 url:
-                    window.location.href,
+                    stableUrl,
+
 
                 title:
                     document.title,
 
+
                 headings:
                     headings,
+
 
                 fields:
                     fields,
 
+
                 actions:
                     actions,
+
 
                 workflowStatuses:
                     workflowStatuses
@@ -5093,6 +7302,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         }
         """);
     }
+
 
     private static async Task<AuthenticatedAuditFieldFillResult>
     FillSafeFieldsAsync(IPage page)
@@ -5108,16 +7318,20 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             const filledDescriptions = [];
             const skippedDescriptions = [];
 
+
             const isVisibleAndEnabled = element => {
                 if (!(element instanceof HTMLElement)) {
                     return false;
                 }
 
+
                 const style =
                     window.getComputedStyle(element);
 
+
                 const rectangle =
                     element.getBoundingClientRect();
+
 
                 return style.display !== "none" &&
                     style.visibility !== "hidden" &&
@@ -5127,19 +7341,24 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     element.getAttribute("aria-disabled") !== "true";
             };
 
+
             const getDescription = element => {
                 const id = element.id?.trim();
 
+
                 let labelText = "";
+
 
                 if (id) {
                     const explicitLabel =
                         document.querySelector(
                             `label[for="${CSS.escape(id)}"]`);
 
+
                     labelText =
                         explicitLabel?.textContent?.trim() ?? "";
                 }
+
 
                 if (!labelText) {
                     labelText =
@@ -5147,6 +7366,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             ?.textContent
                             ?.trim() ?? "";
                 }
+
 
                 return (
                     labelText ||
@@ -5161,6 +7381,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     .trim();
             };
 
+
             const getFieldHint = element => {
                 return [
                     getDescription(element),
@@ -5174,8 +7395,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     .toLowerCase();
             };
 
+
             const setNativeValue = (element, value) => {
                 let prototype;
+
 
                 if (element instanceof HTMLSelectElement) {
                     prototype =
@@ -5191,11 +7414,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         HTMLInputElement.prototype;
                 }
 
+
                 const valueSetter =
                     Object.getOwnPropertyDescriptor(
                         prototype,
                         "value")
                     ?.set;
+
 
                 if (valueSetter) {
                     valueSetter.call(element, value);
@@ -5204,12 +7429,14 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     element.value = value;
                 }
 
+
                 element.dispatchEvent(
                     new Event(
                         "input",
                         {
                             bubbles: true
                         }));
+
 
                 element.dispatchEvent(
                     new Event(
@@ -5218,6 +7445,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             bubbles: true
                         }));
             };
+
 
             const setNativeChecked = (
                 element,
@@ -5228,6 +7456,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         "checked")
                     ?.set;
 
+
                 if (checkedSetter) {
                     checkedSetter.call(
                         element,
@@ -5237,12 +7466,14 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     element.checked = checked;
                 }
 
+
                 element.dispatchEvent(
                     new Event(
                         "input",
                         {
                             bubbles: true
                         }));
+
 
                 element.dispatchEvent(
                     new Event(
@@ -5252,10 +7483,12 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         }));
             };
 
+
             const visibleElements =
                 elements =>
                     Array.from(elements)
                         .filter(isVisibleAndEnabled);
+
 
             const captchaDetected =
                 document.querySelector(
@@ -5264,6 +7497,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     "[id*='captcha' i], " +
                     "[class*='captcha' i], " +
                     "input[name*='captcha' i]") !== null;
+
 
             if (captchaDetected) {
                 return {
@@ -5277,6 +7511,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 };
             }
 
+
             const unsafeControls =
                 visibleElements(
                     document.querySelectorAll(
@@ -5288,6 +7523,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     "[name*='signature' i], " +
                     "[id*='signature' i], " +
                     "[aria-label*='signature' i]"));
+
 
             if (unsafeControls.length > 0) {
                 return {
@@ -5304,12 +7540,14 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 };
             }
 
+
             /*
              * Avoid automatically accepting certifications,
              * legal agreements, or consent statements.
              */
             const unsafeAgreementPattern =
                 /\b(certify|attest|signature|authorize|consent|agree|terms and conditions)\b/i;
+
 
             const agreementControl =
                 visibleElements(
@@ -5318,6 +7556,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     .find(element =>
                         unsafeAgreementPattern.test(
                             getDescription(element)));
+
 
             if (agreementControl) {
                 return {
@@ -5335,6 +7574,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 };
             }
 
+
             const controlSet =
                 new Set([
                     ...document.querySelectorAll(
@@ -5348,18 +7588,22 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         "[aria-required='true']")
                 ]);
 
+
             const controls =
                 Array.from(controlSet);
+
 
             const getTextValue = element => {
                 const hint =
                     getFieldHint(element);
+
 
                 if (
                     hint.includes("first name") ||
                     hint.includes("firstname")) {
                     return "Alex";
                 }
+
 
                 if (
                     hint.includes("last name") ||
@@ -5368,19 +7612,23 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     return "Tester";
                 }
 
+
                 if (
                     hint.includes("full name") ||
                     hint === "name") {
                     return "Alex Tester";
                 }
 
+
                 if (hint.includes("address")) {
                     return "200 N SPRING ST";
                 }
 
+
                 if (hint.includes("city")) {
                     return "Los Angeles";
                 }
+
 
                 if (
                     hint.includes("state") ||
@@ -5388,18 +7636,22 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     return "CA";
                 }
 
+
                 if (
                     hint.includes("zip") ||
                     hint.includes("postal")) {
                     return "90012";
                 }
 
+
                 return "Accessibility audit test";
             };
+
 
             const getFinancialTestValue = element => {
                 const hint =
                     getFieldHint(element);
+
 
                 if (
                     hint.includes("amount due") ||
@@ -5411,6 +7663,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     return "100.00";
                 }
 
+
                 if (
                     hint.includes("ucs transaction") ||
                     hint.includes("transaction id") ||
@@ -5418,11 +7671,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     return "TEST-TRANSACTION-001";
                 }
 
+
                 if (
                     hint.includes("cardholder") ||
                     hint.includes("name on card")) {
                     return "Alex Tester";
                 }
+
 
                 if (
                     element.getAttribute("autocomplete") ===
@@ -5433,6 +7688,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     return "4111111111111111";
                 }
 
+
                 if (
                     element.getAttribute("autocomplete") ===
                         "cc-csc" ||
@@ -5441,6 +7697,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     hint.includes("security code")) {
                     return "123";
                 }
+
 
                 if (
                     element.getAttribute("autocomplete") ===
@@ -5451,6 +7708,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     return "12/30";
                 }
 
+
                 if (
                     hint.includes("check number") ||
                     hint.includes("check no") ||
@@ -5459,43 +7717,54 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     return "100001";
                 }
 
+
                 if (
                     hint.includes("date fees paid") ||
                     hint.includes("payment date") ||
                     hint.includes("date paid")) {
 
+
                     const today =
                         new Date();
+
 
                     const month =
                         String(today.getMonth() + 1)
                             .padStart(2, "0");
 
+
                     const day =
                         String(today.getDate())
                             .padStart(2, "0");
 
+
                     const year =
                         today.getFullYear();
+
 
                     return element.type === "date"
                         ? `${year}-${month}-${day}`
                         : `${month}/${day}/${year}`;
                 }
 
+
                 return null;
             };
+
 
             for (const element of controls) {
                 const description =
                     getDescription(element);
 
+
                 if (!isVisibleAndEnabled(element)) {
                     skippedDescriptions.push(
                         `${description}: hidden or disabled`);
 
+
                     continue;
                 }
+
 
                 if (
                     element.hasAttribute("readonly") ||
@@ -5504,8 +7773,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     skippedDescriptions.push(
                         `${description}: read only`);
 
+
                     continue;
                 }
+
 
                 if (
                     element instanceof HTMLSelectElement) {
@@ -5513,8 +7784,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         skippedDescriptions.push(
                             `${description}: already has a value`);
 
+
                         continue;
                     }
+
 
                     const option =
                         Array.from(element.options)
@@ -5522,22 +7795,28 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                 !candidate.disabled &&
                                 candidate.value !== "");
 
+
                     if (!option) {
                         skippedDescriptions.push(
                             `${description}: no selectable option`);
 
+
                         continue;
                     }
+
 
                     setNativeValue(
                         element,
                         option.value);
 
+
                     filledDescriptions.push(
                         `${description}: selected ${option.text}`);
 
+
                     continue;
                 }
+
 
                 if (
                     element instanceof
@@ -5546,30 +7825,38 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         skippedDescriptions.push(
                             `${description}: already has a value`);
 
+
                         continue;
                     }
+
 
                     setNativeValue(
                         element,
                         "Accessibility audit test response.");
 
+
                     filledDescriptions.push(
                         description);
 
+
                     continue;
                 }
+
 
                 if (!(
                     element instanceof HTMLInputElement)) {
                     skippedDescriptions.push(
                         `${description}: unsupported control`);
 
+
                     continue;
                 }
+
 
                 const type =
                     (element.type || "text")
                         .toLowerCase();
+
 
                 if ([
                     "hidden",
@@ -5582,23 +7869,29 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     continue;
                 }
 
+
                 if (type === "checkbox") {
                     if (element.checked) {
                         skippedDescriptions.push(
                             `${description}: already checked`);
 
+
                         continue;
                     }
+
 
                     setNativeChecked(
                         element,
                         true);
 
+
                     filledDescriptions.push(
                         description);
 
+
                     continue;
                 }
+
 
                 if (type === "radio") {
                         /*
@@ -5607,14 +7900,18 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     skippedDescriptions.push(
                         `${description}: handled later by Playwright`);
 
+
                     continue;
                 }
+
 
                 const currentValue =
                     element.value.trim();
 
+
                 const fieldHint =
                     getFieldHint(element);
+
 
                 const isDefaultMoneyValue =
                     (
@@ -5625,30 +7922,38 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     /^[$,\s]*0(?:\.0+)?$/.test(
                         currentValue);
 
+
                 if (
                     currentValue &&
                     !isDefaultMoneyValue) {
                     skippedDescriptions.push(
                         `${description}: already has a value`);
 
+
                     continue;
                 }
 
+
                 const financialTestValue =
                     getFinancialTestValue(element);
+
 
                 if (financialTestValue !== null) {
                     setNativeValue(
                         element,
                         financialTestValue);
 
+
                     filledDescriptions.push(
                         `${description}: test value entered`);
+
 
                     continue;
                 }
 
+
                 let value;
+
 
                 switch (type) {
                     case "email":
@@ -5656,15 +7961,18 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             "accessibility.audit@example.com";
                         break;
 
+
                     case "tel":
                         value =
                             "2135550100";
                         break;
 
+
                     case "url":
                         value =
                             "https://example.com";
                         break;
+
 
                     case "number":
                     case "range":
@@ -5672,13 +7980,16 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         const minimum =
                             Number(element.min);
 
+
                         const maximum =
                             Number(element.max);
+
 
                         value =
                             Number.isFinite(minimum)
                                 ? minimum
                                 : 1;
+
 
                         if (
                             Number.isFinite(maximum) &&
@@ -5686,11 +7997,14 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             value = maximum;
                         }
 
+
                         value =
                             String(value);
 
+
                         break;
                     }
+
 
                     case "date":
                         value =
@@ -5700,6 +8014,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                 .slice(0, 10);
                         break;
 
+
                     case "month":
                         value =
                             new Date()
@@ -5707,9 +8022,11 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                 .slice(0, 7);
                         break;
 
+
                     case "time":
                         value = "09:00";
                         break;
+
 
                     case "datetime-local":
                         value =
@@ -5718,22 +8035,27 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                 .slice(0, 16);
                         break;
 
+
                     case "text":
                     case "search":
                         value =
                             getTextValue(element);
                         break;
 
+
                     default:
                         skippedDescriptions.push(
                             `${description}: unsupported input type ${type}`);
 
+
                         continue;
                 }
+
 
                 setNativeValue(
                     element,
                     value);
+
 
                 filledDescriptions.push(
                     description);
@@ -5742,15 +8064,20 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 FilledFieldCount:
                     filledDescriptions.length,
 
+
                 SkippedFieldCount:
                     skippedDescriptions.length,
 
+
                 RequiresManualInteraction: false,
+
 
                 StopReason: null,
 
+
                 FilledFieldDescriptions:
                     filledDescriptions,
+
 
                 SkippedFieldDescriptions:
                     skippedDescriptions
@@ -5758,10 +8085,12 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         })())
         """);
 
+
         AuthenticatedAuditFieldFillResult? result =
             System.Text.Json.JsonSerializer.Deserialize<
                 AuthenticatedAuditFieldFillResult>(
                     resultJson);
+
 
         /*
         * Some address fields require selecting an autocomplete result after
@@ -5775,6 +8104,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         await Task.Delay(
             TimeSpan.FromMilliseconds(750));
 
+
         ILocator addressInputs =
             page.GetByLabel(
                 "Address",
@@ -5783,7 +8113,9 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     Exact = false
                 });
 
+
         ILocator? addressInput = null;
+
 
         for (
             int index = 0;
@@ -5792,6 +8124,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         {
             ILocator candidate =
                 addressInputs.Nth(index);
+
 
             if (
                 await candidate.IsVisibleAsync() &&
@@ -5802,115 +8135,214 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             }
         }
 
+
         /*
          * Fallback in case the Address label is not properly connected
          * to its input.
+         *
+         * Do not walk every visible input with Playwright locators here.
+         * Dynamic BOE pages can rebuild their controls while this helper is
+         * running, which can leave an Nth() locator pointing at an element
+         * that no longer exists and cause a 30-second timeout. Instead, find
+         * the already-filled address directly in the current DOM and mark it.
          */
         if (addressInput is null)
         {
-            ILocator visibleInputs =
-                page.Locator("input:visible");
+            string fallbackAddressSelector =
+                await page.EvaluateAsync<string>(
+                    """
+                () => {
+                    const markerAttribute =
+                        "data-city-audit-address-input";
 
-            for (
-                int index = 0;
-                index < await visibleInputs.CountAsync();
-                index++)
+                    document
+                        .querySelectorAll(
+                            `[${markerAttribute}]`)
+                        .forEach(element =>
+                            element.removeAttribute(
+                                markerAttribute));
+
+                    const candidate =
+                        Array.from(
+                            document.querySelectorAll(
+                                "input"))
+                            .find(element => {
+                                if (!(
+                                    element instanceof
+                                        HTMLInputElement)) {
+                                    return false;
+                                }
+
+                                const style =
+                                    window.getComputedStyle(
+                                        element);
+
+                                const rectangle =
+                                    element.getBoundingClientRect();
+
+                                const visibleAndEditable =
+                                    style.display !== "none" &&
+                                    style.visibility !== "hidden" &&
+                                    rectangle.width > 0 &&
+                                    rectangle.height > 0 &&
+                                    !element.disabled &&
+                                    !element.readOnly;
+
+                                return visibleAndEditable &&
+                                    element.value
+                                        .trim()
+                                        .toUpperCase() ===
+                                        "200 N SPRING ST";
+                            });
+
+                    if (!candidate) {
+                        return "";
+                    }
+
+                    candidate.setAttribute(
+                        markerAttribute,
+                        "true");
+
+                    return
+                        `[${markerAttribute}="true"]`;
+                }
+                """);
+
+
+            if (!string.IsNullOrWhiteSpace(
+                fallbackAddressSelector))
             {
-                ILocator candidate =
-                    visibleInputs.Nth(index);
-
-                if (!await candidate.IsEditableAsync())
-                {
-                    continue;
-                }
-
-                string currentValue =
-                    await candidate.InputValueAsync();
-
-                if (string.Equals(
-                    currentValue.Trim(),
-                    "200 N SPRING ST",
-                    StringComparison.OrdinalIgnoreCase))
-                {
-                    addressInput = candidate;
-                    break;
-                }
+                addressInput =
+                    page.Locator(
+                        fallbackAddressSelector);
             }
         }
 
+
+        /*
+         * Address autocomplete is best-effort post-processing. A dynamic
+         * workflow state may replace its DOM while this runs; that should not
+         * fail the entire automatic workflow on unrelated pages such as the
+         * A-Permit Driveway step.
+         */
         if (addressInput is not null)
         {
-            string addressValue =
-                (await addressInput.InputValueAsync())
-                    .Trim();
-
-            if (!string.IsNullOrWhiteSpace(addressValue))
+            try
             {
-                /*
-                 * Wait for the site's address result to appear.
-                 */
-                await Task.Delay(
-                    TimeSpan.FromMilliseconds(750));
-
-                ILocator matchingResults =
-                    page.GetByText(
-                        addressValue,
+                string addressValue =
+                    (await addressInput.InputValueAsync(
                         new()
                         {
-                            Exact = true
-                        });
+                            Timeout = 2000
+                        }))
+                        .Trim();
 
-                bool resultSelected = false;
 
-                /*
-                 * Search backward because autocomplete results are commonly
-                 * rendered after the input and hidden duplicate layouts.
-                 */
-                for (
-                    int index =
-                        await matchingResults.CountAsync() - 1;
-                    index >= 0;
-                    index--)
+                if (!string.IsNullOrWhiteSpace(addressValue))
                 {
-                    ILocator matchingResult =
-                        matchingResults.Nth(index);
-
-                    if (await matchingResult.IsVisibleAsync())
-                    {
-                        await matchingResult.ClickAsync();
-
-                        resultSelected = true;
-                        break;
-                    }
-                }
-
-                /*
-                 * Keyboard fallback for autocomplete components that do not
-                 * expose the suggestion as ordinary visible text.
-                 */
-                if (
-                    !resultSelected &&
-                    await addressInput.IsEditableAsync())
-                {
-                    await addressInput.ClickAsync();
-                    await addressInput.PressAsync(
-                        "ArrowDown");
-
+                    /*
+                     * Wait for the site's address result to appear.
+                     */
                     await Task.Delay(
-                        TimeSpan.FromMilliseconds(150));
+                        TimeSpan.FromMilliseconds(750));
 
-                    await addressInput.PressAsync(
-                        "Enter");
+
+                    ILocator matchingResults =
+                        page.GetByText(
+                            addressValue,
+                            new()
+                            {
+                                Exact = true
+                            });
+
+
+                    bool resultSelected = false;
+
+
+                    /*
+                     * Search backward because autocomplete results are commonly
+                     * rendered after the input and hidden duplicate layouts.
+                     */
+                    for (
+                        int index =
+                            await matchingResults.CountAsync() - 1;
+                        index >= 0;
+                        index--)
+                    {
+                        ILocator matchingResult =
+                            matchingResults.Nth(index);
+
+
+                        if (await matchingResult.IsVisibleAsync())
+                        {
+                            await matchingResult.ClickAsync(
+                                new LocatorClickOptions
+                                {
+                                    Timeout = 2000
+                                });
+
+
+                            resultSelected = true;
+                            break;
+                        }
+                    }
+
+
+                    /*
+                     * Keyboard fallback for autocomplete components that do not
+                     * expose the suggestion as ordinary visible text.
+                     */
+                    if (!resultSelected)
+                    {
+                        bool addressStillEditable =
+                            await addressInput.IsEditableAsync(
+                                new()
+                                {
+                                    Timeout = 2000
+                                });
+
+
+                        if (addressStillEditable)
+                        {
+                            await addressInput.ClickAsync(
+                                new LocatorClickOptions
+                                {
+                                    Timeout = 2000
+                                });
+
+
+                            await addressInput.PressAsync(
+                                "ArrowDown");
+
+
+                            await Task.Delay(
+                                TimeSpan.FromMilliseconds(150));
+
+
+                            await addressInput.PressAsync(
+                                "Enter");
+                        }
+                    }
+
+
+                    /*
+                     * Give the page time to store the selected address and
+                     * remove the validation error.
+                     */
+                    await Task.Delay(
+                        TimeSpan.FromMilliseconds(750));
                 }
-
+            }
+            catch (PlaywrightException)
+            {
                 /*
-                 * Give the page time to store the selected address and
-                 * remove the validation error.
+                 * The application changed its rendered controls while address
+                 * post-processing was running. Continue with the current state
+                 * instead of failing the entire workflow.
                  */
-                await Task.Delay(
-                    TimeSpan.FromMilliseconds(750));
             }
         }
+
 
         /*
         * Styled Yes/No controls may require a real browser click on their
@@ -5928,19 +8360,24 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 const processedAttribute =
                     "data-city-audit-radio-processed";
 
+
                 const clickAttribute =
                     "data-city-audit-radio-click";
+
 
                 const isVisible = element => {
                     if (!(element instanceof HTMLElement)) {
                         return false;
                     }
 
+
                     const style =
                         window.getComputedStyle(element);
 
+
                     const rectangle =
                         element.getBoundingClientRect();
+
 
                     return (
                         style.display !== "none" &&
@@ -5949,6 +8386,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         rectangle.height > 0
                     );
                 };
+
 
                 /*
                  * Remove the temporary click marker from the
@@ -5961,36 +8399,45 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         element.removeAttribute(
                             clickAttribute));
 
+
                 const radios =
                     Array.from(
                         document.querySelectorAll(
                             'input[type="radio"]'));
 
+
                 const visitedGroups =
                     new Set();
+
 
                 for (const radio of radios) {
                     const groupName =
                         radio.name ||
                         radio.id;
 
+
                     if (!groupName) {
                         continue;
                     }
+
 
                     const formIdentifier =
                         radio.form?.id ||
                         radio.form?.name ||
                         "";
 
+
                     const groupKey =
                         `${formIdentifier}|${groupName}`;
+
 
                     if (visitedGroups.has(groupKey)) {
                         continue;
                     }
 
+
                     visitedGroups.add(groupKey);
+
 
                     const group =
                         radios.filter(candidate => {
@@ -5998,6 +8445,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                 candidate.form?.id ||
                                 candidate.form?.name ||
                                 "";
+
 
                             return (
                                 candidateFormIdentifier ===
@@ -6008,6 +8456,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                 ) === groupName
                             );
                         });
+
 
                     /*
                      * Each group is processed only once during
@@ -6021,10 +8470,12 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         continue;
                     }
 
+
                     group.forEach(candidate =>
                         candidate.setAttribute(
                             processedAttribute,
                             "true"));
+
 
                     /*
                      * Preserve the choice already made by the
@@ -6033,6 +8484,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                      */
                     const getRadioOptionText = candidate => {
                         let labelText = "";
+
 
                         if (candidate.id) {
                             labelText =
@@ -6043,11 +8495,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                 ?.textContent || "";
                         }
 
+
                         if (!labelText) {
                             labelText =
                                 candidate.closest("label")
                                     ?.textContent || "";
                         }
+
 
                         return [
                             labelText,
@@ -6061,6 +8515,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             .toLowerCase();
                         };
 
+
                         /*
                         * Prefer No for ordinary Yes/No questions. This avoids opening
                         * additional conditional fields during a demonstration audit.
@@ -6071,8 +8526,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                     return false;
                                 }
 
+
                                 const optionText =
                                     getRadioOptionText(candidate);
+
 
                                 return (
                                     optionText === "no" ||
@@ -6084,6 +8541,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                 );
                             });
 
+
                         const selectedRadio =
                             preferredNoRadio ||
                             group.find(candidate =>
@@ -6092,11 +8550,26 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             group.find(candidate =>
                                 !candidate.disabled);
 
+
                     if (!selectedRadio) {
                         continue;
                     }
 
+
+                    /*
+                     * FillSafeFieldsAsync can run more than once on the same
+                     * rendered state. Once the intended radio is already
+                     * selected, do not click its styled label again. Re-clicking
+                     * can trigger another asynchronous redraw and make the label
+                     * disappear while Playwright is trying to scroll/click it.
+                     */
+                    if (selectedRadio.checked) {
+                        continue;
+                    }
+
+
                     let clickableElement = null;
+
 
                     if (selectedRadio.id) {
                         clickableElement =
@@ -6107,11 +8580,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                 }"]`);
                     }
 
+
                     if (!clickableElement) {
                         clickableElement =
                             selectedRadio.closest(
                                 "label");
                     }
+
 
                     /*
                      * Styled radio buttons usually display the
@@ -6125,21 +8600,26 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             clickAttribute,
                             "true");
 
+
                         return `[${clickAttribute}="true"]`;
                     }
+
 
                     if (isVisible(selectedRadio)) {
                         selectedRadio.setAttribute(
                             clickAttribute,
                             "true");
 
+
                         return `[${clickAttribute}="true"]`;
                     }
                 }
 
+
                 return "";
             }
             """);
+
 
             if (string.IsNullOrWhiteSpace(
                 radioChoiceSelector))
@@ -6147,8 +8627,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 break;
             }
 
+
             ILocator radioChoiceLocator =
                 page.Locator(radioChoiceSelector);
+
 
             try
             {
@@ -6157,6 +8639,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     {
                         Timeout = 3000
                     });
+
 
                 await Task.Delay(
                     TimeSpan.FromMilliseconds(200));
@@ -6168,7 +8651,16 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                  * radio group could not be clicked.
                  */
             }
+            catch (System.TimeoutException)
+            {
+                /*
+                 * A dynamic form may replace the styled radio label while
+                 * Playwright is attempting the click. Treat that optional
+                 * re-click as best-effort and continue the workflow.
+                 */
+            }
         }
+
 
         /*
          * Remove temporary attributes after all groups are processed.
@@ -6184,16 +8676,19 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     element.removeAttribute(
                         "data-city-audit-radio-processed");
 
+
                     element.removeAttribute(
                         "data-city-audit-radio-click");
                 });
             }
             """);
 
+
         return result ??
             throw new InvalidOperationException(
                 "The field-filling result could not be read.");
     }
+
 
     private static string? CreateFailureSummary(
     AxeResultNode node)
@@ -6208,6 +8703,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 .Concat(node.None ?? Array.Empty<AxeResultCheck>())
                 .Select(check => check.Message?.Trim());
 
+
         string summary = string.Join(
             Environment.NewLine,
             messages
@@ -6215,20 +8711,24 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     !string.IsNullOrWhiteSpace(message))
                 .Distinct(StringComparer.OrdinalIgnoreCase));
 
+
         return string.IsNullOrWhiteSpace(summary)
             ? null
             : summary;
     }
+
 
     private static List<AuthenticatedAuditFindingResult>
     CreateFindingResults(AxeResult axeResult)
     {
         var findings = new List<AuthenticatedAuditFindingResult>();
 
+
         AddFindingResults(
             findings,
             axeResult.Violations,
             "Violation");
+
 
         /*
          * Axe's Incomplete collection contains results that could not be
@@ -6239,8 +8739,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             axeResult.Incomplete,
             "NeedsReview");
 
+
         return findings;
     }
+
 
     private static void AddFindingResults(
         ICollection<AuthenticatedAuditFindingResult> destination,
@@ -6252,9 +8754,11 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             return;
         }
 
+
         foreach (AxeResultItem axeItem in axeItems)
         {
             string ruleId = axeItem.Id?.Trim() ?? string.Empty;
+
 
             /*
              * RuleId is required by our database model. An axe result without an
@@ -6265,6 +8769,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 continue;
             }
 
+
             destination.Add(
                 new AuthenticatedAuditFindingResult
                 {
@@ -6272,30 +8777,39 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         LimitLength(findingType, 50)
                         ?? "Unknown",
 
+
                     RuleId =
                         LimitLength(ruleId, 200)
                         ?? ruleId,
 
+
                     Impact =
                         LimitLength(axeItem.Impact, 50),
+
 
                     Help =
                         LimitLength(axeItem.Help, 500),
 
+
                     Description =
                         LimitLength(axeItem.Description, 2000),
 
+
                     HelpUrl = axeItem.HelpUrl,
+
 
                     // Preserve WCAG metadata so findings can later be grouped and prioritized.
                     WcagTags =
                         GetWcagTags(axeItem.Tags),
 
+
                     WcagLevel =
                         GetWcagLevel(axeItem.Tags),
 
+
                     AffectedElementCount =
                         axeItem.Nodes?.Count() ?? 0,
+
 
                     // Keep the exact affected elements for details pages and reports.
                     Nodes =
@@ -6307,17 +8821,20 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                                         node.Target?.ToString()
                                         ?? string.Empty,
 
+
                                     Html =
                                         node.Html,
+
 
                                     FailureSummary =
                                         CreateFailureSummary(node)
                                 })
                         .ToList()
                     ?? new List<AuthenticatedAuditFindingNodeResult>()
-                    });
+                });
         }
     }
+
 
     private static void SetProgress(
     AuthenticatedAuditBrowserSession session,
@@ -6333,14 +8850,17 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             IsScanning = isScanning,
             Stage = stage,
 
+
             // Prevent an accidental value below 0 or above 100.
             StagePercent = Math.Clamp(stagePercent, 0, 100),
+
 
             CurrentUrl = currentUrl,
             CurrentPageNumber = currentPageNumber,
             TotalPageCount = totalPageCount
         };
     }
+
 
     private async Task<int> SaveAuditStepAsync(
     int auditRunId,
@@ -6350,8 +8870,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         await using AsyncServiceScope scope =
             _scopeFactory.CreateAsyncScope();
 
+
         ApplicationDbContext dbContext =
             scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
 
         var auditStep = new AuthenticatedAuditStep
         {
@@ -6394,33 +8916,42 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     LimitLength(findingResult.FindingType, 50)
                     ?? "Unknown",
 
+
                 RuleId =
                     LimitLength(findingResult.RuleId, 200)
                     ?? string.Empty,
 
+
                 Impact =
                     LimitLength(findingResult.Impact, 50),
+
 
                 Help =
                     LimitLength(findingResult.Help, 500),
 
+
                 Description =
                     LimitLength(findingResult.Description, 2000),
 
+
                 HelpUrl =
                     LimitLength(findingResult.HelpUrl, 2048),
+
 
                 // Preserve WCAG metadata for filtering and prioritization.
                 WcagTags =
                     LimitLength(findingResult.WcagTags, 1000)
                     ?? string.Empty,
 
+
                 WcagLevel =
                     LimitLength(findingResult.WcagLevel, 10),
+
 
                 AffectedElementCount =
                     findingResult.AffectedElementCount
             };
+
 
             foreach (AuthenticatedAuditFindingNodeResult nodeResult
                      in findingResult.Nodes)
@@ -6432,11 +8963,14 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                             LimitLength(nodeResult.Target, 2000)
                             ?? string.Empty,
 
+
                         Html =
                             LimitLength(nodeResult.Html, 10000),
 
+
                         FailureSummary =
                             LimitLength(nodeResult.FailureSummary, 4000),
+
 
                         ElementFixGuidance =
                             LimitLength(
@@ -6446,14 +8980,18 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     });
             }
 
+
             auditStep.Findings.Add(auditFinding);
         }
+
 
         dbContext.AuthenticatedAuditSteps.Add(auditStep);
         await dbContext.SaveChangesAsync(cancellationToken);
 
+
         return auditStep.Id;
     }
+
 
     private async Task<string> NavigateAuthenticatedSessionAsync(
     Guid sessionId,
@@ -6468,7 +9006,9 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 "The authenticated audit session is no longer running.");
         }
 
+
         bool lockTaken = false;
+
 
         try
         {
@@ -6479,6 +9019,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             await session.OperationLock.WaitAsync(cancellationToken);
             lockTaken = true;
 
+
             if (session.IsStopping ||
                 !_sessions.ContainsKey(sessionId))
             {
@@ -6486,11 +9027,13 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     "The authenticated audit session is no longer running.");
             }
 
+
             if (!session.Browser.IsConnected)
             {
                 throw new KeyNotFoundException(
                     "The Playwright-controlled Edge browser has been closed.");
             }
+
 
             /*
              * Reuse the active page whenever possible. Every page created from the
@@ -6499,15 +9042,18 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
              */
             IPage? page = session.ActivePage;
 
+
             if (page is null || page.IsClosed)
             {
                 page =
                     session.BrowserContext.Pages
                         .LastOrDefault(openPage => !openPage.IsClosed);
 
+
                 page ??=
                     await session.BrowserContext.NewPageAsync();
             }
+
 
             await page.GotoAsync(
                 url,
@@ -6517,7 +9063,9 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     Timeout = 30000
                 });
 
+
             session.ActivePage = page;
+
 
             /*
              * Some protected applications continue rendering after navigation.
@@ -6556,6 +9104,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         }
     }
 
+
     private async Task CompleteAuditRunAsync(
     int auditRunId,
     int? lastSavedStepId,
@@ -6564,13 +9113,16 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         await using AsyncServiceScope scope =
             _scopeFactory.CreateAsyncScope();
 
+
         ApplicationDbContext dbContext =
             scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
 
         AuthenticatedAuditRun? auditRun =
             await dbContext.AuthenticatedAuditRuns.FindAsync(
                 new object[] { auditRunId },
                 CancellationToken.None);
+
 
         if (auditRun is null)
         {
@@ -6578,12 +9130,14 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 $"Authenticated audit run {auditRunId} could not be found.");
         }
 
+
         if (markLastStepAsFinal && lastSavedStepId.HasValue)
         {
             AuthenticatedAuditStep? lastStep =
                 await dbContext.AuthenticatedAuditSteps.FindAsync(
                     new object[] { lastSavedStepId.Value },
                     CancellationToken.None);
+
 
             /*
              * Verify that the step actually belongs to this run before changing it.
@@ -6596,12 +9150,15 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             }
         }
 
+
         auditRun.Status = "Completed";
         auditRun.CompletedAt = DateTime.UtcNow;
         auditRun.ErrorMessage = null;
 
+
         await dbContext.SaveChangesAsync(CancellationToken.None);
     }
+
 
     private async Task HandleUnexpectedBrowserDisconnectAsync(
     Guid sessionId)
@@ -6617,8 +9174,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             return;
         }
 
+
         bool lockTaken = false;
         bool ownsCleanup = false;
+
 
         try
         {
@@ -6629,15 +9188,18 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             await session.OperationLock.WaitAsync(CancellationToken.None);
             lockTaken = true;
 
+
             if (session.IsStopping)
             {
                 return;
             }
 
+
             bool removed =
                 _sessions.TryRemove(
                     sessionId,
                     out AuthenticatedAuditBrowserSession? removedSession);
+
 
             if (!removed ||
                 !ReferenceEquals(removedSession, session))
@@ -6645,14 +9207,17 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 return;
             }
 
+
             session.IsStopping = true;
             ownsCleanup = true;
+
 
             await MarkRunAsInterruptedAsync(
                 session.AuditRunId,
                 "The Playwright-controlled Edge browser was closed or " +
                 "disconnected before this authenticated audit session was " +
                 "completed.");
+
 
             _logger.LogWarning(
                 "Authenticated audit session {SessionId} for run {AuditRunId} " +
@@ -6679,6 +9244,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 session.OperationLock.Release();
             }
 
+
             if (ownsCleanup)
             {
                 try
@@ -6701,6 +9267,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         }
     }
 
+
     private void RegisterPageCloseTracking(
     Guid sessionId,
     IPage page)
@@ -6716,6 +9283,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         };
     }
 
+
     private async Task HandlePossibleLastPageClosedAsync(
         Guid sessionId)
     {
@@ -6726,6 +9294,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
          */
         await Task.Delay(250);
 
+
         if (!_sessions.TryGetValue(
                 sessionId,
                 out AuthenticatedAuditBrowserSession? session))
@@ -6733,19 +9302,23 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             return;
         }
 
+
         if (session.IsStopping)
         {
             return;
         }
 
+
         bool hasOpenAuditablePage =
             session.BrowserContext.Pages.Any(IsAuditablePage);
+
 
         if (hasOpenAuditablePage)
         {
             // Another login or protected application tab is still available.
             return;
         }
+
 
         /*
          * No usable Edge pages remain. Reuse the existing interruption cleanup,
@@ -6754,6 +9327,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         await HandleUnexpectedBrowserDisconnectAsync(sessionId);
     }
 
+
     private async Task MarkRunAsInterruptedAsync(
     int auditRunId,
     string errorMessage)
@@ -6761,18 +9335,22 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         await using AsyncServiceScope scope =
             _scopeFactory.CreateAsyncScope();
 
+
         ApplicationDbContext dbContext =
             scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
 
         AuthenticatedAuditRun? auditRun =
             await dbContext.AuthenticatedAuditRuns.FindAsync(
                 new object[] { auditRunId },
                 CancellationToken.None);
 
+
         if (auditRun is null)
         {
             return;
         }
+
 
         /*
          * Do not overwrite a run that another request successfully completed
@@ -6783,9 +9361,11 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             return;
         }
 
+
         auditRun.Status = "Interrupted";
         auditRun.CompletedAt = DateTime.UtcNow;
         auditRun.ErrorMessage = LimitLength(errorMessage, 4000);
+
 
         /*
          * Once shutdown owns the session, record its final state even when the
@@ -6793,6 +9373,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
          */
         await dbContext.SaveChangesAsync(CancellationToken.None);
     }
+
 
     private async Task MarkRunAsUnsuccessfulAsync(
         int auditRunId,
@@ -6804,22 +9385,27 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             await using AsyncServiceScope scope =
                 _scopeFactory.CreateAsyncScope();
 
+
             ApplicationDbContext dbContext =
                 scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
 
             AuthenticatedAuditRun? auditRun =
                 await dbContext.AuthenticatedAuditRuns.FindAsync(
                     new object[] { auditRunId },
                     CancellationToken.None);
 
+
             if (auditRun is null)
             {
                 return;
             }
 
+
             auditRun.Status = status;
             auditRun.CompletedAt = DateTime.UtcNow;
             auditRun.ErrorMessage = LimitLength(errorMessage, 4000);
+
 
             // Do not use the original cancellation token here. Even if the
             // request was cancelled, we still want to record what happened.
@@ -6836,6 +9422,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         }
     }
 
+
     private static void ValidateStartRequest(
         string applicationName,
         string startingUrl)
@@ -6847,12 +9434,14 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 nameof(applicationName));
         }
 
+
         if (applicationName.Length > 200)
         {
             throw new ArgumentException(
                 "The application name cannot exceed 200 characters.",
                 nameof(applicationName));
         }
+
 
         if (startingUrl.Length > 2048)
         {
@@ -6861,10 +9450,12 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 nameof(startingUrl));
         }
 
+
         bool isValidUrl =
             Uri.TryCreate(startingUrl, UriKind.Absolute, out Uri? parsedUrl)
             && (parsedUrl.Scheme == Uri.UriSchemeHttps
                 || parsedUrl.Scheme == Uri.UriSchemeHttp);
+
 
         if (!isValidUrl)
         {
@@ -6873,6 +9464,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 nameof(startingUrl));
         }
     }
+
 
     private static async Task ClosePartiallyCreatedBrowserAsync(
         IBrowserContext? browserContext,
@@ -6891,6 +9483,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             }
         }
 
+
         if (browser is not null)
         {
             try
@@ -6903,8 +9496,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             }
         }
 
+
         playwright?.Dispose();
     }
+
 
     private static string? LimitLength(
         string? value,
@@ -6915,8 +9510,10 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
             return value;
         }
 
+
         return value[..maximumLength];
     }
+
 
     /// <summary>
     /// Compares the requested and final navigation destinations while ignoring
@@ -6941,11 +9538,14 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 StringComparison.OrdinalIgnoreCase);
         }
 
+
         string requestedPath =
             requestedUri.AbsolutePath.TrimEnd('/');
 
+
         string finalPath =
             finalUri.AbsolutePath.TrimEnd('/');
+
 
         return
             !string.Equals(
@@ -6963,6 +9563,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                 StringComparison.OrdinalIgnoreCase);
     }
 
+
     /// <summary>
     /// Temporary rendered-page information captured from JavaScript.
     ///
@@ -6973,15 +9574,21 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
     {
         public string? PageTitle { get; set; }
 
+
         public string? Heading { get; set; }
+
 
         public string? StepName { get; set; }
 
+
         public int VisibleFormCount { get; set; }
+
 
         public int VisibleFieldCount { get; set; }
 
+
         public int VisibleButtonCount { get; set; }
+
 
         public string? FingerprintSource { get; set; }
     }
