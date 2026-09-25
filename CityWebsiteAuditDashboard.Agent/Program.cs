@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.SignalR.Client;
+using System.Diagnostics;
 
 var losAngelesTimeZone =
     TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
@@ -76,6 +77,92 @@ connection.On<string>(
     "DashboardHello",
     message => Console.WriteLine(message));
 
+connection.On<Guid, string>("OpenUrl", async (commandId, url) =>
+{
+    bool opened = false;
+
+    try
+    {
+        if (shutdown.IsCancellationRequested)
+        {
+            return;
+        }
+
+        if (url.Length > 2048 ||
+            !Uri.TryCreate(url, UriKind.Absolute, out Uri? target) ||
+            (target.Scheme != Uri.UriSchemeHttp &&
+             target.Scheme != Uri.UriSchemeHttps) ||
+            !string.IsNullOrEmpty(target.UserInfo))
+        {
+            throw new ArgumentException("The dashboard sent an invalid URL.");
+        }
+
+        string? edgePath = new[]
+        {
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                "Microsoft", "Edge", "Application", "msedge.exe"),
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                "Microsoft", "Edge", "Application", "msedge.exe"),
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Microsoft", "Edge", "Application", "msedge.exe")
+        }.FirstOrDefault(File.Exists);
+
+        if (edgePath is null)
+        {
+            throw new FileNotFoundException("Microsoft Edge was not found on this workstation.");
+        }
+
+        var startInfo = new ProcessStartInfo(edgePath)
+        {
+            UseShellExecute = false
+        };
+        startInfo.ArgumentList.Add("--new-window");
+        startInfo.ArgumentList.Add(target.AbsoluteUri);
+
+        using Process? edge = Process.Start(startInfo);
+        if (edge is null)
+        {
+            throw new InvalidOperationException("Microsoft Edge did not start.");
+        }
+
+        opened = true;
+        Console.WriteLine($"Opened Edge for {target.Host}.");
+    }
+    catch (Exception exception)
+    {
+        Console.Error.WriteLine($"Could not open Edge: {exception.Message}");
+    }
+
+    try
+    {
+        using var acknowledgementTimeout =
+            CancellationTokenSource.CreateLinkedTokenSource(shutdown.Token);
+        acknowledgementTimeout.CancelAfter(TimeSpan.FromSeconds(10));
+
+        bool accepted = await connection.InvokeAsync<bool>(
+            "CompleteOpenUrl",
+            commandId,
+            opened,
+            acknowledgementTimeout.Token);
+
+        if (!accepted)
+        {
+            Console.Error.WriteLine("The dashboard no longer expects this browser request.");
+        }
+    }
+    catch (OperationCanceledException) when (shutdown.IsCancellationRequested)
+    {
+        // The Agent is stopping.
+    }
+    catch (Exception exception)
+    {
+        Console.Error.WriteLine($"Could not acknowledge browser request: {exception.Message}");
+    }
+});
+
 connection.Closed += _ =>
 {
     Console.WriteLine(
@@ -92,7 +179,7 @@ Console.WriteLine(
 Console.WriteLine($"Connecting to {hubUri}");
 
 Console.WriteLine(
-    "Step 1 only: no Playwright or browser commands are enabled.");
+    "Open URL is enabled. Playwright remains in the dashboard.");
 
 // One loop owns initial connection, registration and reconnection.
 // Individual connection attempts and heartbeats have bounded timeouts.

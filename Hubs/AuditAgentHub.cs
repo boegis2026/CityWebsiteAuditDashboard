@@ -46,7 +46,7 @@ public sealed class AuditAgentHub : Hub
         await Clients.Caller.SendAsync(
             "DashboardHello",
             "Dashboard → Agent message received. " +
-            "Step 1 connection is working.",
+            "The connection is working.",
             Context.ConnectionAborted);
 
         return "Agent → Dashboard registration accepted.";
@@ -63,6 +63,15 @@ public sealed class AuditAgentHub : Hub
         return DateTimeOffset.UtcNow;
     }
 
+    // Only the registered Agent connection can acknowledge its own command.
+    public bool CompleteOpenUrl(Guid commandId, bool opened)
+    {
+        return _registry.CompleteOpenUrl(
+            Context.ConnectionId,
+            commandId,
+            opened);
+    }
+
     public override async Task OnDisconnectedAsync(
         Exception? exception)
     {
@@ -71,3 +80,4 @@ public sealed class AuditAgentHub : Hub
         await base.OnDisconnectedAsync(exception);
     }
 }
+

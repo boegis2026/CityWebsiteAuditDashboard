@@ -5,6 +5,11 @@ public sealed record AuditAgentConnectionStatus(
     DateTimeOffset ConnectedAt,
     DateTimeOffset LastSeenAt);
 
+public sealed record AuditAgentOpenUrlCommand(
+    string ConnectionId,
+    Guid CommandId,
+    Task<bool> Completion);
+
 // One IIS worker process and one connected Agent for this proof of concept.
 public sealed class AuditAgentConnectionRegistry
 {
@@ -12,6 +17,8 @@ public sealed class AuditAgentConnectionRegistry
 
     private string? _connectionId;
     private AuditAgentConnectionStatus? _status;
+    private Guid? _pendingCommandId;
+    private TaskCompletionSource<bool>? _pendingCompletion;
 
     public bool TryRegister(
         string connectionId,
@@ -66,6 +73,9 @@ public sealed class AuditAgentConnectionRegistry
             {
                 _connectionId = null;
                 _status = null;
+                _pendingCommandId = null;
+                _pendingCompletion?.TrySetResult(false);
+                _pendingCompletion = null;
             }
         }
     }
@@ -75,6 +85,71 @@ public sealed class AuditAgentConnectionRegistry
         lock (_gate)
         {
             return _status;
+        }
+    }
+
+    // Reserve one command at a time. A stale or disconnected Agent cannot
+    // receive browser launch requests.
+    public AuditAgentOpenUrlCommand? BeginOpenUrl()
+    {
+        lock (_gate)
+        {
+            if (_connectionId is null ||
+                _status is null ||
+                DateTimeOffset.UtcNow - _status.LastSeenAt >=
+                    TimeSpan.FromSeconds(45) ||
+                _pendingCommandId is not null)
+            {
+                return null;
+            }
+
+            Guid commandId = Guid.NewGuid();
+            var completion = new TaskCompletionSource<bool>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+
+            _pendingCommandId = commandId;
+            _pendingCompletion = completion;
+
+            return new AuditAgentOpenUrlCommand(
+                _connectionId,
+                commandId,
+                completion.Task);
+        }
+    }
+
+    public bool CompleteOpenUrl(
+        string connectionId,
+        Guid commandId,
+        bool opened)
+    {
+        lock (_gate)
+        {
+            if (_connectionId != connectionId ||
+                _pendingCommandId != commandId ||
+                _pendingCompletion is null)
+            {
+                return false;
+            }
+
+            _pendingCompletion.TrySetResult(opened);
+            _pendingCompletion = null;
+            _pendingCommandId = null;
+            return true;
+        }
+    }
+
+    public void CancelOpenUrl(Guid commandId)
+    {
+        lock (_gate)
+        {
+            if (_pendingCommandId != commandId)
+            {
+                return;
+            }
+
+            _pendingCompletion?.TrySetResult(false);
+            _pendingCompletion = null;
+            _pendingCommandId = null;
         }
     }
 }
