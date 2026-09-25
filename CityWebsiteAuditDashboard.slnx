@@ -1,5 +1,5 @@
 <Solution>
-  <Project Path="../CityWebsiteAuditDashboard.Agent/CityWebsiteAuditDashboard.Agent.csproj" Id="8aebbf60-84a3-43a4-b3f4-f361b770e6e9" />
+  <Project Path="../../CityWebsiteAuditDashboard.Agent/CityWebsiteAuditDashboard.Agent.csproj" />
   <Project Path="CityWebsiteAuditDashboard.csproj" />
   <Project Path="CityWebsiteAuditDashboard.PlaywrightSpike/CityWebsiteAuditDashboard.PlaywrightSpike.csproj" />
 </Solution>
