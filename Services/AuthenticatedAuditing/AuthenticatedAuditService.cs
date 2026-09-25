@@ -3747,7 +3747,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     .toLowerCase()
                     .includes(
                         "/rpermits/public/home/applyfornewpermit") &&
-                /application requirements/i.test(
+                /application requirements|steps to complete in order/i.test(
                     normalizeText(
                         document.body?.innerText));
 
@@ -3791,244 +3791,62 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                     .filter(isVisibleAndEnabled);
 
 
-            /*
-             * Redesigned R-Permit hub handling.
-             *
-             * Do NOT use the Required/Optional badges to decide which section
-             * is current. A completed row still keeps its Required badge, so
-             * treating Required as progress can reopen an already completed
-             * section.
-             *
-             * Instead, use the right-side progress/status badges to establish
-             * exact visual row bands. Only a row whose progress status is
-             * "Not Complete" is actionable. "Completed on ..." is finished and
-             * "Not Yet Available" is locked. This also means optional sections
-             * are processed automatically as soon as their right-side status
-             * becomes "Not Complete".
-             */
             const getRPermitRequirementActions = () => {
                 if (!isRPermitRequirementsHub) {
                     return [];
                 }
 
-                const rowStatusPattern =
+                // Bind a status to its section in the DOM, never to a nearby screen position.
+                // Required/Optional remain type labels even after the section is completed.
+                const sectionPattern =
+                    /^(applicant information|owner information|lessee information|property information|business information|encroachment|permit tags|required attachments|other attachments)$/i;
+                const statusPattern =
                     /^(not complete|not completed|not yet available|completed(?:\s+on\b.*)?|complete|done)$/i;
+                const label = element => normalizeText(
+                    element.innerText || element.textContent ||
+                    element.getAttribute("aria-label") || "");
+                const isVisible = element => {
+                    const style = window.getComputedStyle(element);
+                    const rectangle = element.getBoundingClientRect();
+                    return style.display !== "none" &&
+                        style.visibility !== "hidden" &&
+                        rectangle.width > 0 && rectangle.height > 0;
+                };
+                // Include disabled section controls when finding row boundaries. A locked
+                // section must still prevent an ancestor containing multiple rows matching.
+                const sectionControls = Array.from(document.querySelectorAll(
+                    "a, button, [role='button'], [role='link'], [onclick]"))
+                    .filter(element => isVisible(element) && sectionPattern.test(label(element)));
+                const sections = sectionControls.filter(element =>
+                    !sectionControls.some(child => child !== element && element.contains(child)));
 
-                const actionableStatusPattern =
-                    /^(not complete|not completed)$/i;
+                // Status badges are display text; disabled badges are still valid statuses.
+                // Keep leaf representations so wrappers cannot introduce phantom rows.
+                const statusElements = Array.from(document.querySelectorAll("body *"))
+                    .filter(element => isVisible(element) && statusPattern.test(label(element)));
+                const statuses = statusElements.filter(element =>
+                    !statusElements.some(child => child !== element && element.contains(child)));
 
-                const rawStatuses =
-                    Array.from(
-                        document.querySelectorAll("body *"))
-                        .filter(isVisibleAndEnabled)
-                        .map(element => {
-                            const text =
-                                normalizeText(
-                                    element.innerText);
-
-                            const rectangle =
-                                element.getBoundingClientRect();
-
-                            return {
-                                Element: element,
-                                Text: text,
-                                Rectangle: rectangle,
-                                CenterY:
-                                    (rectangle.top +
-                                     rectangle.bottom) / 2,
-                                Area:
-                                    rectangle.width *
-                                    rectangle.height
-                            };
-                        })
-                        .filter(item =>
-                            item.Text.length > 0 &&
-                            item.Text.length <= 100 &&
-                            rowStatusPattern.test(
-                                item.Text))
-                        .sort((left, right) =>
-                            left.Area - right.Area);
-
-                /*
-                 * The same visible badge text can appear through nested parent
-                 * elements. Keep only the smallest representation at each
-                 * vertical position.
-                 */
-                const uniqueStatuses = [];
-
-                for (const item of rawStatuses) {
-                    const duplicate =
-                        uniqueStatuses.some(existing =>
-                            Math.abs(
-                                existing.CenterY -
-                                item.CenterY) < 4);
-
-                    if (!duplicate) {
-                        uniqueStatuses.push(item);
+                return sections.filter(section => {
+                    if (!isVisibleAndEnabled(section)) {
+                        return false;
                     }
-                }
-
-                const orderedStatuses =
-                    uniqueStatuses.sort((left, right) =>
-                        left.CenterY -
-                        right.CenterY);
-
-                const results = [];
-
-                for (let statusIndex = 0;
-                     statusIndex < orderedStatuses.length;
-                     statusIndex++) {
-                    const statusItem =
-                        orderedStatuses[statusIndex];
-
-                    if (!actionableStatusPattern.test(
-                        statusItem.Text)) {
-                        continue;
+                    for (let row = section.parentElement;
+                         row && row !== document.body;
+                         row = row.parentElement) {
+                        // Stop at a shared container: it cannot prove which status belongs
+                        // to this section. Never borrow the next section's Not Complete.
+                        if (sections.filter(other => row.contains(other)).length !== 1) {
+                            return false;
+                        }
+                        const rowStatuses = statuses.filter(status => row.contains(status));
+                        if (rowStatuses.length > 0) {
+                            return rowStatuses.length === 1 &&
+                                /^(not complete|not completed)$/i.test(label(rowStatuses[0]));
+                        }
                     }
-
-                    const previousStatus =
-                        statusIndex > 0
-                            ? orderedStatuses[
-                                statusIndex - 1]
-                            : null;
-
-                    const nextStatus =
-                        statusIndex <
-                            orderedStatuses.length - 1
-                            ? orderedStatuses[
-                                statusIndex + 1]
-                            : null;
-
-                    /*
-                     * Bound this row by the midpoints to the status badge above
-                     * and below it. This prevents Owner Information from ever
-                     * being confused with the completed Applicant Information
-                     * row immediately above it.
-                     */
-                    const rowTop =
-                        previousStatus
-                            ? (previousStatus.CenterY +
-                               statusItem.CenterY) / 2
-                            : statusItem.CenterY - 55;
-
-                    const rowBottom =
-                        nextStatus
-                            ? (statusItem.CenterY +
-                               nextStatus.CenterY) / 2
-                            : statusItem.CenterY + 55;
-
-                    const statusRectangle =
-                        statusItem.Rectangle;
-
-                    const alignedActions =
-                        possibleActions
-                            .map(element => {
-                                const rectangle =
-                                    element.getBoundingClientRect();
-
-                                const centerY =
-                                    (rectangle.top +
-                                     rectangle.bottom) / 2;
-
-                                const actionText =
-                                    normalizeText(
-                                        getActionText(element));
-
-                                const primaryText =
-                                    normalizeText(
-                                        element.innerText ||
-                                        element.textContent ||
-                                        element.getAttribute(
-                                            "aria-label") ||
-                                        element.getAttribute(
-                                            "title") ||
-                                        "");
-
-                                const insideThisRow =
-                                    centerY > rowTop &&
-                                    centerY < rowBottom;
-
-                                const appearsBeforeStatus =
-                                    rectangle.left <
-                                    statusRectangle.left - 8;
-
-                                const isStatusOrBadge =
-                                    /^(not complete|not completed|not yet available|required|optional|completed(?:\s+on\b.*)?|complete|done)$/i.test(
-                                        primaryText);
-
-                                const isUnsafe =
-                                    /\b(submit|finalize|certify|pay|payment|purchase|checkout|place order|logout|sign out)\b/i.test(
-                                        actionText);
-
-                                if (
-                                    !insideThisRow ||
-                                    !appearsBeforeStatus ||
-                                    !actionText ||
-                                    isStatusOrBadge ||
-                                    isUnsafe) {
-                                    return null;
-                                }
-
-                                const tagName =
-                                    element.tagName
-                                        .toLowerCase();
-
-                                const role =
-                                    (element.getAttribute(
-                                        "role") || "")
-                                        .toLowerCase();
-
-                                let score = 0;
-
-                                if (tagName === "a") {
-                                    score += 500;
-                                }
-
-                                if (tagName === "button") {
-                                    score += 480;
-                                }
-
-                                if (role === "button" ||
-                                    role === "link") {
-                                    score += 450;
-                                }
-
-                                if (element.hasAttribute(
-                                    "onclick")) {
-                                    score += 420;
-                                }
-
-                                if (
-                                    !/\b(required|optional|not complete|not completed|not yet available|completed)\b/i.test(
-                                        primaryText)) {
-                                    score += 300;
-                                }
-
-                                score -=
-                                    Math.min(
-                                        200,
-                                        Math.abs(
-                                            centerY -
-                                            statusItem.CenterY) * 8);
-
-                                return {
-                                    Element: element,
-                                    Score: score
-                                };
-                            })
-                            .filter(candidate =>
-                                candidate !== null)
-                            .sort((left, right) =>
-                                right.Score -
-                                left.Score);
-
-                    if (alignedActions.length > 0) {
-                        results.push(
-                            alignedActions[0].Element);
-                    }
-                }
-
-                return results;
+                    return false;
+                });
             };
 
 
@@ -5054,7 +4872,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         .toLowerCase()
                         .includes(
                             "/rpermits/public/home/applyfornewpermit") &&
-                    /application requirements/i.test(
+                    /application requirements|steps to complete in order/i.test(
                         normalizeText(
                             document.body?.innerText));
 
@@ -5214,226 +5032,70 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
                         .filter(isVisibleAndEnabled);
 
 
-                /*
-                 * Redesigned R-Permit requirements hub.
-                 *
-                 * A completed row STILL shows its Required/Optional badge. Never
-                 * use those badges as progress. Build exact visual row bands from
-                 * the right-side status column and click only the section whose
-                 * status is "Not Complete". Optional rows are treated exactly the
-                 * same way once they unlock and become "Not Complete".
-                 */
-                if (isRPermitRequirementsHub) {
-                    const rowStatusPattern =
+                const getRPermitRequirementActions = () => {
+                    if (!isRPermitRequirementsHub) {
+                        return [];
+                    }
+
+                    // Bind a status to its section in the DOM, never to a nearby screen position.
+                    // Required/Optional remain type labels even after the section is completed.
+                    const sectionPattern =
+                        /^(applicant information|owner information|lessee information|property information|business information|encroachment|permit tags|required attachments|other attachments)$/i;
+                    const statusPattern =
                         /^(not complete|not completed|not yet available|completed(?:\s+on\b.*)?|complete|done)$/i;
+                    const label = element => normalizeText(
+                        element.innerText || element.textContent ||
+                        element.getAttribute("aria-label") || "");
+                    const isVisible = element => {
+                        const style = window.getComputedStyle(element);
+                        const rectangle = element.getBoundingClientRect();
+                        return style.display !== "none" &&
+                            style.visibility !== "hidden" &&
+                            rectangle.width > 0 && rectangle.height > 0;
+                    };
+                    // Include disabled section controls when finding row boundaries. A locked
+                    // section must still prevent an ancestor containing multiple rows matching.
+                    const sectionControls = Array.from(document.querySelectorAll(
+                        "a, button, [role='button'], [role='link'], [onclick]"))
+                        .filter(element => isVisible(element) && sectionPattern.test(label(element)));
+                    const sections = sectionControls.filter(element =>
+                        !sectionControls.some(child => child !== element && element.contains(child)));
 
-                    const actionableStatusPattern =
-                        /^(not complete|not completed)$/i;
+                    // Status badges are display text; disabled badges are still valid statuses.
+                    // Keep leaf representations so wrappers cannot introduce phantom rows.
+                    const statusElements = Array.from(document.querySelectorAll("body *"))
+                        .filter(element => isVisible(element) && statusPattern.test(label(element)));
+                    const statuses = statusElements.filter(element =>
+                        !statusElements.some(child => child !== element && element.contains(child)));
 
-                    const rawStatuses =
-                        Array.from(
-                            document.querySelectorAll(
-                                "body *"))
-                            .filter(isVisibleAndEnabled)
-                            .map(element => {
-                                const text =
-                                    normalizeText(
-                                        element.innerText);
-
-                                const rectangle =
-                                    element.getBoundingClientRect();
-
-                                return {
-                                    Element: element,
-                                    Text: text,
-                                    Rectangle: rectangle,
-                                    CenterY:
-                                        (rectangle.top +
-                                         rectangle.bottom) / 2,
-                                    Area:
-                                        rectangle.width *
-                                        rectangle.height
-                                };
-                            })
-                            .filter(item =>
-                                item.Text.length > 0 &&
-                                item.Text.length <= 100 &&
-                                rowStatusPattern.test(
-                                    item.Text))
-                            .sort((left, right) =>
-                                left.Area -
-                                right.Area);
-
-                    const uniqueStatuses = [];
-
-                    for (const item of rawStatuses) {
-                        const duplicate =
-                            uniqueStatuses.some(existing =>
-                                Math.abs(
-                                    existing.CenterY -
-                                    item.CenterY) < 4);
-
-                        if (!duplicate) {
-                            uniqueStatuses.push(item);
+                    return sections.filter(section => {
+                        if (!isVisibleAndEnabled(section)) {
+                            return false;
                         }
-                    }
-
-                    const orderedStatuses =
-                        uniqueStatuses.sort((left, right) =>
-                            left.CenterY -
-                            right.CenterY);
-
-                    const matchedActions = [];
-
-                    for (let statusIndex = 0;
-                         statusIndex < orderedStatuses.length;
-                         statusIndex++) {
-                        const statusItem =
-                            orderedStatuses[statusIndex];
-
-                        if (!actionableStatusPattern.test(
-                            statusItem.Text)) {
-                            continue;
+                        for (let row = section.parentElement;
+                             row && row !== document.body;
+                             row = row.parentElement) {
+                            // Stop at a shared container: it cannot prove which status belongs
+                            // to this section. Never borrow the next section's Not Complete.
+                            if (sections.filter(other => row.contains(other)).length !== 1) {
+                                return false;
+                            }
+                            const rowStatuses = statuses.filter(status => row.contains(status));
+                            if (rowStatuses.length > 0) {
+                                return rowStatuses.length === 1 &&
+                                    /^(not complete|not completed)$/i.test(label(rowStatuses[0]));
+                            }
                         }
+                        return false;
+                    });
+                };
 
-                        const previousStatus =
-                            statusIndex > 0
-                                ? orderedStatuses[
-                                    statusIndex - 1]
-                                : null;
-
-                        const nextStatus =
-                            statusIndex <
-                                orderedStatuses.length - 1
-                                ? orderedStatuses[
-                                    statusIndex + 1]
-                                : null;
-
-                        const rowTop =
-                            previousStatus
-                                ? (previousStatus.CenterY +
-                                   statusItem.CenterY) / 2
-                                : statusItem.CenterY - 55;
-
-                        const rowBottom =
-                            nextStatus
-                                ? (statusItem.CenterY +
-                                   nextStatus.CenterY) / 2
-                                : statusItem.CenterY + 55;
-
-                        const statusRectangle =
-                            statusItem.Rectangle;
-
-                        const alignedActions =
-                            actions
-                                .map(element => {
-                                    const rectangle =
-                                        element.getBoundingClientRect();
-
-                                    const centerY =
-                                        (rectangle.top +
-                                         rectangle.bottom) / 2;
-
-                                    const actionText =
-                                        normalizeText(
-                                            getActionText(element));
-
-                                    const primaryText =
-                                        normalizeText(
-                                            element.innerText ||
-                                            element.textContent ||
-                                            element.getAttribute(
-                                                "aria-label") ||
-                                            element.getAttribute(
-                                                "title") ||
-                                            "");
-
-                                    const insideThisRow =
-                                        centerY > rowTop &&
-                                        centerY < rowBottom;
-
-                                    const appearsBeforeStatus =
-                                        rectangle.left <
-                                        statusRectangle.left - 8;
-
-                                    const isStatusOrBadge =
-                                        /^(not complete|not completed|not yet available|required|optional|completed(?:\s+on\b.*)?|complete|done)$/i.test(
-                                            primaryText);
-
-                                    const isUnsafe =
-                                        unsafePattern.test(
-                                            actionText);
-
-                                    if (
-                                        !insideThisRow ||
-                                        !appearsBeforeStatus ||
-                                        !actionText ||
-                                        isStatusOrBadge ||
-                                        isUnsafe) {
-                                        return null;
-                                    }
-
-                                    const tagName =
-                                        element.tagName
-                                            .toLowerCase();
-
-                                    const role =
-                                        (element.getAttribute(
-                                            "role") || "")
-                                            .toLowerCase();
-
-                                    let score = 0;
-
-                                    if (tagName === "a") {
-                                        score += 500;
-                                    }
-
-                                    if (tagName === "button") {
-                                        score += 480;
-                                    }
-
-                                    if (role === "button" ||
-                                        role === "link") {
-                                        score += 450;
-                                    }
-
-                                    if (element.hasAttribute(
-                                        "onclick")) {
-                                        score += 420;
-                                    }
-
-                                    if (
-                                        !/\b(required|optional|not complete|not completed|not yet available|completed)\b/i.test(
-                                            primaryText)) {
-                                        score += 300;
-                                    }
-
-                                    score -=
-                                        Math.min(
-                                            200,
-                                            Math.abs(
-                                                centerY -
-                                                statusItem.CenterY) * 8);
-
-                                    return {
-                                        Element: element,
-                                        ActionText:
-                                            primaryText ||
-                                            actionText,
-                                        Score: score
-                                    };
-                                })
-                                .filter(candidate =>
-                                    candidate !== null)
-                                .sort((left, right) =>
-                                    right.Score -
-                                    left.Score);
-
-                        if (alignedActions.length > 0) {
-                            matchedActions.push(
-                                alignedActions[0]);
-                        }
-                    }
+                if (isRPermitRequirementsHub) {
+                    const matchedActions = getRPermitRequirementActions()
+                        .map(element => ({
+                            Element: element,
+                            ActionText: normalizeText(element.innerText || element.textContent)
+                        }));
 
                     if (matchedActions.length > 0) {
                         const selected =
@@ -9593,3 +9255,4 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
         public string? FingerprintSource { get; set; }
     }
 }
+
