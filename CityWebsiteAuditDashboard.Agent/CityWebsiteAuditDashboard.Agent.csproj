@@ -1,19 +1,18 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
 	<PropertyGroup>
 		<OutputType>Exe</OutputType>
 		<TargetFramework>net10.0-windows</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 	</PropertyGroup>
-
 	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
 		<PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.9" />
 		<PackageReference Include="Microsoft.Playwright" Version="1.61.0" />
-	</ItemGroup>
-
-	<ItemGroup>
+		<PackageReference Include="Deque.AxeCore.Playwright" Version="4.12.0" />
+		<PackageReference Include="PDFsharp-MigraDoc-GDI" Version="6.2.4" />
+		<PackageReference Include="System.Drawing.Common" Version="10.0.10" />
 		<ProjectReference Include="..\CityWebsiteAuditDashboard.Contracts\CityWebsiteAuditDashboard.Contracts.csproj" />
+		<Compile Include="..\Services\AuthenticatedAuditing\IAuthenticatedAuditService.cs" Link="IAuthenticatedAuditService.cs" />
 	</ItemGroup>
-
 </Project>

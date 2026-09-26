@@ -1,3 +1,5 @@
+using System.Net;
+using CityWebsiteAuditDashboard.Contracts;
 using CityWebsiteAuditDashboard.Services;
 using CityWebsiteAuditDashboard.Data;
 using Microsoft.EntityFrameworkCore;
@@ -9,12 +11,26 @@ using Microsoft.AspNetCore.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Machine settings live outside the publish folder so publishing cannot erase the pairing key.
+string machineSettings = Path.Combine(
+    Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+    "CityWebsiteAuditDashboard", "staging.settings.json");
+builder.Configuration.AddJsonFile(machineSettings, optional: true, reloadOnChange: false);
+builder.Configuration.AddEnvironmentVariables();
+
 // Add services to the container.
 builder.Services.AddControllersWithViews();
 
-// Step 1: an independent Agent connection test.
-// Existing browser ownership remains unchanged.
-builder.Services.AddSignalR();
+builder.Services.AddSignalR(options =>
+{
+    options.MaximumReceiveMessageSize = AuditAgentProtocol.MaximumMessageBytes;
+    // Saving a step must not block the Agent's heartbeat or stop acknowledgement.
+    options.MaximumParallelInvocationsPerClient = 4;
+    options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+    options.KeepAliveInterval = TimeSpan.FromSeconds(10);
+});
+builder.Services.AddSingleton<AuditAgentDispatcher>();
+builder.Services.AddSingleton<AuditAgentStore>();
 
 builder.Services.AddSingleton<AuditAgentConnectionRegistry>();
 
@@ -56,8 +72,7 @@ builder.Services.AddScoped<AccessibilityRemediationRetestService>();
 builder.Services.AddScoped<
     AccessibilityRemediationWorkflowComparisonService>();
 
-// A singleton is required because the same authenticated Playwright browser
-// must remain alive across separate Start, Scan, and Stop HTTP requests.
+// The singleton routes existing dashboard controls to the connected workstation Agent.
 builder.Services.AddSingleton<
     IAuthenticatedAuditService,
     AuthenticatedAuditService>();
@@ -74,6 +89,7 @@ builder.Services.AddScoped<
  */
 builder.Services.AddHostedService<
     AuthenticatedAuditStartupRecoveryService>();
+builder.Services.AddHostedService<AuditAgentMonitor>();
 
 /*
  * Gracefully closes active Playwright browsers when the dashboard stops.
@@ -98,9 +114,35 @@ app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Local development keeps working. Remote dashboard access requires an authenticated
+// operator explicitly listed in the machine settings; the hub separately requires its pairing key.
+app.Use(async (context, next) =>
+{
+    bool hubRequest = context.Request.Path.StartsWithSegments("/hubs/audit-agent");
+    bool loopback = context.Connection.RemoteIpAddress is { } ip && IPAddress.IsLoopback(ip);
+    if (!hubRequest && !loopback)
+    {
+        string[] operators = app.Configuration.GetSection("Staging:AllowedOperators").Get<string[]>() ?? [];
+        bool allowed = context.Request.IsHttps && context.User.Identity?.IsAuthenticated == true &&
+            context.User.Identity.AuthenticationType != AuditAgentAuthenticationHandler.SchemeName &&
+            operators.Contains(context.User.Identity.Name ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+        if (!allowed)
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsync("Staging access requires HTTPS and an authorized Windows account.");
+            return;
+        }
+    }
+    await next(context);
+});
+
 app.MapStaticAssets();
 
-app.MapHub<AuditAgentHub>("/hubs/audit-agent");
+app.MapHub<AuditAgentHub>("/hubs/audit-agent", options =>
+{
+    options.ApplicationMaxBufferSize = AuditAgentProtocol.MaximumMessageBytes * 2L;
+    options.TransportMaxBufferSize = AuditAgentProtocol.MaximumMessageBytes * 2L;
+});
 
 app.MapControllerRoute(
     name: "default",

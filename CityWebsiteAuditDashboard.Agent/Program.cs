@@ -1,257 +1,97 @@
-﻿using Microsoft.AspNetCore.SignalR.Client;
-using CityWebsiteAuditDashboard.Agent;
+﻿using CityWebsiteAuditDashboard.Agent;
+using CityWebsiteAuditDashboard.Contracts;
+using CityWebsiteAuditDashboard.Services.AuthenticatedAuditing;
+using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.Extensions.Logging;
 using Microsoft.Playwright;
 
-var losAngelesTimeZone =
-    TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
-
-string FormatLosAngelesTime(DateTimeOffset timestamp)
-{
-    return TimeZoneInfo.ConvertTime(
-        timestamp,
-        losAngelesTimeZone
-    ).ToString("MM/dd/yyyy h:mm:ss tt") + " Los Angeles time";
-}
-
-string? dashboardUrl =
-    Environment.GetEnvironmentVariable(
-        "AuditAgent__DashboardUrl");
-
-string? sharedKey =
-    Environment.GetEnvironmentVariable(
-        "AuditAgent__SharedKey");
-
-if (!Uri.TryCreate(
-        dashboardUrl,
-        UriKind.Absolute,
-        out Uri? baseUri) ||
-    (baseUri.Scheme != Uri.UriSchemeHttps &&
-     !(baseUri.Scheme == Uri.UriSchemeHttp &&
-       baseUri.IsLoopback)) ||
-    !string.IsNullOrEmpty(baseUri.UserInfo) ||
-    !string.IsNullOrEmpty(baseUri.Query) ||
+string? dashboardUrl = Environment.GetEnvironmentVariable("AuditAgent__DashboardUrl");
+string? sharedKey = Environment.GetEnvironmentVariable("AuditAgent__SharedKey");
+if (!Uri.TryCreate(dashboardUrl, UriKind.Absolute, out Uri? baseUri) ||
+    (baseUri.Scheme != "https" && !(baseUri.Scheme == "http" && baseUri.IsLoopback)) ||
+    !string.IsNullOrEmpty(baseUri.UserInfo) || !string.IsNullOrEmpty(baseUri.Query) ||
     !string.IsNullOrEmpty(baseUri.Fragment))
 {
-    Console.Error.WriteLine(
-        "Set AuditAgent__DashboardUrl to the dashboard base URL. " +
-        "Use HTTPS, or HTTP on localhost only.");
-
+    Console.Error.WriteLine("Set AuditAgent__DashboardUrl to HTTPS, or HTTP on localhost only.");
     return 1;
 }
-
-if (string.IsNullOrWhiteSpace(sharedKey) ||
-    sharedKey.Length < 32 ||
-    sharedKey.Length > 1024)
+if (string.IsNullOrWhiteSpace(sharedKey) || sharedKey.Length < 32 || sharedKey.Length > 1024)
 {
-    Console.Error.WriteLine(
-        "Set AuditAgent__SharedKey to the same random key " +
-        "configured on the dashboard (at least 32 characters).");
-
+    Console.Error.WriteLine("Set AuditAgent__SharedKey to the existing dashboard pairing key (32–1024 characters).");
     return 1;
 }
-
-// Preserve an IIS application path such as /AuditDashboard/.
-var hubUri = new Uri(
-    new Uri(baseUri.AbsoluteUri.TrimEnd('/') + "/"),
-    "hubs/audit-agent");
-
+var zone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+string LocalTime(DateTimeOffset value) => TimeZoneInfo.ConvertTime(value, zone)
+    .ToString("MM/dd/yyyy h:mm:ss tt") + " Los Angeles time";
+var hubUri = new Uri(new Uri(baseUri.AbsoluteUri.TrimEnd('/') + "/"), "hubs/audit-agent");
 using var shutdown = new CancellationTokenSource();
+Console.CancelKeyPress += (_, e) => { e.Cancel = true; shutdown.Cancel(); };
+using var logs = LoggerFactory.Create(builder => builder.AddSimpleConsole(options => options.SingleLine = true));
+var logger = logs.CreateLogger("AuditAgent");
+Console.WriteLine($"Audit Agent on {Environment.MachineName}. Press Ctrl+C to stop.");
+Console.WriteLine($"Connecting to {hubUri}. Full audit protocol v{AuditAgentProtocol.Version}.");
 
-Console.CancelKeyPress += (_, e) =>
-{
-    e.Cancel = true;
-    shutdown.Cancel();
-};
-
-using var playwright = await Playwright.CreateAsync();
-await using var browser = new AgentBrowser(playwright);
-
-await using var connection = new HubConnectionBuilder()
-    .WithUrl(hubUri, options =>
-    {
-        options.Headers["X-Audit-Agent-Key"] = sharedKey;
-
-        // Supports IIS sites that also require the logged-in
-        // Windows identity.
-        options.UseDefaultCredentials = true;
-    })
-    .Build();
-
-connection.On<string>(
-    "DashboardHello",
-    message => Console.WriteLine(message));
-
-connection.On<Guid, string>("OpenUrl", async (commandId, url) =>
-{
-    bool opened = false;
-
-    try
-    {
-        if (shutdown.IsCancellationRequested)
-        {
-            return;
-        }
-
-        await browser.OpenAsync(url, shutdown.Token);
-        opened = true;
-    }
-    catch (Exception exception)
-    {
-        Console.Error.WriteLine(
-            $"Could not open Edge: {exception.Message}");
-    }
-
-    try
-    {
-        using var acknowledgementTimeout =
-            CancellationTokenSource.CreateLinkedTokenSource(
-                shutdown.Token);
-
-        acknowledgementTimeout.CancelAfter(
-            TimeSpan.FromSeconds(10));
-
-        bool accepted = await connection.InvokeAsync<bool>(
-            "CompleteOpenUrl",
-            commandId,
-            opened,
-            acknowledgementTimeout.Token);
-
-        if (!accepted)
-        {
-            await browser.CloseAsync();
-
-            Console.Error.WriteLine(
-                "The dashboard no longer expects this browser request.");
-        }
-    }
-    catch (OperationCanceledException)
-        when (shutdown.IsCancellationRequested)
-    {
-        await browser.CloseAsync();
-    }
-    catch (Exception exception)
-    {
-        await browser.CloseAsync();
-
-        Console.Error.WriteLine(
-            $"Could not acknowledge browser request: {exception.Message}");
-    }
-});
-
-connection.Closed += async _ =>
-{
-    Console.WriteLine(
-        "Dashboard connection closed at " +
-        $"{FormatLosAngelesTime(DateTimeOffset.UtcNow)}.");
-
-    await browser.CloseAsync();
-};
-
-Console.WriteLine(
-    $"Audit Agent on {Environment.MachineName}. " +
-    "Press Ctrl+C to stop.");
-
-Console.WriteLine($"Connecting to {hubUri}");
-
-Console.WriteLine(
-    "Open URL now uses Playwright in this Agent. " +
-    "Audit controls are not migrated yet.");
-
-// One loop owns initial connection, registration and reconnection.
-// Individual connection attempts and heartbeats have bounded timeouts.
 try
 {
     while (!shutdown.IsCancellationRequested)
     {
+        // Each registration owns a new engine. A disconnected authenticated browser is never silently resumed.
+        using var lease = CancellationTokenSource.CreateLinkedTokenSource(shutdown.Token);
+        await using var connection = new HubConnectionBuilder().WithUrl(hubUri, options =>
+        {
+            options.Headers["X-Audit-Agent-Key"] = sharedKey;
+            options.UseDefaultCredentials = true;
+            options.ApplicationMaxBufferSize = AuditAgentProtocol.MaximumMessageBytes * 2L;
+            options.TransportMaxBufferSize = AuditAgentProtocol.MaximumMessageBytes * 2L;
+        }).Build();
+        connection.ServerTimeout = TimeSpan.FromSeconds(30);
+        connection.KeepAliveInterval = TimeSpan.FromSeconds(10);
+        using var playwright = await Playwright.CreateAsync();
+        await using var diagnostic = new AgentBrowser(playwright);
+        var persistence = new AgentPersistence(connection, lease.Token);
+        var engine = new AgentAuditEngine(persistence, logs.CreateLogger<AgentAuditEngine>());
+        await using var worker = new AgentAuditWorker(connection, engine, persistence, diagnostic, logger, lease.Token);
+        using var executeSubscription = connection.On<AuditCommand>("ExecuteAudit", worker.Execute);
+        using var cancelSubscription = connection.On<Guid, bool>("CancelAudit", worker.Cancel);
+        using var openSubscription = connection.On<Guid, string>("OpenUrl", worker.OpenDiagnostic);
+        using var expiredSubscription = connection.On("LeaseExpired", () => lease.Cancel());
+        connection.Closed += _ => { lease.Cancel(); return Task.CompletedTask; };
         try
         {
-            using (var connectTimeout =
-                CancellationTokenSource.CreateLinkedTokenSource(
-                    shutdown.Token))
+            using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(lease.Token))
             {
-                connectTimeout.CancelAfter(
-                    TimeSpan.FromSeconds(15));
-
-                await connection.StartAsync(
-                    connectTimeout.Token);
-
-                string reply =
-                    await connection.InvokeAsync<string>(
-                        "Register",
-                        Environment.MachineName,
-                        connectTimeout.Token);
-
-                Console.WriteLine(reply);
+                timeout.CancelAfter(TimeSpan.FromSeconds(20));
+                await connection.StartAsync(timeout.Token);
+                Console.WriteLine(await connection.InvokeAsync<string>("RegisterV2", Environment.MachineName,
+                    AuditAgentProtocol.Version, timeout.Token));
             }
-
-            while (!shutdown.IsCancellationRequested)
+            int heartbeatNumber = 0;
+            while (!lease.IsCancellationRequested && !worker.MustReconnect)
             {
-                using var heartbeatTimeout =
-                    CancellationTokenSource.CreateLinkedTokenSource(
-                        shutdown.Token);
-
-                heartbeatTimeout.CancelAfter(
-                    TimeSpan.FromSeconds(10));
-
-                DateTimeOffset serverTime =
-                    await connection.InvokeAsync<DateTimeOffset>(
-                        "Heartbeat",
-                        heartbeatTimeout.Token);
-
-                Console.WriteLine(
-                    "Heartbeat acknowledged at " +
-                    FormatLosAngelesTime(serverTime) + ".");
-
-                await Task.Delay(
-                    TimeSpan.FromSeconds(10),
-                    shutdown.Token);
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(lease.Token);
+                timeout.CancelAfter(TimeSpan.FromSeconds(10));
+                var serverTime = await connection.InvokeAsync<DateTimeOffset>("ReportState", worker.CaptureState(), timeout.Token);
+                if (heartbeatNumber++ % 5 == 0)
+                    Console.WriteLine("Heartbeat acknowledged at " + LocalTime(serverTime) + ".");
+                await Task.Delay(TimeSpan.FromSeconds(2), lease.Token);
             }
         }
-        catch (OperationCanceledException)
-            when (shutdown.IsCancellationRequested)
-        {
-            break;
-        }
-        catch (Exception exception)
-        {
-            Console.Error.WriteLine(
-                $"Connection unavailable: {exception.Message}");
-
-            Console.WriteLine(
-                "Retrying in 5 seconds. Check the URL, " +
-                "matching key, and dashboard availability.");
-        }
+        catch (Exception ex) when (!shutdown.IsCancellationRequested)
+        { logger.LogWarning("Connection ended: {Message}. Reconnecting with a new session.", ex.Message); }
+        catch (OperationCanceledException) when (shutdown.IsCancellationRequested) { }
         finally
         {
-            await browser.CloseAsync();
-
-            using var stopTimeout =
-                new CancellationTokenSource(
-                    TimeSpan.FromSeconds(5));
-
-            try
-            {
-                await connection.StopAsync(
-                    stopTimeout.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                // The bounded shutdown wait expired.
-            }
+            // Stop the hub first so MVC marks running records interrupted independently of workstation cleanup.
+            lease.Cancel();
+            using var stopTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            try { await connection.StopAsync(stopTimeout.Token); }
+            catch (Exception ex) { logger.LogWarning(ex, "Connection shutdown warning."); }
         }
-
-        await Task.Delay(
-            TimeSpan.FromSeconds(5),
-            shutdown.Token);
+        // Await-using disposes the worker before the next registration.
+        if (!shutdown.IsCancellationRequested) await Task.Delay(TimeSpan.FromSeconds(5), shutdown.Token);
     }
 }
-catch (OperationCanceledException)
-    when (shutdown.IsCancellationRequested)
-{
-    // Ctrl+C ends the retry or heartbeat delay.
-}
-
-await browser.CloseAsync();
+catch (OperationCanceledException) when (shutdown.IsCancellationRequested) { }
 Console.WriteLine("Audit Agent stopped.");
-
 return 0;
+

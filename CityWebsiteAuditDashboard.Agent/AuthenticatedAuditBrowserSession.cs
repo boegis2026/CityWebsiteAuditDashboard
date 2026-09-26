@@ -117,7 +117,7 @@ internal sealed class AuthenticatedAuditBrowserSession : IAsyncDisposable
             finally
             {
                 Playwright?.Dispose();
-                OperationLock.Dispose();
+
             }
 
             return;
@@ -132,7 +132,7 @@ internal sealed class AuthenticatedAuditBrowserSession : IAsyncDisposable
          */
         IPlaywright? playwrightToDispose = Playwright;
 
-        OperationLock.Dispose();
+
 
         _ = Task.Run(() =>
         {
@@ -191,7 +191,8 @@ internal sealed class AuthenticatedAuditBrowserSession : IAsyncDisposable
             return false;
         }
 
-        cancellationSource.Cancel();
+        try { cancellationSource.Cancel(); }
+        catch (ObjectDisposedException) { return false; }
 
         return true;
     }
@@ -210,3 +211,4 @@ internal sealed class AuthenticatedAuditBrowserSession : IAsyncDisposable
             0);
     }
 }
+
