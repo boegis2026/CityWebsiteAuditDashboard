@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.SignalR.Client;
-using System.Diagnostics;
+using CityWebsiteAuditDashboard.Agent;
+using Microsoft.Playwright;
 
 var losAngelesTimeZone =
     TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
@@ -62,6 +63,9 @@ Console.CancelKeyPress += (_, e) =>
     shutdown.Cancel();
 };
 
+using var playwright = await Playwright.CreateAsync();
+await using var browser = new AgentBrowser(playwright);
+
 await using var connection = new HubConnectionBuilder()
     .WithUrl(hubUri, options =>
     {
@@ -88,59 +92,23 @@ connection.On<Guid, string>("OpenUrl", async (commandId, url) =>
             return;
         }
 
-        if (url.Length > 2048 ||
-            !Uri.TryCreate(url, UriKind.Absolute, out Uri? target) ||
-            (target.Scheme != Uri.UriSchemeHttp &&
-             target.Scheme != Uri.UriSchemeHttps) ||
-            !string.IsNullOrEmpty(target.UserInfo))
-        {
-            throw new ArgumentException("The dashboard sent an invalid URL.");
-        }
-
-        string? edgePath = new[]
-        {
-            Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
-                "Microsoft", "Edge", "Application", "msedge.exe"),
-            Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                "Microsoft", "Edge", "Application", "msedge.exe"),
-            Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Microsoft", "Edge", "Application", "msedge.exe")
-        }.FirstOrDefault(File.Exists);
-
-        if (edgePath is null)
-        {
-            throw new FileNotFoundException("Microsoft Edge was not found on this workstation.");
-        }
-
-        var startInfo = new ProcessStartInfo(edgePath)
-        {
-            UseShellExecute = false
-        };
-        startInfo.ArgumentList.Add("--new-window");
-        startInfo.ArgumentList.Add(target.AbsoluteUri);
-
-        using Process? edge = Process.Start(startInfo);
-        if (edge is null)
-        {
-            throw new InvalidOperationException("Microsoft Edge did not start.");
-        }
-
+        await browser.OpenAsync(url, shutdown.Token);
         opened = true;
-        Console.WriteLine($"Opened Edge for {target.Host}.");
     }
     catch (Exception exception)
     {
-        Console.Error.WriteLine($"Could not open Edge: {exception.Message}");
+        Console.Error.WriteLine(
+            $"Could not open Edge: {exception.Message}");
     }
 
     try
     {
         using var acknowledgementTimeout =
-            CancellationTokenSource.CreateLinkedTokenSource(shutdown.Token);
-        acknowledgementTimeout.CancelAfter(TimeSpan.FromSeconds(10));
+            CancellationTokenSource.CreateLinkedTokenSource(
+                shutdown.Token);
+
+        acknowledgementTimeout.CancelAfter(
+            TimeSpan.FromSeconds(10));
 
         bool accepted = await connection.InvokeAsync<bool>(
             "CompleteOpenUrl",
@@ -150,26 +118,33 @@ connection.On<Guid, string>("OpenUrl", async (commandId, url) =>
 
         if (!accepted)
         {
-            Console.Error.WriteLine("The dashboard no longer expects this browser request.");
+            await browser.CloseAsync();
+
+            Console.Error.WriteLine(
+                "The dashboard no longer expects this browser request.");
         }
     }
-    catch (OperationCanceledException) when (shutdown.IsCancellationRequested)
+    catch (OperationCanceledException)
+        when (shutdown.IsCancellationRequested)
     {
-        // The Agent is stopping.
+        await browser.CloseAsync();
     }
     catch (Exception exception)
     {
-        Console.Error.WriteLine($"Could not acknowledge browser request: {exception.Message}");
+        await browser.CloseAsync();
+
+        Console.Error.WriteLine(
+            $"Could not acknowledge browser request: {exception.Message}");
     }
 });
 
-connection.Closed += _ =>
+connection.Closed += async _ =>
 {
     Console.WriteLine(
-        $"Dashboard connection closed at " +
+        "Dashboard connection closed at " +
         $"{FormatLosAngelesTime(DateTimeOffset.UtcNow)}.");
 
-    return Task.CompletedTask;
+    await browser.CloseAsync();
 };
 
 Console.WriteLine(
@@ -179,7 +154,8 @@ Console.WriteLine(
 Console.WriteLine($"Connecting to {hubUri}");
 
 Console.WriteLine(
-    "Open URL is enabled. Playwright remains in the dashboard.");
+    "Open URL now uses Playwright in this Agent. " +
+    "Audit controls are not migrated yet.");
 
 // One loop owns initial connection, registration and reconnection.
 // Individual connection attempts and heartbeats have bounded timeouts.
@@ -247,6 +223,8 @@ try
         }
         finally
         {
+            await browser.CloseAsync();
+
             using var stopTimeout =
                 new CancellationTokenSource(
                     TimeSpan.FromSeconds(5));
@@ -273,6 +251,7 @@ catch (OperationCanceledException)
     // Ctrl+C ends the retry or heartbeat delay.
 }
 
+await browser.CloseAsync();
 Console.WriteLine("Audit Agent stopped.");
 
 return 0;

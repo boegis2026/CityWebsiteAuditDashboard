@@ -46,6 +46,7 @@ public sealed class AuditAgentController : Controller
         {
             TempData["AgentOpenUrlStatus"] =
                 "Enter a valid HTTP or HTTPS URL without credentials.";
+
             return RedirectToAction(nameof(Index));
         }
 
@@ -55,6 +56,7 @@ public sealed class AuditAgentController : Controller
         {
             TempData["AgentOpenUrlStatus"] =
                 "The Agent is unavailable or already opening a URL.";
+
             return RedirectToAction(nameof(Index));
         }
 
@@ -68,11 +70,11 @@ public sealed class AuditAgentController : Controller
                     cancellationToken);
 
             bool opened = await command.Completion.WaitAsync(
-                TimeSpan.FromSeconds(20),
+                TimeSpan.FromSeconds(90),
                 cancellationToken);
 
             TempData["AgentOpenUrlStatus"] = opened
-                ? "The Agent launched Edge with the requested URL."
+                ? "The Agent opened the URL in its Playwright-controlled Edge window."
                 : "The Agent could not open the URL. Check its console.";
         }
         catch (TimeoutException)
@@ -104,4 +106,3 @@ public sealed class AuditAgentController : Controller
         return RedirectToAction(nameof(Index));
     }
 }
-
