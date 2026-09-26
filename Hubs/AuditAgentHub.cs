@@ -1,68 +1,126 @@
 ﻿using CityWebsiteAuditDashboard.Contracts;
 using CityWebsiteAuditDashboard.Services.AuditAgent;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.SignalR;
 
-namespace CityWebsiteAuditDashboard.Services.AuthenticatedAuditing;
+namespace CityWebsiteAuditDashboard.Hubs;
 
-// Controllers keep their existing interface. Every browser operation now runs on the Agent.
-public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
+[Authorize(
+    AuthenticationSchemes =
+        AuditAgentAuthenticationHandler.SchemeName)]
+public sealed class AuditAgentHub : Hub
 {
-    private readonly AuditAgentDispatcher _agent;
-    public AuthenticatedAuditService(AuditAgentDispatcher agent) => _agent = agent;
+    private readonly AuditAgentConnectionRegistry _registry;
+    private readonly AuditAgentDispatcher _dispatcher;
+    private readonly AuditAgentStore _store;
 
-    public AuthenticatedAuditSessionResult? GetActiveSession() => _agent.ActiveSession;
-    public AuthenticatedAuditProgressResult? GetProgress(Guid sessionId) => _agent.Progress(sessionId);
-    public bool RequestAutomaticWorkflowStop(Guid sessionId) => _agent.RequestWorkflowStop(sessionId);
-
-    public Task<AuthenticatedAuditSessionResult> StartSessionAsync(AuthenticatedAuditStartRequest request,
-        CancellationToken cancellationToken = default) =>
-        _agent.CallAsync<AuthenticatedAuditSessionResult>(new() { Operation = "Start", Start = request }, cancellationToken);
-
-    public Task<AuthenticatedAuditStepResult> ScanCurrentStepAsync(Guid sessionId,
-        CancellationToken cancellationToken = default) =>
-        Send<AuthenticatedAuditStepResult>("Scan", sessionId, cancellationToken);
-
-    public Task<AuthenticatedAuditBatchResult> ScanBatchAsync(Guid sessionId, IReadOnlyList<string> urls,
-        CancellationToken cancellationToken = default) =>
-        _agent.CallAsync<AuthenticatedAuditBatchResult>(new()
-        { Operation = "Batch", SessionId = sessionId, Urls = urls.ToList() }, cancellationToken);
-
-    public Task<AuthenticatedAuditNavigationAnalysisResult> AnalyzeCurrentStateAsync(Guid sessionId,
-        CancellationToken cancellationToken = default) =>
-        Send<AuthenticatedAuditNavigationAnalysisResult>("Analyze", sessionId, cancellationToken);
-
-    public Task<AuthenticatedAuditFieldFillResult> FillCurrentStateAsync(Guid sessionId,
-        CancellationToken cancellationToken = default) =>
-        Send<AuthenticatedAuditFieldFillResult>("Fill", sessionId, cancellationToken);
-
-    public Task<AuthenticatedAuditAutomaticNavigationResult> PreviewAutomaticStepAsync(Guid sessionId,
-        CancellationToken cancellationToken = default) =>
-        Send<AuthenticatedAuditAutomaticNavigationResult>("Preview", sessionId, cancellationToken);
-
-    public Task<AuthenticatedAuditAutomaticNavigationResult> AdvanceAutomaticStepAsync(Guid sessionId,
-        CancellationToken cancellationToken = default) =>
-        Send<AuthenticatedAuditAutomaticNavigationResult>("Advance", sessionId, cancellationToken);
-
-    public Task<AuthenticatedAuditAutomaticCycleResult> ScanAndAdvanceAutomaticStepAsync(Guid sessionId,
-        CancellationToken cancellationToken = default) =>
-        Send<AuthenticatedAuditAutomaticCycleResult>("Cycle", sessionId, cancellationToken);
-
-    public Task<AuthenticatedAuditAutomaticRunResult> RunAutomaticWorkflowAsync(Guid sessionId,
-        int maximumStateCount = 25, CancellationToken cancellationToken = default) =>
-        _agent.CallAsync<AuthenticatedAuditAutomaticRunResult>(new()
-        { Operation = "Run", SessionId = sessionId, MaximumStates = Math.Clamp(maximumStateCount, 1, 25) }, cancellationToken);
-
-    public async Task StopSessionAsync(Guid sessionId, bool markLastStepAsFinal,
-        CancellationToken cancellationToken = default) =>
-        await _agent.CallAsync<bool>(new()
-        { Operation = "Stop", SessionId = sessionId, MarkFinal = markLastStepAsFinal }, cancellationToken);
-
-    public async Task InterruptAllSessionsAsync(CancellationToken cancellationToken = default)
+    public AuditAgentHub(
+        AuditAgentConnectionRegistry registry,
+        AuditAgentDispatcher dispatcher,
+        AuditAgentStore store)
     {
-        if (_agent.Connection is null) return;
-        await _agent.CallAsync<bool>(new() { Operation = "Interrupt" }, cancellationToken);
+        _registry = registry;
+        _dispatcher = dispatcher;
+        _store = store;
     }
 
-    private Task<T> Send<T>(string operation, Guid sessionId, CancellationToken token) =>
-        _agent.CallAsync<T>(new() { Operation = operation, SessionId = sessionId }, token);
-}
+    public async Task<string> RegisterV2(
+        string machineName,
+        int protocolVersion)
+    {
+        if (protocolVersion != AuditAgentProtocol.Version)
+        {
+            throw new HubException(
+                "Publish matching dashboard and Agent versions.");
+        }
 
+        if (string.IsNullOrWhiteSpace(machineName) ||
+            machineName.Length > 100 ||
+            machineName.Any(char.IsControl))
+        {
+            throw new HubException(
+                "A valid workstation name is required.");
+        }
+
+        if (!_registry.TryRegister(
+            Context.ConnectionId,
+            machineName.Trim()))
+        {
+            throw new HubException(
+                "Another Agent is already connected.");
+        }
+
+        await _store.RegisterAsync(Context.ConnectionId);
+
+        _dispatcher.Attach(Context.ConnectionId);
+
+        return "Agent → Dashboard registration accepted. " +
+               "Audit protocol v2.";
+    }
+
+    public DateTimeOffset ReportState(AuditAgentState state)
+    {
+        RequireOwner();
+
+        if (!_registry.Heartbeat(Context.ConnectionId))
+        {
+            throw new HubException(
+                "Register the Agent first.");
+        }
+
+        _dispatcher.Update(Context.ConnectionId, state);
+
+        return DateTimeOffset.UtcNow;
+    }
+
+    public Task<int> SaveAudit(AuditWrite write)
+    {
+        RequireOwner();
+
+        return _store.SaveAsync(
+            Context.ConnectionId,
+            write);
+    }
+
+    public bool CompleteAudit(AuditReply reply)
+    {
+        RequireOwner();
+
+        return _dispatcher.Complete(
+            Context.ConnectionId,
+            reply);
+    }
+
+    public bool CompleteOpenUrl(
+        Guid commandId,
+        bool opened)
+    {
+        RequireOwner();
+
+        return _registry.CompleteOpenUrl(
+            Context.ConnectionId,
+            commandId,
+            opened);
+    }
+
+    private void RequireOwner()
+    {
+        if (!_dispatcher.IsOwner(Context.ConnectionId))
+        {
+            throw new HubException(
+                "This Agent is not registered.");
+        }
+    }
+
+    public override async Task OnDisconnectedAsync(
+        Exception? exception)
+    {
+        _dispatcher.Detach(Context.ConnectionId);
+
+        _registry.Remove(Context.ConnectionId);
+
+        await _store.DisconnectAsync(Context.ConnectionId);
+
+        await base.OnDisconnectedAsync(exception);
+    }
+}
