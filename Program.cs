@@ -8,6 +8,7 @@ using CityWebsiteAuditDashboard.Services.Remediation;
 using CityWebsiteAuditDashboard.Hubs;
 using CityWebsiteAuditDashboard.Services.AuditAgent;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Server.IISIntegration;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -118,21 +119,52 @@ app.UseAuthorization();
 // operator explicitly listed in the machine settings; the hub separately requires its pairing key.
 app.Use(async (context, next) =>
 {
-    bool hubRequest = context.Request.Path.StartsWithSegments("/hubs/audit-agent");
-    bool loopback = context.Connection.RemoteIpAddress is { } ip && IPAddress.IsLoopback(ip);
-    if (!hubRequest && !loopback)
+    bool hubRequest = context.Request.Path
+        .StartsWithSegments("/hubs/audit-agent");
+
+    bool loopback = context.Connection.RemoteIpAddress is { } ip
+        && IPAddress.IsLoopback(ip);
+
+    bool requireLocalSignIn = app.Configuration
+        .GetValue<bool>("Staging:RequireWindowsAuthenticationLocally");
+
+    if (!hubRequest && (!loopback || requireLocalSignIn))
     {
-        string[] operators = app.Configuration.GetSection("Staging:AllowedOperators").Get<string[]>() ?? [];
-        bool allowed = context.Request.IsHttps && context.User.Identity?.IsAuthenticated == true &&
-            context.User.Identity.AuthenticationType != AuditAgentAuthenticationHandler.SchemeName &&
-            operators.Contains(context.User.Identity.Name ?? string.Empty, StringComparer.OrdinalIgnoreCase);
-        if (!allowed)
+        if (!context.Request.IsHttps)
         {
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            await context.Response.WriteAsync("Staging access requires HTTPS and an authorized Windows account.");
+            await context.Response.WriteAsync("HTTPS is required.");
+            return;
+        }
+
+        var windows = await context.AuthenticateAsync(
+            IISDefaults.AuthenticationScheme);
+
+        if (!windows.Succeeded ||
+            windows.Principal?.Identity?.IsAuthenticated != true)
+        {
+            await context.ChallengeAsync(
+                IISDefaults.AuthenticationScheme);
+            return;
+        }
+
+        context.User = windows.Principal;
+
+        string[] operators = app.Configuration
+            .GetSection("Staging:AllowedOperators")
+            .Get<string[]>() ?? [];
+
+        if (!operators.Contains(
+            context.User.Identity?.Name ?? string.Empty,
+            StringComparer.OrdinalIgnoreCase))
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsync(
+                "Your Windows account is not authorized for this dashboard.");
             return;
         }
     }
+
     await next(context);
 });
 
