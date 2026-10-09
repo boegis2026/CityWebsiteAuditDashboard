@@ -19,7 +19,7 @@ string LocalTime(DateTimeOffset value) => TimeZoneInfo.ConvertTime(value, zone)
     .ToString("MM/dd/yyyy h:mm:ss tt") + " Los Angeles time";
 var hubUri = new Uri(new Uri(baseUri.AbsoluteUri.TrimEnd('/') + "/"), "hubs/audit-agent");
 using var shutdown = new CancellationTokenSource();
-Task parentWatch = startup.WatchParentAsync(shutdown);
+Task parentWatch = Task.Run(() => startup.WatchParentAsync(shutdown));
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; shutdown.Cancel(); };
 using var logs = LoggerFactory.Create(builder => builder.AddSimpleConsole(options => options.SingleLine = true));
 var logger = logs.CreateLogger("AuditAgent");
