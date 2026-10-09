@@ -1,155 +1,106 @@
 ﻿namespace CityWebsiteAuditDashboard.Services.AuditAgent;
 
-public sealed record AuditAgentConnectionStatus(
-    string MachineName,
-    DateTimeOffset ConnectedAt,
-    DateTimeOffset LastSeenAt);
+public sealed record AuditAgentConnectionStatus(string MachineName, DateTimeOffset ConnectedAt, DateTimeOffset LastSeenAt);
+public sealed record AuditAgentOpenUrlCommand(string ConnectionId, Guid CommandId, Task<bool> Completion);
 
-public sealed record AuditAgentOpenUrlCommand(
-    string ConnectionId,
-    Guid CommandId,
-    Task<bool> Completion);
-
-// One IIS worker process and one connected Agent for this proof of concept.
+// One active Agent per authenticated operator, within one IIS worker process.
 public sealed class AuditAgentConnectionRegistry
 {
+    private sealed class Entry(string owner, string connection, string machine)
+    {
+        public string Owner { get; } = owner;
+        public string Connection { get; } = connection;
+        public AuditAgentConnectionStatus Status { get; set; } = new(machine, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+        public Guid? PendingId;
+        public TaskCompletionSource<bool>? PendingCompletion;
+    }
     private readonly object _gate = new();
+    private readonly Dictionary<string, Entry> _owners = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Entry> _connections = new(StringComparer.Ordinal);
 
-    private string? _connectionId;
-    private AuditAgentConnectionStatus? _status;
-    private Guid? _pendingCommandId;
-    private TaskCompletionSource<bool>? _pendingCompletion;
-
-    public bool TryRegister(
-        string connectionId,
-        string machineName)
+    public bool TryRegister(string connection, string owner, string machine)
     {
         lock (_gate)
         {
-            if (_connectionId is not null &&
-                _connectionId != connectionId)
-            {
-                return false;
-            }
-
-            _connectionId = connectionId;
-
-            var now = DateTimeOffset.UtcNow;
-
-            _status = new AuditAgentConnectionStatus(
-                machineName,
-                _status?.ConnectedAt ?? now,
-                now);
-
+            if (_connections.TryGetValue(connection, out var existing)) return existing.Owner == owner;
+            if (_owners.ContainsKey(owner)) return false;
+            var entry = new Entry(owner, connection, machine);
+            _owners.Add(owner, entry);
+            _connections.Add(connection, entry);
             return true;
         }
     }
 
-    public bool Heartbeat(string connectionId)
+    public bool IsOwner(string connection, string owner)
+    { lock (_gate) return _connections.TryGetValue(connection, out var entry) && entry.Owner == owner; }
+
+    public string? OwnerFor(string connection)
+    { lock (_gate) return _connections.TryGetValue(connection, out var entry) ? entry.Owner : null; }
+
+    public bool Heartbeat(string connection)
     {
         lock (_gate)
         {
-            if (_connectionId != connectionId ||
-                _status is null)
-            {
-                return false;
-            }
-
-            _status = _status with
-            {
-                LastSeenAt = DateTimeOffset.UtcNow
-            };
-
+            if (!_connections.TryGetValue(connection, out var entry)) return false;
+            entry.Status = entry.Status with { LastSeenAt = DateTimeOffset.UtcNow };
             return true;
         }
     }
 
-    public void Remove(string connectionId)
+    public AuditAgentConnectionStatus? GetStatus(string owner)
+    { lock (_gate) return _owners.TryGetValue(owner, out var entry) ? entry.Status : null; }
+
+    public bool IsFresh(string connection)
+    {
+        lock (_gate) return _connections.TryGetValue(connection, out var entry) &&
+            DateTimeOffset.UtcNow - entry.Status.LastSeenAt < TimeSpan.FromSeconds(40);
+    }
+
+    public void Remove(string connection)
     {
         lock (_gate)
         {
-            // A delayed disconnect must never clear a newer connection.
-            if (_connectionId == connectionId)
-            {
-                _connectionId = null;
-                _status = null;
-                _pendingCommandId = null;
-                _pendingCompletion?.TrySetResult(false);
-                _pendingCompletion = null;
-            }
+            if (!_connections.Remove(connection, out var entry)) return;
+            _owners.Remove(entry.Owner);
+            entry.PendingCompletion?.TrySetResult(false);
         }
     }
 
-    public AuditAgentConnectionStatus? GetStatus()
+    public string[] TakeExpired(DateTimeOffset now)
     {
         lock (_gate)
         {
-            return _status;
+            var expired = _connections.Values.Where(x => now - x.Status.LastSeenAt > TimeSpan.FromSeconds(45))
+                .Select(x => x.Connection).ToArray();
+            foreach (var connection in expired) Remove(connection);
+            return expired;
         }
     }
 
-    // Reserve one command at a time. A stale or disconnected Agent cannot
-    // receive browser launch requests.
-    public AuditAgentOpenUrlCommand? BeginOpenUrl()
+    public AuditAgentOpenUrlCommand? BeginOpenUrl(string owner)
     {
         lock (_gate)
         {
-            if (_connectionId is null ||
-                _status is null ||
-                DateTimeOffset.UtcNow - _status.LastSeenAt >=
-                    TimeSpan.FromSeconds(45) ||
-                _pendingCommandId is not null)
-            {
+            if (!_owners.TryGetValue(owner, out var entry) || !IsFresh(entry.Connection) || entry.PendingId.HasValue)
                 return null;
-            }
-
-            Guid commandId = Guid.NewGuid();
-            var completion = new TaskCompletionSource<bool>(
-                TaskCreationOptions.RunContinuationsAsynchronously);
-
-            _pendingCommandId = commandId;
-            _pendingCompletion = completion;
-
-            return new AuditAgentOpenUrlCommand(
-                _connectionId,
-                commandId,
-                completion.Task);
+            entry.PendingId = Guid.NewGuid();
+            entry.PendingCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            return new(entry.Connection, entry.PendingId.Value, entry.PendingCompletion.Task);
         }
     }
 
-    public bool CompleteOpenUrl(
-        string connectionId,
-        Guid commandId,
-        bool opened)
+    public bool CompleteOpenUrl(string connection, Guid commandId, bool opened)
     {
         lock (_gate)
         {
-            if (_connectionId != connectionId ||
-                _pendingCommandId != commandId ||
-                _pendingCompletion is null)
-            {
+            if (!_connections.TryGetValue(connection, out var entry) || entry.PendingId != commandId || entry.PendingCompletion is null)
                 return false;
-            }
-
-            _pendingCompletion.TrySetResult(opened);
-            _pendingCompletion = null;
-            _pendingCommandId = null;
+            entry.PendingCompletion.TrySetResult(opened);
+            entry.PendingId = null;
+            entry.PendingCompletion = null;
             return true;
         }
     }
 
-    public void CancelOpenUrl(Guid commandId)
-    {
-        lock (_gate)
-        {
-            if (_pendingCommandId != commandId)
-            {
-                return;
-            }
-
-            _pendingCompletion?.TrySetResult(false);
-            _pendingCompletion = null;
-            _pendingCommandId = null;
-        }
-    }
+    public void CancelOpenUrl(string connection, Guid commandId) => CompleteOpenUrl(connection, commandId, false);
 }

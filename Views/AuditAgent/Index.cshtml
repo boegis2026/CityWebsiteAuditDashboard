@@ -12,7 +12,17 @@
             TimeSpan.FromSeconds(45);
 }
 
-<h1>Audit Agent connection</h1>
+<h1>Your Audit Agent</h1>
+<p>Signed in as <strong>@User.Identity?.Name</strong>. Browser controls use the Agent connected for this account.</p>
+@if (ViewBag.LocalAgentStatus is string localStatus)
+{
+    <p class="alert alert-info" role="status">@localStatus</p>
+}
+else
+{
+    <p>Open City Website Audit Agent on your workstation. It signs in using your Windows account; no pairing key is needed.</p>
+}
+
 
 <p>
     Check the workstation connection and open a URL in Edge on that workstation.
@@ -21,7 +31,7 @@
 @if (Model is null)
 {
     <p class="alert alert-secondary" role="status">
-        No Agent connected.
+        No Agent is connected for your account.
     </p>
 }
 else

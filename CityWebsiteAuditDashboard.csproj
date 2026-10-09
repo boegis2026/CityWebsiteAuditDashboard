@@ -30,6 +30,8 @@
 
 	<ItemGroup>
 		<ProjectReference Include="CityWebsiteAuditDashboard.Contracts\CityWebsiteAuditDashboard.Contracts.csproj" />
+		<ProjectReference Include="CityWebsiteAuditDashboard.Agent\CityWebsiteAuditDashboard.Agent.csproj" ReferenceOutputAssembly="false" Private="false" GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained;PublishSingleFile" />
+		<AssemblyMetadata Include="AgentBuildConfiguration" Value="$(Configuration)" />
 	</ItemGroup>
 
 </Project>

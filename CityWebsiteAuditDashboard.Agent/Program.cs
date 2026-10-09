@@ -5,31 +5,28 @@ using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Logging;
 using Microsoft.Playwright;
 
-string? dashboardUrl = Environment.GetEnvironmentVariable("AuditAgent__DashboardUrl");
-string? sharedKey = Environment.GetEnvironmentVariable("AuditAgent__SharedKey");
-if (!Uri.TryCreate(dashboardUrl, UriKind.Absolute, out Uri? baseUri) ||
-    (baseUri.Scheme != "https" && !(baseUri.Scheme == "http" && baseUri.IsLoopback)) ||
-    !string.IsNullOrEmpty(baseUri.UserInfo) || !string.IsNullOrEmpty(baseUri.Query) ||
-    !string.IsNullOrEmpty(baseUri.Fragment))
-{
-    Console.Error.WriteLine("Set AuditAgent__DashboardUrl to HTTPS, or HTTP on localhost only.");
-    return 1;
-}
-if (string.IsNullOrWhiteSpace(sharedKey) || sharedKey.Length < 32 || sharedKey.Length > 1024)
-{
-    Console.Error.WriteLine("Set AuditAgent__SharedKey to the existing dashboard pairing key (32–1024 characters).");
-    return 1;
-}
+AgentStartup startup;
+try { startup = await AgentStartup.LoadAsync(args); }
+catch (Exception ex) { Console.Error.WriteLine(ex.Message); return 1; }
+if (startup.ConfigureOnly) return 0;
+FileStream instanceLock;
+try { instanceLock = startup.AcquireInstanceLock(); }
+catch (Exception ex) { Console.Error.WriteLine(ex.Message); return 1; }
+using var singleInstance = instanceLock;
+var baseUri = new Uri(startup.DashboardUrl);
 var zone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
 string LocalTime(DateTimeOffset value) => TimeZoneInfo.ConvertTime(value, zone)
     .ToString("MM/dd/yyyy h:mm:ss tt") + " Los Angeles time";
 var hubUri = new Uri(new Uri(baseUri.AbsoluteUri.TrimEnd('/') + "/"), "hubs/audit-agent");
 using var shutdown = new CancellationTokenSource();
+Task parentWatch = startup.WatchParentAsync(shutdown);
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; shutdown.Cancel(); };
 using var logs = LoggerFactory.Create(builder => builder.AddSimpleConsole(options => options.SingleLine = true));
 var logger = logs.CreateLogger("AuditAgent");
 Console.WriteLine($"Audit Agent on {Environment.MachineName}. Press Ctrl+C to stop.");
 Console.WriteLine($"Connecting to {hubUri}. Full audit protocol v{AuditAgentProtocol.Version}.");
+Console.WriteLine(startup.IsLocal ? "Automatic local development Agent." :
+    $"Windows account: {Environment.UserDomainName}\\{Environment.UserName}. No pairing key required.");
 
 try
 {
@@ -39,8 +36,8 @@ try
         using var lease = CancellationTokenSource.CreateLinkedTokenSource(shutdown.Token);
         await using var connection = new HubConnectionBuilder().WithUrl(hubUri, options =>
         {
-            options.Headers["X-Audit-Agent-Key"] = sharedKey;
-            options.UseDefaultCredentials = true;
+            if (startup.IsLocal) options.Headers["X-Audit-Agent-Key"] = startup.LocalKey!;
+            options.UseDefaultCredentials = !startup.IsLocal;
             options.ApplicationMaxBufferSize = AuditAgentProtocol.MaximumMessageBytes * 2L;
             options.TransportMaxBufferSize = AuditAgentProtocol.MaximumMessageBytes * 2L;
         }).Build();
@@ -92,6 +89,7 @@ try
     }
 }
 catch (OperationCanceledException) when (shutdown.IsCancellationRequested) { }
+catch (Exception ex) { Console.Error.WriteLine("Agent stopped: " + ex.Message); return 1; }
 Console.WriteLine("Audit Agent stopped.");
 return 0;
 

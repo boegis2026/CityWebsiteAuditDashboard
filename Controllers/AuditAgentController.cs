@@ -1,4 +1,5 @@
-﻿using CityWebsiteAuditDashboard.Hubs;
+﻿using CityWebsiteAuditDashboard.Services.Security;
+using CityWebsiteAuditDashboard.Hubs;
 using CityWebsiteAuditDashboard.Services.AuditAgent;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -10,15 +11,21 @@ namespace CityWebsiteAuditDashboard.Controllers;
     Location = ResponseCacheLocation.None)]
 public sealed class AuditAgentController : Controller
 {
+    private readonly AuditOperator _operator;
+    private readonly LocalDevelopmentAgent _local;
     private readonly AuditAgentConnectionRegistry _registry;
     private readonly IHubContext<AuditAgentHub> _hubContext;
     private readonly ILogger<AuditAgentController> _logger;
 
     public AuditAgentController(
+        AuditOperator auditOperator,
+        LocalDevelopmentAgent local,
         AuditAgentConnectionRegistry registry,
         IHubContext<AuditAgentHub> hubContext,
         ILogger<AuditAgentController> logger)
     {
+        _operator = auditOperator;
+        _local = local;
         _registry = registry;
         _hubContext = hubContext;
         _logger = logger;
@@ -27,7 +34,8 @@ public sealed class AuditAgentController : Controller
     [HttpGet]
     public IActionResult Index()
     {
-        return View(_registry.GetStatus());
+        ViewBag.LocalAgentStatus = _local.Enabled ? _local.Status : null;
+        return View(_registry.GetStatus(_operator.RequireId()));
     }
 
     [HttpPost]
@@ -50,7 +58,7 @@ public sealed class AuditAgentController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        AuditAgentOpenUrlCommand? command = _registry.BeginOpenUrl();
+        AuditAgentOpenUrlCommand? command = _registry.BeginOpenUrl(_operator.RequireId());
 
         if (command is null)
         {
@@ -100,7 +108,7 @@ public sealed class AuditAgentController : Controller
         }
         finally
         {
-            _registry.CancelOpenUrl(command.CommandId);
+            _registry.CancelOpenUrl(command.ConnectionId, command.CommandId);
         }
 
         return RedirectToAction(nameof(Index));

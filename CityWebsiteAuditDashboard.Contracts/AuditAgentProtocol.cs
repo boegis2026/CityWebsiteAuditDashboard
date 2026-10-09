@@ -5,7 +5,7 @@ namespace CityWebsiteAuditDashboard.Contracts;
 
 public static class AuditAgentProtocol
 {
-    public const int Version = 2;
+    public const int Version = 3;
     public const int MaximumMessageBytes = 16 * 1024 * 1024;
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     public static string Serialize<T>(T value) => JsonSerializer.Serialize(value, Json);

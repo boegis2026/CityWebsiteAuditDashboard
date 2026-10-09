@@ -1,4 +1,5 @@
-﻿using CityWebsiteAuditDashboard.Contracts;
+﻿using CityWebsiteAuditDashboard.Services.Security;
+using CityWebsiteAuditDashboard.Contracts;
 using CityWebsiteAuditDashboard.Services.AuditAgent;
 
 namespace CityWebsiteAuditDashboard.Services.AuthenticatedAuditing;
@@ -7,15 +8,17 @@ namespace CityWebsiteAuditDashboard.Services.AuthenticatedAuditing;
 public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
 {
     private readonly AuditAgentDispatcher _agent;
-    public AuthenticatedAuditService(AuditAgentDispatcher agent) => _agent = agent;
+    private readonly AuditOperator _operator;
+    public AuthenticatedAuditService(AuditAgentDispatcher agent, AuditOperator auditOperator)
+    { _agent = agent; _operator = auditOperator; }
 
-    public AuthenticatedAuditSessionResult? GetActiveSession() => _agent.ActiveSession;
-    public AuthenticatedAuditProgressResult? GetProgress(Guid sessionId) => _agent.Progress(sessionId);
-    public bool RequestAutomaticWorkflowStop(Guid sessionId) => _agent.RequestWorkflowStop(sessionId);
+    public AuthenticatedAuditSessionResult? GetActiveSession() => _agent.ActiveSession(_operator.RequireId());
+    public AuthenticatedAuditProgressResult? GetProgress(Guid sessionId) => _agent.Progress(_operator.RequireId(), sessionId);
+    public bool RequestAutomaticWorkflowStop(Guid sessionId) => _agent.RequestWorkflowStop(_operator.RequireId(), sessionId);
 
     public Task<AuthenticatedAuditSessionResult> StartSessionAsync(AuthenticatedAuditStartRequest request,
         CancellationToken cancellationToken = default) =>
-        _agent.CallAsync<AuthenticatedAuditSessionResult>(new() { Operation = "Start", Start = request }, cancellationToken);
+        _agent.CallAsync<AuthenticatedAuditSessionResult>(_operator.RequireId(), new() { Operation = "Start", Start = request }, cancellationToken);
 
     public Task<AuthenticatedAuditStepResult> ScanCurrentStepAsync(Guid sessionId,
         CancellationToken cancellationToken = default) =>
@@ -23,7 +26,7 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
 
     public Task<AuthenticatedAuditBatchResult> ScanBatchAsync(Guid sessionId, IReadOnlyList<string> urls,
         CancellationToken cancellationToken = default) =>
-        _agent.CallAsync<AuthenticatedAuditBatchResult>(new()
+        _agent.CallAsync<AuthenticatedAuditBatchResult>(_operator.RequireId(), new()
         { Operation = "Batch", SessionId = sessionId, Urls = urls.ToList() }, cancellationToken);
 
     public Task<AuthenticatedAuditNavigationAnalysisResult> AnalyzeCurrentStateAsync(Guid sessionId,
@@ -48,21 +51,21 @@ public sealed class AuthenticatedAuditService : IAuthenticatedAuditService
 
     public Task<AuthenticatedAuditAutomaticRunResult> RunAutomaticWorkflowAsync(Guid sessionId,
         int maximumStateCount = 25, CancellationToken cancellationToken = default) =>
-        _agent.CallAsync<AuthenticatedAuditAutomaticRunResult>(new()
+        _agent.CallAsync<AuthenticatedAuditAutomaticRunResult>(_operator.RequireId(), new()
         { Operation = "Run", SessionId = sessionId, MaximumStates = Math.Clamp(maximumStateCount, 1, 25) }, cancellationToken);
 
     public async Task StopSessionAsync(Guid sessionId, bool markLastStepAsFinal,
         CancellationToken cancellationToken = default) =>
-        await _agent.CallAsync<bool>(new()
+        await _agent.CallAsync<bool>(_operator.RequireId(), new()
         { Operation = "Stop", SessionId = sessionId, MarkFinal = markLastStepAsFinal }, cancellationToken);
 
     public async Task InterruptAllSessionsAsync(CancellationToken cancellationToken = default)
     {
-        if (_agent.Connection is null) return;
-        await _agent.CallAsync<bool>(new() { Operation = "Interrupt" }, cancellationToken);
+        if (_agent.ActiveSession(_operator.RequireId()) is null) return;
+        await _agent.CallAsync<bool>(_operator.RequireId(), new() { Operation = "Interrupt" }, cancellationToken);
     }
 
     private Task<T> Send<T>(string operation, Guid sessionId, CancellationToken token) =>
-        _agent.CallAsync<T>(new() { Operation = operation, SessionId = sessionId }, token);
+        _agent.CallAsync<T>(_operator.RequireId(), new() { Operation = operation, SessionId = sessionId }, token);
 }
 

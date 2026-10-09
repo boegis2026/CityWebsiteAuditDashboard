@@ -1,4 +1,4 @@
-using System.Net;
+using CityWebsiteAuditDashboard.Services.Security;
 using CityWebsiteAuditDashboard.Contracts;
 using CityWebsiteAuditDashboard.Services;
 using CityWebsiteAuditDashboard.Data;
@@ -8,11 +8,10 @@ using CityWebsiteAuditDashboard.Services.Remediation;
 using CityWebsiteAuditDashboard.Hubs;
 using CityWebsiteAuditDashboard.Services.AuditAgent;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Server.IISIntegration;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Machine settings live outside the publish folder so publishing cannot erase the pairing key.
+// Machine settings retain the database connection and authorized Windows accounts outside the publish folder.
 string machineSettings = Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
     "CityWebsiteAuditDashboard", "staging.settings.json");
@@ -21,6 +20,11 @@ builder.Configuration.AddEnvironmentVariables();
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton<AuditOperator>();
+builder.Services.AddSingleton<LocalDevelopmentAgent>();
+builder.Services.AddAuthorization(options => options.AddPolicy(AuditOperator.Policy,
+    policy => policy.RequireAuthenticatedUser().RequireClaim(AuditOperator.OwnerClaim)));
 
 builder.Services.AddSignalR(options =>
 {
@@ -91,6 +95,7 @@ builder.Services.AddScoped<
 builder.Services.AddHostedService<
     AuthenticatedAuditStartupRecoveryService>();
 builder.Services.AddHostedService<AuditAgentMonitor>();
+builder.Services.AddHostedService(provider => provider.GetRequiredService<LocalDevelopmentAgent>());
 
 /*
  * Gracefully closes active Playwright browsers when the dashboard stops.
@@ -113,72 +118,11 @@ app.UseHttpsRedirection();
 app.UseRouting();
 
 app.UseAuthentication();
+app.UseMiddleware<AuditAccessMiddleware>();
 app.UseAuthorization();
-
-// Local development keeps working. Remote dashboard access requires an authenticated
-// operator explicitly listed in the machine settings; the hub separately requires its pairing key.
-app.Use(async (context, next) =>
-{
-    bool hubRequest = context.Request.Path
-        .StartsWithSegments("/hubs/audit-agent");
-
-    bool loopback = context.Connection.RemoteIpAddress is { } ip
-        && IPAddress.IsLoopback(ip);
-
-    bool requireLocalSignIn = app.Configuration
-        .GetValue<bool>("Staging:RequireWindowsAuthenticationLocally");
-
-    if (!hubRequest && (!loopback || requireLocalSignIn))
-    {
-        if (!context.Request.IsHttps)
-        {
-            context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            await context.Response.WriteAsync("HTTPS is required.");
-            return;
-        }
-
-        var windows = await context.AuthenticateAsync(
-            IISDefaults.AuthenticationScheme);
-
-        if (!windows.Succeeded ||
-            windows.Principal?.Identity?.IsAuthenticated != true)
-        {
-            await context.ChallengeAsync(
-                IISDefaults.AuthenticationScheme);
-            return;
-        }
-
-        context.User = windows.Principal;
-
-        string[] operators = app.Configuration
-            .GetSection("Staging:AllowedOperators")
-            .Get<string[]>() ?? [];
-
-        if (!operators.Contains(
-            context.User.Identity?.Name ?? string.Empty,
-            StringComparer.OrdinalIgnoreCase))
-        {
-            context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            await context.Response.WriteAsync(
-                "Your Windows account is not authorized for this dashboard.");
-            return;
-        }
-    }
-
-    await next(context);
-});
 
 app.MapStaticAssets();
 
 app.MapHub<AuditAgentHub>("/hubs/audit-agent", options =>
 {
-    options.ApplicationMaxBufferSize = AuditAgentProtocol.MaximumMessageBytes * 2L;
-    options.TransportMaxBufferSize = AuditAgentProtocol.MaximumMessageBytes * 2L;
-});
-
-app.MapControllerRoute(
-    name: "default",
-    pattern: "{controller=AccessibilityOverview}/{action=Index}/{id?}")
-    .WithStaticAssets();
-
-app.Run();
+options.ApplicationMaxBufferSize = AuditAgentProtocol.MaximumMessageBytes * 2L;

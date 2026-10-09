@@ -1,4 +1,5 @@
-﻿namespace CityWebsiteAuditDashboard.Services.AuthenticatedAuditing;
+﻿using CityWebsiteAuditDashboard.Services.AuditAgent;
+namespace CityWebsiteAuditDashboard.Services.AuthenticatedAuditing;
 
 /// <summary>
 /// Requests cleanup of live authenticated audit sessions when ASP.NET Core
@@ -10,11 +11,11 @@
 /// </summary>
 public sealed class AuthenticatedAuditShutdownService : IHostedService
 {
-    private readonly IAuthenticatedAuditService _authenticatedAuditService;
+    private readonly AuditAgentDispatcher _authenticatedAuditService;
     private readonly ILogger<AuthenticatedAuditShutdownService> _logger;
 
     public AuthenticatedAuditShutdownService(
-        IAuthenticatedAuditService authenticatedAuditService,
+        AuditAgentDispatcher authenticatedAuditService,
         ILogger<AuthenticatedAuditShutdownService> logger)
     {
         _authenticatedAuditService = authenticatedAuditService;
@@ -33,7 +34,7 @@ public sealed class AuthenticatedAuditShutdownService : IHostedService
     {
         try
         {
-            await _authenticatedAuditService.InterruptAllSessionsAsync(
+            await _authenticatedAuditService.InterruptAllAsync(
                 cancellationToken);
         }
         catch (OperationCanceledException)

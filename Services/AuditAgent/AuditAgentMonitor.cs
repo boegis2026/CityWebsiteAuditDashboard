@@ -24,14 +24,15 @@ public sealed class AuditAgentMonitor : BackgroundService
             {
                 try
                 {
-                    if (_registry.GetStatus() is { } status &&
-                        DateTimeOffset.UtcNow - status.LastSeenAt > TimeSpan.FromSeconds(45) &&
-                        _dispatcher.Connection is { } connection)
+                    foreach (string connection in _registry.TakeExpired(DateTimeOffset.UtcNow))
                     {
                         _dispatcher.Detach(connection);
-                        _registry.Remove(connection);
                         try { await _hub.Clients.Client(connection).SendAsync("LeaseExpired", stoppingToken); }
-                        finally { await _store.DisconnectAsync(connection); }
+                        catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
+                        { _logger.LogWarning(ex, "Could not notify an expired Agent."); }
+                        try { await _store.DisconnectAsync(connection); }
+                        catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
+                        { _logger.LogError(ex, "Expired Agent cleanup will be retried by database recovery."); }
                     }
                     await _store.RecoverDisconnectedAsync();
                 }
