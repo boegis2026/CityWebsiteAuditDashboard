@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
 	<PropertyGroup>
 		<DefaultItemExcludes>
@@ -8,10 +8,11 @@
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<UserSecretsId>fb0df67d-d46a-44ed-bac0-f4c6acf2b284</UserSecretsId>
+		<!-- The Agent is built for local use, not shipped inside the dashboard publish. -->
+		<ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
 	</PropertyGroup>
 
 	<ItemGroup>
-
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.9">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -30,7 +31,10 @@
 
 	<ItemGroup>
 		<ProjectReference Include="CityWebsiteAuditDashboard.Contracts\CityWebsiteAuditDashboard.Contracts.csproj" />
-		<ProjectReference Include="CityWebsiteAuditDashboard.Agent\CityWebsiteAuditDashboard.Agent.csproj" ReferenceOutputAssembly="false" Private="false" GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained;PublishSingleFile" />
+		<ProjectReference Include="CityWebsiteAuditDashboard.Agent\CityWebsiteAuditDashboard.Agent.csproj"
+						  ReferenceOutputAssembly="false"
+						  Private="false"
+						  GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained;PublishSingleFile" />
 		<AssemblyMetadata Include="AgentBuildConfiguration" Value="$(Configuration)" />
 	</ItemGroup>
 
