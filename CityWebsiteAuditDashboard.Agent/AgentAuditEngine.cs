@@ -138,28 +138,13 @@ public sealed class AgentAuditEngine : IAuthenticatedAuditService
             playwright = await Playwright.CreateAsync();
 
 
-            // Dedicated audit profile for the current Windows user.
-            string auditProfileDirectory = System.IO.Path.Combine(
-                Environment.GetFolderPath(
-                    Environment.SpecialFolder.LocalApplicationData),
-                "CityWebsiteAuditDashboard",
-                "EdgeAuditProfile");
+            browser = await playwright.Chromium.LaunchAsync(
+                new BrowserTypeLaunchOptions
+                {
+                Headless = false
+                });
 
-            System.IO.Directory.CreateDirectory(auditProfileDirectory);
-
-            browserContext =
-                await playwright.Chromium.LaunchPersistentContextAsync(
-                    auditProfileDirectory,
-                    new BrowserTypeLaunchPersistentContextOptions
-                    {
-                        Channel = "msedge",
-                        Headless = false,
-                        Timeout = 60_000
-                    });
-
-            browser = browserContext.Browser
-                ?? throw new InvalidOperationException(
-                    "Could not obtain the audit Edge browser.");
+            browserContext = await browser.NewContextAsync();
 
 
             IPage startingPage = await browserContext.NewPageAsync();
