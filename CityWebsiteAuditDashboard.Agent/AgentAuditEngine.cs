@@ -138,27 +138,28 @@ public sealed class AgentAuditEngine : IAuthenticatedAuditService
             playwright = await Playwright.CreateAsync();
 
 
-            browser = await playwright.Chromium.LaunchAsync(
-                new BrowserTypeLaunchOptions
-                {
-                    /*
-                    * Use the workstation's installed Microsoft Edge instead of
-                    * Playwright's downloaded Chromium build.
-                    *
-                    * Managed workstations may restrict unfamiliar browser executables,
-                    * while the organization-managed Edge installation is already
-                    * approved and configured for the workstation.
-                    */
-                    Channel = "msedge",
+            // Dedicated audit profile for the current Windows user.
+            string auditProfileDirectory = System.IO.Path.Combine(
+                Environment.GetFolderPath(
+                    Environment.SpecialFolder.LocalApplicationData),
+                "CityWebsiteAuditDashboard",
+                "EdgeAuditProfile");
 
+            System.IO.Directory.CreateDirectory(auditProfileDirectory);
 
-                    // Authentication and workflow navigation are performed manually,
-                    // so the browser must remain visible.
-                    Headless = false
-                });
+            browserContext =
+                await playwright.Chromium.LaunchPersistentContextAsync(
+                    auditProfileDirectory,
+                    new BrowserTypeLaunchPersistentContextOptions
+                    {
+                        Channel = "msedge",
+                        Headless = false,
+                        Timeout = 60_000
+                    });
 
-
-            browserContext = await browser.NewContextAsync();
+            browser = browserContext.Browser
+                ?? throw new InvalidOperationException(
+                    "Could not obtain the audit Edge browser.");
 
 
             IPage startingPage = await browserContext.NewPageAsync();
