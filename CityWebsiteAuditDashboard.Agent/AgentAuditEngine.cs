@@ -141,8 +141,22 @@ public sealed class AgentAuditEngine : IAuthenticatedAuditService
             browser = await playwright.Chromium.LaunchAsync(
                 new BrowserTypeLaunchOptions
                 {
-                Headless = false
+                    /*
+                    * Use the workstation's installed Microsoft Edge instead of
+                    * Playwright's downloaded Chromium build.
+                    *
+                    * Managed workstations may restrict unfamiliar browser executables,
+                    * while the organization-managed Edge installation is already
+                    * approved and configured for the workstation.
+                    */
+                    Channel = "msedge",
+
+
+                    // Authentication and workflow navigation are performed manually,
+                    // so the browser must remain visible.
+                    Headless = false
                 });
+
 
             browserContext = await browser.NewContextAsync();
 
