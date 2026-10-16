@@ -1,0 +1,39 @@
+@model ReportPage
+@{ ViewData["Title"] = "Remediation and retests"; }
+<p class="eyebrow">Follow-through and verification</p>
+<h1>Remediation &amp; retests</h1>
+<p class="lede">Track recorded work, ownership, and the latest verification evidence.</p>
+<partial name="_Filters" model="Model" />
+@if (Model.ValidationError is null)
+{
+    <section class="notice" aria-labelledby="remediation-scope">
+        <h2 id="remediation-scope">Current status of tracked items</h2>
+        <p>Each item appears once if it links to an audit in the selected history. The application and rule below come from its latest matching occurrence.
+            Current status, latest retest, and latest recorded note may be newer than the selected dates. Findings without a tracked item are excluded.</p>
+        <p>Fixed means reported fixed; Verified is the recorded verification status. A “Not detected” retest alone does not prove conformance or change an item to Verified.</p>
+    </section>
+    @if (Model.Items.Count == 0) { <p class="empty">No tracked remediation items match this selection.</p> }
+    @foreach (var item in Model.Items)
+    {
+        <article class="panel" aria-labelledby="item-@item.Id">
+            <p class="eyebrow">Item #@item.Id · @item.Application</p>
+            <h2 id="item-@item.Id">@(string.IsNullOrWhiteSpace(item.Help) ? item.Rule : item.Help)</h2>
+            <dl class="facts">
+                <div><dt>Current status</dt><dd><span class="badge @ReportDisplay.Tone(item.Status)">@ReportDisplay.Status(item.Status)</span></dd></div>
+                <div><dt>Scanner impact</dt><dd><span class="badge @ReportDisplay.Tone(item.Impact)">@item.Impact</span></dd></div>
+                <div><dt>Assigned to</dt><dd>@(string.IsNullOrWhiteSpace(item.Assignee) ? "Unassigned" : item.Assignee)</dd></div>
+                <div><dt>Last updated</dt><dd>@ReportDisplay.Time(item.Updated)</dd></div>
+                <div><dt>Latest retest</dt><dd>@(item.Retest is null ? "No retest recorded" : ReportDisplay.Status(item.Retest))
+                    @if (item.Retested is { } date) { <span class="subtext">@ReportDisplay.Time(date)</span> }</dd></div>
+            </dl>
+            <h3>Latest recorded note</h3>
+            <p class="preserve">@(item.Notes ?? "No note recorded. Rule guidance below can help plan the review; it is not a confirmed fix for this application.")</p>
+            <div class="links">
+                <a asp-action="Audit" asp-route-id="@item.RunId">View source audit #@item.RunId</a>
+                @if (ReportDisplay.SafeLink(item.HelpUrl) is { } link)
+                { <a href="@link" rel="noreferrer">Read guidance for @item.Rule (external site)</a> }
+            </div>
+        </article>
+    }
+    <partial name="_Pagination" model="Model" />
+}

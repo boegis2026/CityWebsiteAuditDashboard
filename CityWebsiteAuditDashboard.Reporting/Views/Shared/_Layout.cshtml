@@ -1,0 +1,34 @@
+@{
+    var action = ViewContext.RouteData.Values["action"]?.ToString();
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@ViewData["Title"] · BOE Accessibility Reports</title>
+    <link rel="stylesheet" href="~/css/reporting.css" asp-append-version="true" />
+</head>
+<body>
+    <a class="skip" href="#main">Skip to main content</a>
+    <header class="masthead">
+        <div class="shell brand-row">
+            <a class="brand" asp-controller="Reports" asp-action="Index">
+                <span>City of Los Angeles · Bureau of Engineering</span>
+                <strong>Accessibility Reports</strong>
+            </a>
+            <span class="mode">Read-only reporting</span>
+        </div>
+        <nav class="shell nav" aria-label="Main navigation">
+            <a asp-controller="Reports" asp-action="Index" aria-current="@(action == "Index" ? "page" : null)">Overview</a>
+            <a asp-controller="Reports" asp-action="Audits" aria-current="@(action is "Audits" or "Audit" ? "page" : null)">Audit history</a>
+            <a asp-controller="Reports" asp-action="Remediation" aria-current="@(action == "Remediation" ? "page" : null)">Remediation &amp; retests</a>
+        </nav>
+    </header>
+    <main id="main" class="shell main" tabindex="-1">@RenderBody()</main>
+    <footer class="shell footer">
+        <p>Authenticated audit results · Times shown in Los Angeles time.</p>
+        <p>Signed in as @(User.Identity?.Name ?? "not signed in"). Contact your dashboard administrator for access or report corrections.</p>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,23 @@
+@model ReportPage
+<form method="get" class="filters" aria-label="Report filters">
+    <div><label for="Application">Application</label>
+        <select id="Application" name="Application">
+            <option value="">All applications</option>
+            @if (Model.Filter.Application is not null && !Model.Applications.Contains(Model.Filter.Application))
+            { <option value="@Model.Filter.Application" selected>@Model.Filter.Application</option> }
+            @foreach (var application in Model.Applications)
+            { <option value="@application" selected="@(Model.Filter.Application == application)">@application</option> }
+        </select>
+    </div>
+    <div><label for="From">Audit start date, from</label>
+        <input id="From" name="From" type="date" value="@Model.Filter.From" required /></div>
+    <div><label for="To">Audit start date, through</label>
+        <input id="To" name="To" type="date" value="@Model.Filter.To" required /></div>
+    <button type="submit">Apply filters</button>
+    <a class="button secondary" asp-action="@ViewContext.RouteData.Values["action"]">Reset</a>
+    <p class="filter-help">Dates include the full start and end days in Los Angeles time. Filters apply to audit start dates.</p>
+</form>
+@if (Model.ValidationError is not null)
+{
+    <div class="notice error" role="alert"><h2>Check the filters</h2><p>@Model.ValidationError</p></div>
+}

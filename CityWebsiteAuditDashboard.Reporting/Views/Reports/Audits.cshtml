@@ -1,0 +1,13 @@
+@model ReportPage
+@{ ViewData["Title"] = "Audit history"; }
+<p class="eyebrow">Recorded evidence</p>
+<h1>Audit history</h1>
+<p class="lede">Review completed, active, failed, and interrupted runs. An incomplete run may contain only partial results.</p>
+<partial name="_Filters" model="Model" />
+@if (Model.ValidationError is null)
+{
+    <section class="panel" aria-label="Audit history results">
+        <partial name="_AuditTable" model="Model" />
+        <partial name="_Pagination" model="Model" />
+    </section>
+}

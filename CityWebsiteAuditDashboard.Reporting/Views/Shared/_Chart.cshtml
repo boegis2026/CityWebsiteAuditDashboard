@@ -1,0 +1,23 @@
+@model List<CountRow>
+@{ var maximum = Math.Max(1, Model.Select(x => x.Count).DefaultIfEmpty().Max());
+   var height = Math.Max(100, Model.Count * 48 + 40);
+   string Num(decimal value) => value.ToString(System.Globalization.CultureInfo.InvariantCulture); }
+@if (Model.Count == 0 || Model.All(x => x.Count == 0)) { <p class="empty">No data in this selection.</p> }
+else {
+    <figure class="graph">
+        <figcaption>@ViewData["ChartCaption"]</figcaption>
+        <svg viewBox="0 0 640 @height" role="img" aria-label="@ViewData["ChartCaption"]. Exact values are listed below." focusable="false">
+            @for (var i = 0; i < Model.Count; i++) {
+                var item = Model[i]; var y = i * 48 + 12;
+                <g><text x="0" y="@(y + 22)" class="graph-label">@item.Label</text>
+                <rect x="145" y="@y" width="420" height="32" rx="4" class="track" />
+                <rect x="145" y="@y" width="@Num(420m * item.Count / maximum)" height="32" rx="4" class="graph-bar @ReportDisplay.Tone(item.Label)" />
+                <text x="580" y="@(y + 22)" class="graph-label">@ReportDisplay.Number(item.Count)</text></g>
+            }
+        </svg>
+        <details><summary>View graph data</summary>
+            <table><caption>@ViewData["ChartCaption"]</caption><thead><tr><th scope="col">Category</th><th scope="col">Count</th></tr></thead>
+            <tbody>@foreach (var row in Model) { <tr><th scope="row">@row.Label</th><td>@ReportDisplay.Number(row.Count)</td></tr> }</tbody></table>
+        </details>
+    </figure>
+}

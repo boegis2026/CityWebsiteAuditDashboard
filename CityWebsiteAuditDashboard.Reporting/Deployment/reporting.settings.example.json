@@ -1,0 +1,11 @@
+{
+  "ConnectionStrings": {
+    "ReportingDatabase": "Server=ENGVMDB030DEV;Database=CityWebsiteAuditDashboardDb;Integrated Security=True;Encrypt=True;TrustServerCertificate=False;Application Name=CityWebsiteAuditDashboard.Reporting;Connect Timeout=15;"
+  },
+  "Reporting": {
+    "AllowedUsers": [
+      "BOEPW\\521796"
+    ],
+    "AllowedGroups": []
+  }
+}

@@ -1,0 +1,52 @@
+@model ReportPage
+@{ ViewData["Title"] = "Accessibility overview"; }
+<p class="eyebrow">Bureau of Engineering · Results and progress</p>
+<h1>Accessibility overview</h1>
+<p class="lede">See recorded findings, follow remediation, and identify where manual review is needed.</p>
+<partial name="_Filters" model="Model" />
+@if (Model.ValidationError is null)
+{
+    <a class="button" asp-action="OverviewPdf" asp-all-route-data="Model.Filter.Routes(1)">Download overview PDF</a>
+    <section class="notice" aria-labelledby="scope-title">
+        <h2 id="scope-title">What these numbers mean</h2>
+        <p>Finding totals use the latest completed audit for each recorded application name within these dates.
+            Only successful scanned steps contribute findings. A rule on two steps counts twice; these are occurrences, not unique defects.</p>
+        <p>@ReportDisplay.Number(Model.CompletedCount) completed runs and @ReportDisplay.Number(Model.OtherCount) other runs are in the selected history.
+</p>
+    </section>
+    <dl class="metrics">
+        <div><dt>Applications with a completed audit</dt><dd>@ReportDisplay.Number(Model.ApplicationsCount)</dd></div>
+        <div><dt>Violation occurrences</dt><dd>@ReportDisplay.Number(Model.ViolationCount)</dd></div>
+        <div><dt>Occurrences needing manual review</dt><dd>@ReportDisplay.Number(Model.ReviewCount)</dd></div>
+        <div><dt>Tracked remediation items in scope</dt><dd>@ReportDisplay.Number(Model.Statuses.Sum(x => x.Count))</dd></div>
+    </dl>
+    <div class="two-columns">
+        <section class="panel" aria-labelledby="severity-title">
+            <h2 id="severity-title">Violation severity</h2>
+            <p>Latest completed audit per application. “Unknown” means the scanner did not provide a recognized impact.</p>
+            @{ ViewData["ChartCaption"] = "Violation occurrences by scanner impact"; }
+            <partial name="_Chart" model="Model.Severity" />
+        </section>
+        <section class="panel" aria-labelledby="status-title">
+            <h2 id="status-title">Remediation progress</h2>
+            <p>Distinct tracked items linked to any run in the filtered history. Status is current, not a historical snapshot.</p>
+            @{ ViewData["ChartCaption"] = "Tracked items by current remediation status"; }
+            <partial name="_Chart" model="Model.Statuses" />
+            <p class="small">Fixed awaits verification. Won’t fix is not resolved. Untracked findings are not included.</p>
+            <a asp-action="Remediation" asp-all-route-data="Model.Filter.Routes(1)">Review remediation and retests</a>
+        </section>
+    </div>
+    <section class="panel" aria-labelledby="activity-title">
+        <h2 id="activity-title">Audit activity</h2>
+        <p>Completed runs grouped by start month in Los Angeles time. Only months with completed runs are shown.
+            This measures testing activity, not improvement in accessibility.</p>
+        @{ ViewData["ChartCaption"] = "Completed audit runs by month (year-month)"; }
+        <partial name="_Chart" model="Model.Activity" />
+    </section>
+    <section class="panel" aria-labelledby="recent-title">
+        <h2 id="recent-title">Latest completed audits</h2>
+        <p>Up to 10 applications, ordered by their latest completed run.</p>
+        <partial name="_AuditTable" model="Model" />
+        <a asp-action="Audits" asp-all-route-data="Model.Filter.Routes(1)">View the full audit history</a>
+    </section>
+}

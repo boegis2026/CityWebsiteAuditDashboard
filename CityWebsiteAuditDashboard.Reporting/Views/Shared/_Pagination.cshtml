@@ -1,0 +1,26 @@
+@model ReportPage
+@{ var action = ViewContext.RouteData.Values["action"]?.ToString();
+   var start = Math.Max(1, Model.Filter.Page - 2);
+   var end = Math.Min(Model.PageCount, Model.Filter.Page + 2); }
+<nav class="pagination" aria-label="Report pages">
+    <span>Page @Model.Filter.Page of @Model.PageCount · @ReportDisplay.Number(Model.Total) records</span>
+    @if (Model.Filter.Page > 1) {
+        <a class="button secondary" asp-action="@action" asp-route-id="@Model.Audit?.Id" asp-all-route-data="Model.Filter.Routes(1)">First</a>
+        <a class="button secondary" asp-action="@action" asp-route-id="@Model.Audit?.Id" asp-all-route-data="Model.Filter.Routes(Model.Filter.Page - 1)">Previous</a>
+    }
+    @for (var number = start; number <= end; number++) {
+        <a class="button secondary" asp-action="@action" asp-route-id="@Model.Audit?.Id" asp-all-route-data="Model.Filter.Routes((int)number)" aria-label="Page @number" aria-current="@(number == Model.Filter.Page ? "page" : null)">@number</a>
+    }
+    @if (Model.HasNext) {
+        <a class="button secondary" asp-action="@action" asp-route-id="@Model.Audit?.Id" asp-all-route-data="Model.Filter.Routes(Model.Filter.Page + 1)">Next</a>
+        <a class="button secondary" asp-action="@action" asp-route-id="@Model.Audit?.Id" asp-all-route-data="Model.Filter.Routes((int)Model.PageCount)">Last</a>
+    }
+    <form method="get" asp-action="@action" asp-route-id="@Model.Audit?.Id" class="page-jump">
+        <input type="hidden" name="Application" value="@Model.Filter.Application" />
+        <input type="hidden" name="From" value="@Model.Filter.From" />
+        <input type="hidden" name="To" value="@Model.Filter.To" />
+        <label for="page-number">Go to page</label>
+        <input id="page-number" name="page" type="number" min="1" max="@Model.PageCount" value="@Model.Filter.Page" required />
+        <button type="submit">Go</button>
+    </form>
+</nav>

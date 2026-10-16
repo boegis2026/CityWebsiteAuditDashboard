@@ -1,0 +1,30 @@
+@model ReportPage
+@if (Model.Audits.Count == 0)
+{
+    <p class="empty">No audits match this selection.</p>
+}
+else
+{
+    <div class="table-region" role="region" aria-label="Audit results table, scroll horizontally if needed" tabindex="0">
+        <table>
+            <caption>Audit runs. Counts include successful scanned steps only.</caption>
+            <thead><tr><th scope="col">Application / audit</th><th scope="col">Started</th><th scope="col">Run status</th>
+                <th scope="col">Successful / recorded steps</th><th scope="col">Violation occurrences</th><th scope="col">Needs manual review</th></tr></thead>
+            <tbody>
+            @foreach (var run in Model.Audits)
+            {
+                <tr>
+                    <th scope="row"><a asp-action="Audit" asp-route-id="@run.Id">@run.Application · audit #@run.Id</a><br /><a asp-action="AuditPdf" asp-route-id="@run.Id" aria-label="Download PDF for audit @run.Id">Download PDF</a></th>
+                    <td>@ReportDisplay.Time(run.Started)</td>
+                    <td><span class="badge @ReportDisplay.Tone(run.Status)">@run.Status</span>
+                        @if (run.Steps == 0) { <span class="subtext">No recorded steps</span> }
+                        else if (run.SuccessfulSteps < run.Steps) { <span class="subtext">Includes failed steps</span> }
+                    </td>
+                    <td>@run.SuccessfulSteps / @run.Steps</td>
+                    <td>@ReportDisplay.Number(run.Violations)</td><td>@ReportDisplay.Number(run.Review)</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}
