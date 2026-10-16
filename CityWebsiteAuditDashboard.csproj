@@ -2,7 +2,7 @@
 
 	<PropertyGroup>
 		<DefaultItemExcludes>
-			$(DefaultItemExcludes);CityWebsiteAuditDashboard.PlaywrightSpike\**;CityWebsiteAuditDashboard.Agent\**;CityWebsiteAuditDashboard.Contracts\**
+			$(DefaultItemExcludes);CityWebsiteAuditDashboard.PlaywrightSpike\**;CityWebsiteAuditDashboard.Agent\**;CityWebsiteAuditDashboard.Contracts\**;CityWebsiteAuditDashboard.Reporting\**
 		</DefaultItemExcludes>
 		<TargetFramework>net10.0-windows</TargetFramework>
 		<Nullable>enable</Nullable>
