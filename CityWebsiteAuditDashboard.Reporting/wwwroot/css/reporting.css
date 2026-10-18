@@ -763,3 +763,18 @@ code {
         color: black;
     }
 }
+
+.graph-bar.warning {
+    fill: #facc15;
+    stroke: none;
+}
+
+.metrics > div:nth-child(3) dd {
+    color: #facc15;
+    text-shadow: none;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    display: block;
+    padding: 0;
+}
