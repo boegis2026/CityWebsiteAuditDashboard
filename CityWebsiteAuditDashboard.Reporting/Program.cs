@@ -1,6 +1,4 @@
 using CityWebsiteAuditDashboard.Reporting.Data;
-using Microsoft.AspNetCore.Authentication.Negotiate;
-using Microsoft.AspNetCore.Authorization;
 
 PdfSharp.Fonts.GlobalFontSettings.FontResolver = new CityWebsiteAuditDashboard.Reporting.Services.ReportFontResolver();
 
@@ -12,24 +10,11 @@ var machineSettings = Path.Combine(
 builder.Configuration.AddJsonFile(machineSettings, optional: true, reloadOnChange: false);
 builder.Configuration.AddEnvironmentVariables("CITYREPORT_");
 
-var viewers = builder.Configuration.GetSection("Reporting:AllowedUsers").Get<string[]>() ?? [];
-var groups = builder.Configuration.GetSection("Reporting:AllowedGroups").Get<string[]>() ?? [];
-if (!viewers.Any(x => !string.IsNullOrWhiteSpace(x)) &&
-    !groups.Any(x => !string.IsNullOrWhiteSpace(x)))
-    throw new InvalidOperationException("Configure Reporting:AllowedUsers or AllowedGroups before starting.");
 if (string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("ReportingDatabase")))
     throw new InvalidOperationException("Configure ConnectionStrings:ReportingDatabase before starting.");
 
-builder.Services.AddAuthentication(NegotiateDefaults.AuthenticationScheme).AddNegotiate();
-builder.Services.AddAuthorization(options =>
-{
-    options.FallbackPolicy = new AuthorizationPolicyBuilder()
-        .RequireAuthenticatedUser()
-        .RequireAssertion(context =>
-            viewers.Contains(context.User.Identity?.Name ?? "", StringComparer.OrdinalIgnoreCase) ||
-            groups.Where(x => !string.IsNullOrWhiteSpace(x)).Any(context.User.IsInRole))
-        .Build();
-});
+// Public reporting: no authenticated-user requirement or approved-user list.
+builder.Services.AddAuthorization();
 builder.Services.AddControllersWithViews();
 builder.Services.AddScoped<ReportStore>();
 var app = builder.Build();
@@ -55,13 +40,10 @@ app.UseStatusCodePages(async status =>
     response.ContentType = "text/plain; charset=utf-8";
     await response.WriteAsync(response.StatusCode switch
     {
-        403 => "Your Windows account is not approved for this reporting site. Contact the dashboard administrator.",
-        401 => "Sign in with your approved Windows account.",
         404 => "The requested report was not found.",
         _ => "The request could not be completed."
     });
 });
-app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllerRoute("default", "{controller=Reports}/{action=Index}/{id?}");
 app.Run();
