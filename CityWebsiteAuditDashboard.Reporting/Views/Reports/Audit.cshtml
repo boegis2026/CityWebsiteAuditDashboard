@@ -1,5 +1,7 @@
 @model ReportPage
-@{ var run = Model.Audit!; ViewData["Title"] = $"{run.Application} · audit #{run.Id}"; }
+@{
+    var run = Model.Audit!; ViewData["Title"] = $"{run.Application} · audit #{run.Id}";
+}
 <a asp-action="Audits">Back to audit history</a>
 <p class="eyebrow">Audit #@run.Id · @run.Status</p>
 <h1>@run.Application</h1>
@@ -7,8 +9,17 @@
 <p class="lede">Started @ReportDisplay.Time(run.Started) · Los Angeles time</p>
 @if (run.Status != "Completed" || run.Steps == 0 || run.SuccessfulSteps < run.Steps)
 {
-    <div class="notice"><h2>Coverage is incomplete or still in progress</h2>
-        <p>Do not interpret missing findings as a clean result. @run.SuccessfulSteps of @run.Steps recorded steps scanned successfully.</p></div>
+    <div class="notice">
+        <h2>Coverage is incomplete or still in progress</h2>
+        <p>Do not interpret missing findings as a clean result. @run.SuccessfulSteps of @run.Steps recorded steps scanned successfully.</p>
+    </div>
+}
+@if (!string.IsNullOrWhiteSpace(Model.AuditNotes))
+{
+    <section class="panel" aria-labelledby="audit-notes-title">
+        <h2 id="audit-notes-title">Audit notes</h2>
+        <p style="white-space: pre-wrap; overflow-wrap: anywhere;">@Model.AuditNotes</p>
+    </section>
 }
 <dl class="metrics">
     <div><dt>Successful scanned steps</dt><dd>@run.SuccessfulSteps</dd></div>
@@ -19,20 +30,36 @@
 <p>Findings are rule occurrences per step. An element can appear under multiple rules or steps, so element counts are not unique elements.</p>
 <section class="panel" aria-labelledby="steps-title">
     <h2 id="steps-title">Page-by-page scan record</h2>
-    @if (Model.Steps.Count == 0) { <p class="empty">No steps have been recorded.</p> }
+    @if (Model.Steps.Count == 0)
+    {
+        <p class="empty">No steps have been recorded.</p>
+    }
     else
     {
         <div class="table-region" role="region" tabindex="0" aria-label="Scanned steps table, scroll horizontally if needed">
-            <table><caption>Recorded step summaries from the scanner</caption>
-                <thead><tr><th scope="col">Step</th><th scope="col">Scanned</th><th scope="col">Result</th>
-                    <th scope="col">Violation rules</th><th scope="col">Review rules</th></tr></thead>
-                <tbody>@foreach (var step in Model.Steps)
-                {
-                    <tr><th scope="row">@step.Number. @step.Name</th><td>@ReportDisplay.Time(step.Scanned)</td>
-                        <td>@(step.Succeeded ? "Succeeded" : "Failed — results unavailable")</td>
-                        <td>@(step.Succeeded ? ReportDisplay.Number(step.Violations) : "Not available")</td>
-                        <td>@(step.Succeeded ? ReportDisplay.Number(step.Review) : "Not available")</td></tr>
-                }</tbody>
+            <table>
+                <caption>Recorded step summaries from the scanner</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Step</th>
+                        <th scope="col">Scanned</th>
+                        <th scope="col">Result</th>
+                        <th scope="col">Violation rules</th>
+                        <th scope="col">Review rules</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var step in Model.Steps)
+                    {
+                        <tr>
+                            <th scope="row">@step.Number. @step.Name</th>
+                            <td>@ReportDisplay.Time(step.Scanned)</td>
+                            <td>@(step.Succeeded ? "Succeeded" : "Failed — results unavailable")</td>
+                            <td>@(step.Succeeded ? ReportDisplay.Number(step.Violations) : "Not available")</td>
+                            <td>@(step.Succeeded ? ReportDisplay.Number(step.Review) : "Not available")</td>
+                        </tr>
+                    }
+                </tbody>
             </table>
         </div>
     }
@@ -40,22 +67,32 @@
 <section class="panel" aria-labelledby="findings-title">
     <h2 id="findings-title">Findings and guidance</h2>
     <p>Violations appear first, ordered by scanner impact. Review results need human assessment. Guidance links open in this tab.</p>
-    @if (Model.Findings.Count == 0) { <p class="empty">No findings on this page. Check coverage above before interpreting the result.</p> }
+    @if (Model.Findings.Count == 0)
+    {
+        <p class="empty">No findings on this page. Check coverage above before interpreting the result.</p>
+    }
     @foreach (var finding in Model.Findings)
     {
         <article class="finding">
             <p class="eyebrow">Step @finding.Step · @finding.StepName</p>
             <h3>@(string.IsNullOrWhiteSpace(finding.Help) ? finding.Rule : finding.Help)</h3>
-            <p><span class="badge @ReportDisplay.Tone(finding.Type)">@ReportDisplay.Status(finding.Type)</span> <span class="badge @ReportDisplay.Tone(finding.Impact)">@finding.Impact</span> <span class="badge @ReportDisplay.Tone(finding.Impact)">@ReportDisplay.Priority(finding.Impact)</span>
+            <p>
+                <span class="badge @ReportDisplay.Tone(finding.Type)">@ReportDisplay.Status(finding.Type)</span> <span class="badge @ReportDisplay.Tone(finding.Impact)">@finding.Impact</span> <span class="badge @ReportDisplay.Tone(finding.Impact)">@ReportDisplay.Priority(finding.Impact)</span>
                 · @finding.Rule · WCAG level @(string.IsNullOrWhiteSpace(finding.Level) ? "not recorded" : finding.Level)
-                · @finding.Elements element occurrences</p>
+                · @finding.Elements element occurrences
+            </p>
             <p>@finding.Description</p>
             <p><strong>WCAG tags:</strong> @(string.IsNullOrWhiteSpace(finding.Tags) ? "Not recorded" : finding.Tags)</p>
             @if (ReportDisplay.SafeLink(finding.HelpUrl) is { } link)
-            { <a href="@link" rel="noreferrer">Read rule guidance for @finding.Rule (external site)</a> }
+            {
+                <a href="@link" rel="noreferrer">Read rule guidance for @finding.Rule (external site)</a>
+            }
             <details class="technical">
                 <summary>Technical Affected Elements (@finding.Nodes.Count)</summary>
-                @if (finding.Nodes.Count == 0) { <p>No technical element details were saved for this finding.</p> }
+                @if (finding.Nodes.Count == 0)
+                {
+                    <p>No technical element details were saved for this finding.</p>
+                }
                 @for (var n = 0; n < finding.Nodes.Count; n++)
                 {
                     var node = finding.Nodes[n];
@@ -72,3 +109,4 @@
     }
     <partial name="_Pagination" model="Model" />
 </section>
+

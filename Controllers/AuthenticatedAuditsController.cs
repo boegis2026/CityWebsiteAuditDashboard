@@ -366,6 +366,30 @@ public sealed class AuthenticatedAuditsController : Controller
             });
     }
 
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveAuditMetadata(int id, string? applicationName,
+        string? auditNotes, CancellationToken cancellationToken)
+    {
+        applicationName = applicationName?.Trim();
+        auditNotes = auditNotes?.Trim();
+        if (string.IsNullOrWhiteSpace(applicationName) || applicationName.Length > 200 ||
+            auditNotes?.Length > 4000)
+        {
+            TempData["AuditMetadataError"] = "Enter an application name (1–200 characters) and notes of at most 4,000 characters.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+        // Update only these two columns, never scanner state or findings.
+        int changed = await _dbContext.AuthenticatedAuditRuns.Where(run => run.Id == id)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(run => run.ApplicationName, applicationName)
+                .SetProperty(run => run.AuditNotes, string.IsNullOrEmpty(auditNotes) ? null : auditNotes),
+                cancellationToken);
+        if (changed == 0) return NotFound();
+        TempData["AuditMetadataSaved"] = "Audit name and notes saved.";
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
     [HttpGet]
     public async Task<IActionResult> Details(
     int id,
@@ -425,6 +449,7 @@ public sealed class AuthenticatedAuditsController : Controller
         var model = new AuthenticatedAuditDetailsViewModel
         {
             Id = auditRun.Id,
+            AuditNotes = auditRun.AuditNotes,
             ApplicationName = auditRun.ApplicationName,
             StartingUrl = auditRun.StartingUrl,
             AccessibilityEngine = auditRun.AccessibilityEngine,
@@ -1413,3 +1438,4 @@ public sealed class AuthenticatedAuditsController : Controller
             : fileName;
     }
 }
+

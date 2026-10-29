@@ -143,28 +143,28 @@
 <header class="mb-4">
 
     <div class="d-flex
-                flex-wrap
-                justify-content-between
-                align-items-start
-                gap-3">
+        flex-wrap
+        justify-content-between
+        align-items-start
+        gap-3">
 
         <div>
 
             <div class="small
-                        fw-bold
-                        text-uppercase
-                        text-muted
-                        mb-2"
+                fw-bold
+                text-uppercase
+                text-muted
+                mb-2"
                  style="letter-spacing: 0.06em;">
                 Authenticated Accessibility Audit
             </div>
 
 
             <div class="d-flex
-                        flex-wrap
-                        align-items-center
-                        gap-2
-                        mb-2">
+                flex-wrap
+                align-items-center
+                gap-2
+                mb-2">
 
                 <h1 class="h2 mb-0">
                     @Model.ApplicationName
@@ -187,8 +187,8 @@
 
 
         <div class="d-flex
-                    flex-wrap
-                    gap-2">
+            flex-wrap
+            gap-2">
 
             <a asp-controller="AuthenticatedAudits"
                asp-action="History"
@@ -233,6 +233,31 @@
 <!-- =========================================================
      Primary audit summary
      ========================================================= -->
+
+<section class="card mb-4" aria-labelledby="audit-notes-heading">
+    <div class="card-body">
+        <h2 id="audit-notes-heading" class="h4">Audit notes and application name</h2>
+        @if (TempData["AuditMetadataSaved"] is string saved)
+        {
+            <div class="alert alert-success" role="status">@saved</div>
+        }
+        @if (TempData["AuditMetadataError"] is string error)
+        {
+            <div class="alert alert-danger" role="alert">@error</div>
+        }
+        <form asp-action="SaveAuditMetadata" method="post">
+            <input type="hidden" name="id" value="@Model.Id" />
+            <label for="audit-application-name" class="form-label">Application name</label>
+            <input id="audit-application-name" name="applicationName" value="@Model.ApplicationName"
+                   class="form-control mb-3" maxlength="200" required />
+            <label for="audit-notes" class="form-label">Audit notes</label>
+            <textarea id="audit-notes" name="auditNotes" class="form-control mb-2"
+                      rows="5" maxlength="4000" aria-describedby="audit-notes-help">@Model.AuditNotes</textarea>
+            <p id="audit-notes-help" class="text-muted">Record coverage, limitations, or follow-up work. These notes appear on the reporting site. Maximum 4,000 characters.</p>
+            <button type="submit" class="btn btn-primary">Save changes</button>
+        </form>
+    </div>
+</section>
 
 <section aria-labelledby="audit-summary-heading"
          class="mb-4">
@@ -282,11 +307,11 @@
         <div class="col-12 col-sm-6 col-xl-3">
 
             <article class="card
-                            shadow-sm
-                            h-100
-                            border-start
-                            border-danger
-                            border-4">
+                shadow-sm
+                h-100
+                border-start
+                border-danger
+                border-4">
 
                 <div class="card-body">
 
@@ -373,10 +398,10 @@
     <div class="card-header">
 
         <div class="d-flex
-                    flex-wrap
-                    justify-content-between
-                    align-items-center
-                    gap-2">
+            flex-wrap
+            justify-content-between
+            align-items-center
+            gap-2">
 
             <div>
 
@@ -403,9 +428,9 @@
     <div class="card-body">
 
         <div class="row
-                    row-cols-2
-                    row-cols-md-4
-                    g-3">
+            row-cols-2
+            row-cols-md-4
+            g-3">
 
             <div class="col">
 
@@ -683,8 +708,8 @@
     else
     {
         <div class="d-flex
-                    flex-column
-                    gap-4">
+            flex-column
+            gap-4">
 
             @foreach (var step
                 in Model.Steps
@@ -726,8 +751,8 @@
 
 
                 <article class="card
-                                shadow-sm
-                                @stepBorderClass">
+                    shadow-sm
+                    @stepBorderClass">
 
                     <!-- =========================================
                          State header
@@ -736,18 +761,18 @@
                     <div class="card-header">
 
                         <div class="d-flex
-                                    flex-wrap
-                                    justify-content-between
-                                    align-items-start
-                                    gap-3">
+                            flex-wrap
+                            justify-content-between
+                            align-items-start
+                            gap-3">
 
                             <div>
 
                                 <div class="small
-                                            fw-bold
-                                            text-uppercase
-                                            text-muted
-                                            mb-1"
+                                    fw-bold
+                                    text-uppercase
+                                    text-muted
+                                    mb-1"
                                      style="letter-spacing: 0.05em;">
                                     Workflow State @step.StepNumber
                                 </div>
@@ -768,8 +793,8 @@
 
 
                             <div class="d-flex
-                                        flex-wrap
-                                        gap-2">
+                                flex-wrap
+                                gap-2">
 
                                 @if (step.WasFinalStep)
                                 {
@@ -805,18 +830,18 @@
                              ===================================== -->
 
                         <div class="row
-                                    row-cols-2
-                                    row-cols-md-4
-                                    g-3
-                                    mb-4">
+                            row-cols-2
+                            row-cols-md-4
+                            g-3
+                            mb-4">
 
                             <div class="col">
 
                                 <div class="border
-                                            rounded
-                                            p-3
-                                            text-center
-                                            h-100">
+                                    rounded
+                                    p-3
+                                    text-center
+                                    h-100">
 
                                     <div class="fs-3 fw-bold">
                                         @step.ViolationRuleCount
@@ -834,10 +859,10 @@
                             <div class="col">
 
                                 <div class="border
-                                            rounded
-                                            p-3
-                                            text-center
-                                            h-100">
+                                    rounded
+                                    p-3
+                                    text-center
+                                    h-100">
 
                                     <div class="fs-3 fw-bold">
                                         @step.AffectedElementCount
@@ -855,10 +880,10 @@
                             <div class="col">
 
                                 <div class="border
-                                            rounded
-                                            p-3
-                                            text-center
-                                            h-100">
+                                    rounded
+                                    p-3
+                                    text-center
+                                    h-100">
 
                                     <div class="fs-3 fw-bold">
                                         @step.NeedsReviewRuleCount
@@ -876,10 +901,10 @@
                             <div class="col">
 
                                 <div class="border
-                                            rounded
-                                            p-3
-                                            text-center
-                                            h-100">
+                                    rounded
+                                    p-3
+                                    text-center
+                                    h-100">
 
                                     <div class="fs-3 fw-bold text-success">
                                         @step.PassedRuleCount
@@ -901,9 +926,9 @@
                              ===================================== -->
 
                         <details class="border
-                                        rounded
-                                        p-3
-                                        mb-4">
+                            rounded
+                            p-3
+                            mb-4">
 
                             <summary class="fw-semibold">
                                 Technical State Details
@@ -1014,13 +1039,12 @@
                         <!-- =====================================
                              No saved findings
                              ===================================== -->
-
                         @if (step.Findings.Count == 0)
                         {
                             <div class="alert
-                                        alert-light
-                                        border
-                                        mb-0">
+                                alert-light
+                                border
+                                mb-0">
 
                                 No rule-level violations or
                                 needs-review findings were saved for
@@ -1048,18 +1072,17 @@
                             <!-- =================================
                                  Violations
                                  ================================= -->
-
                             @if (violationFindings.Count > 0)
                             {
                                 <section aria-labelledby="violations-step-@step.StepNumber"
                                          class="mb-4">
 
                                     <div class="d-flex
-                                                flex-wrap
-                                                justify-content-between
-                                                align-items-end
-                                                gap-2
-                                                mb-3">
+                                        flex-wrap
+                                        justify-content-between
+                                        align-items-end
+                                        gap-2
+                                        mb-3">
 
                                         <div>
 
@@ -1069,8 +1092,8 @@
                                             </h4>
 
                                             <p class="small
-                                                      text-muted
-                                                      mb-0">
+                                                text-muted
+                                                mb-0">
                                                 Ordered by remediation
                                                 priority.
                                             </p>
@@ -1079,7 +1102,7 @@
 
 
                                         <span class="badge
-                                                     text-bg-danger">
+                                            text-bg-danger">
                                             @violationFindings.Count
                                         </span>
 
@@ -1087,8 +1110,8 @@
 
 
                                     <div class="d-flex
-                                                flex-column
-                                                gap-3">
+                                        flex-column
+                                        gap-3">
 
                                         @foreach (var finding
                                             in violationFindings)
@@ -1141,23 +1164,23 @@
 
 
                                             <article class="border
-                                                            border-danger
-                                                            rounded
-                                                            overflow-hidden">
+                                                border-danger
+                                                rounded
+                                                overflow-hidden">
 
                                                 <div class="p-3">
 
                                                     <div class="d-flex
-                                                                flex-wrap
-                                                                justify-content-between
-                                                                align-items-start
-                                                                gap-3">
+                                                        flex-wrap
+                                                        justify-content-between
+                                                        align-items-start
+                                                        gap-3">
 
                                                         <div style="max-width: 800px;">
 
                                                             <div class="small
-                                                                        text-muted
-                                                                        mb-1">
+                                                                text-muted
+                                                                mb-1">
                                                                 @finding.RuleId
                                                             </div>
 
@@ -1176,8 +1199,8 @@
                                                                 finding.Description))
                                                             {
                                                                 <p class="small
-                                                                          text-muted
-                                                                          mb-0">
+                                                                    text-muted
+                                                                    mb-0">
                                                                     @finding.Description
                                                                 </p>
                                                             }
@@ -1186,20 +1209,20 @@
 
 
                                                         <div class="d-flex
-                                                                    flex-wrap
-                                                                    gap-2">
+                                                            flex-wrap
+                                                            gap-2">
 
                                                             @if (isFixFirst)
                                                             {
                                                                 <span class="badge
-                                                                             text-bg-danger">
+                                                                    text-bg-danger">
                                                                     Fix First
                                                                 </span>
                                                             }
 
 
                                                             <span class="badge
-                                                                         @impactBadgeClass">
+                                                                @impactBadgeClass">
 
                                                                 @(string.IsNullOrWhiteSpace(
                                                                     finding.Impact)
@@ -1213,7 +1236,7 @@
                                                                 finding.WcagLevel))
                                                             {
                                                                 <span class="badge
-                                                                             text-bg-primary">
+                                                                    text-bg-primary">
                                                                     WCAG
                                                                     @finding.WcagLevel
                                                                 </span>
@@ -1221,14 +1244,14 @@
                                                             else
                                                             {
                                                                 <span class="badge
-                                                                             text-bg-secondary">
+                                                                    text-bg-secondary">
                                                                     Other / Best Practice
                                                                 </span>
                                                             }
 
 
                                                             <span class="badge
-                                                                         text-bg-dark">
+                                                                text-bg-dark">
                                                                 @finding.AffectedElementCount
                                                                 affected
                                                             </span>
@@ -1242,8 +1265,8 @@
                                                         finding.WcagTags))
                                                     {
                                                         <div class="small
-                                                                    text-muted
-                                                                    mt-3">
+                                                            text-muted
+                                                            mt-3">
 
                                                             <strong>
                                                                 WCAG tags:
@@ -1260,9 +1283,9 @@
                                                          ===================== -->
 
                                                     <div class="d-flex
-                                                                flex-wrap
-                                                                gap-2
-                                                                mt-3">
+                                                        flex-wrap
+                                                        gap-2
+                                                        mt-3">
 
                                                         @if (!string.IsNullOrWhiteSpace(
                                                             finding.HelpUrl))
@@ -1271,8 +1294,8 @@
                                                                target="_blank"
                                                                rel="noopener noreferrer"
                                                                class="btn
-                                                                      btn-sm
-                                                                      btn-outline-primary">
+                                                                btn-sm
+                                                                btn-outline-primary">
 
                                                                 Rule Guidance
 
@@ -1290,8 +1313,8 @@
                                                                asp-action="Details"
                                                                asp-route-id="@finding.RemediationItemId.Value"
                                                                class="btn
-                                                                      btn-sm
-                                                                      btn-success">
+                                                                btn-sm
+                                                                btn-success">
 
                                                                 View Remediation
 
@@ -1325,8 +1348,8 @@
 
                                                                 <button type="submit"
                                                                         class="btn
-                                                                               btn-sm
-                                                                               btn-success">
+                                                                    btn-sm
+                                                                    btn-success">
                                                                     Start Remediation
                                                                 </button>
 
@@ -1339,12 +1362,11 @@
                                                     <!-- =====================
                                                          Element details
                                                          ===================== -->
-
                                                     @if (finding.Nodes.Count > 0)
                                                     {
                                                         <details class="border-top
-                                                                        mt-3
-                                                                        pt-3">
+                                                            mt-3
+                                                            pt-3">
 
                                                             <summary class="fw-semibold">
                                                                 Technical Affected Elements
@@ -1364,9 +1386,9 @@
 
 
                                                                     <div class="border
-                                                                                rounded
-                                                                                p-3
-                                                                                mb-3">
+                                                                        rounded
+                                                                        p-3
+                                                                        mb-3">
 
                                                                         <h6 class="mb-3">
                                                                             Affected Element
@@ -1377,17 +1399,17 @@
                                                                         <div class="mb-3">
 
                                                                             <div class="small
-                                                                                        fw-semibold
-                                                                                        mb-1">
+                                                                                fw-semibold
+                                                                                mb-1">
                                                                                 CSS Selector / Target
                                                                             </div>
 
                                                                             <code class="d-block
-                                                                                         border
-                                                                                         rounded
-                                                                                         bg-light
-                                                                                         p-2
-                                                                                         text-break">
+                                                                                border
+                                                                                rounded
+                                                                                bg-light
+                                                                                p-2
+                                                                                text-break">
 
                                                                                 @(string.IsNullOrWhiteSpace(
                                                                                     node.Target)
@@ -1405,14 +1427,14 @@
                                                                             <div class="mb-3">
 
                                                                                 <div class="small
-                                                                                            fw-semibold
-                                                                                            mb-1">
+                                                                                    fw-semibold
+                                                                                    mb-1">
                                                                                     Why This Element Failed
                                                                                 </div>
 
                                                                                 <div class="border
-                                                                                            rounded
-                                                                                            p-2"
+                                                                                    rounded
+                                                                                    p-2"
                                                                                      style="white-space: pre-line;">
                                                                                     @node.FailureSummary
                                                                                 </div>
@@ -1425,11 +1447,11 @@
                                                                             node.ElementFixGuidance))
                                                                         {
                                                                             <div class="alert
-                                                                                        alert-success
-                                                                                        mb-3">
+                                                                                alert-success
+                                                                                mb-3">
 
                                                                                 <div class="fw-semibold
-                                                                                            mb-1">
+                                                                                    mb-1">
                                                                                     Element Fix Guidance
                                                                                 </div>
 
@@ -1447,17 +1469,17 @@
                                                                             <div>
 
                                                                                 <div class="small
-                                                                                            fw-semibold
-                                                                                            mb-1">
+                                                                                    fw-semibold
+                                                                                    mb-1">
                                                                                     HTML Snippet
                                                                                 </div>
 
                                                                                 <pre class="border
-                                                                                            rounded
-                                                                                            bg-light
-                                                                                            p-2
-                                                                                            mb-0
-                                                                                            text-wrap"><code>@node.Html</code></pre>
+                                                                                rounded
+                                                                                bg-light
+                                                                                p-2
+                                                                                mb-0
+                                                                                text-wrap"><code>@node.Html</code></pre>
 
                                                                             </div>
                                                                         }
@@ -1484,17 +1506,16 @@
                             <!-- =================================
                                  Needs manual review
                                  ================================= -->
-
                             @if (needsReviewFindings.Count > 0)
                             {
                                 <section aria-labelledby="review-step-@step.StepNumber">
 
                                     <div class="d-flex
-                                                flex-wrap
-                                                justify-content-between
-                                                align-items-end
-                                                gap-2
-                                                mb-3">
+                                        flex-wrap
+                                        justify-content-between
+                                        align-items-end
+                                        gap-2
+                                        mb-3">
 
                                         <div>
 
@@ -1504,8 +1525,8 @@
                                             </h4>
 
                                             <p class="small
-                                                      text-muted
-                                                      mb-0">
+                                                text-muted
+                                                mb-0">
                                                 Findings requiring
                                                 additional evaluation.
                                             </p>
@@ -1514,7 +1535,7 @@
 
 
                                         <span class="badge
-                                                     text-bg-warning">
+                                            text-bg-warning">
                                             @needsReviewFindings.Count
                                         </span>
 
@@ -1522,8 +1543,8 @@
 
 
                                     <div class="d-flex
-                                                flex-column
-                                                gap-3">
+                                        flex-column
+                                        gap-3">
 
                                         @foreach (var finding
                                             in needsReviewFindings)
@@ -1576,23 +1597,23 @@
 
 
                                             <article class="border
-                                                            border-warning
-                                                            rounded
-                                                            overflow-hidden">
+                                                border-warning
+                                                rounded
+                                                overflow-hidden">
 
                                                 <div class="p-3">
 
                                                     <div class="d-flex
-                                                                flex-wrap
-                                                                justify-content-between
-                                                                align-items-start
-                                                                gap-3">
+                                                        flex-wrap
+                                                        justify-content-between
+                                                        align-items-start
+                                                        gap-3">
 
                                                         <div style="max-width: 800px;">
 
                                                             <div class="small
-                                                                        text-muted
-                                                                        mb-1">
+                                                                text-muted
+                                                                mb-1">
                                                                 @finding.RuleId
                                                             </div>
 
@@ -1611,8 +1632,8 @@
                                                                 finding.Description))
                                                             {
                                                                 <p class="small
-                                                                          text-muted
-                                                                          mb-0">
+                                                                    text-muted
+                                                                    mb-0">
                                                                     @finding.Description
                                                                 </p>
                                                             }
@@ -1621,20 +1642,20 @@
 
 
                                                         <div class="d-flex
-                                                                    flex-wrap
-                                                                    gap-2">
+                                                            flex-wrap
+                                                            gap-2">
 
                                                             @if (isFixFirst)
                                                             {
                                                                 <span class="badge
-                                                                             text-bg-danger">
+                                                                    text-bg-danger">
                                                                     Fix First
                                                                 </span>
                                                             }
 
 
                                                             <span class="badge
-                                                                         @impactBadgeClass">
+                                                                @impactBadgeClass">
 
                                                                 @(string.IsNullOrWhiteSpace(
                                                                     finding.Impact)
@@ -1648,7 +1669,7 @@
                                                                 finding.WcagLevel))
                                                             {
                                                                 <span class="badge
-                                                                             text-bg-primary">
+                                                                    text-bg-primary">
                                                                     WCAG
                                                                     @finding.WcagLevel
                                                                 </span>
@@ -1656,14 +1677,14 @@
                                                             else
                                                             {
                                                                 <span class="badge
-                                                                             text-bg-secondary">
+                                                                    text-bg-secondary">
                                                                     Other / Best Practice
                                                                 </span>
                                                             }
 
 
                                                             <span class="badge
-                                                                         text-bg-dark">
+                                                                text-bg-dark">
                                                                 @finding.AffectedElementCount
                                                                 affected
                                                             </span>
@@ -1677,8 +1698,8 @@
                                                         finding.WcagTags))
                                                     {
                                                         <div class="small
-                                                                    text-muted
-                                                                    mt-3">
+                                                            text-muted
+                                                            mt-3">
 
                                                             <strong>
                                                                 WCAG tags:
@@ -1691,9 +1712,9 @@
 
 
                                                     <div class="d-flex
-                                                                flex-wrap
-                                                                gap-2
-                                                                mt-3">
+                                                        flex-wrap
+                                                        gap-2
+                                                        mt-3">
 
                                                         @if (!string.IsNullOrWhiteSpace(
                                                             finding.HelpUrl))
@@ -1702,8 +1723,8 @@
                                                                target="_blank"
                                                                rel="noopener noreferrer"
                                                                class="btn
-                                                                      btn-sm
-                                                                      btn-outline-primary">
+                                                                btn-sm
+                                                                btn-outline-primary">
 
                                                                 Rule Guidance
 
@@ -1721,8 +1742,8 @@
                                                                asp-action="Details"
                                                                asp-route-id="@finding.RemediationItemId.Value"
                                                                class="btn
-                                                                      btn-sm
-                                                                      btn-success">
+                                                                btn-sm
+                                                                btn-success">
 
                                                                 View Remediation
 
@@ -1756,8 +1777,8 @@
 
                                                                 <button type="submit"
                                                                         class="btn
-                                                                               btn-sm
-                                                                               btn-success">
+                                                                    btn-sm
+                                                                    btn-success">
                                                                     Start Remediation
                                                                 </button>
 
@@ -1770,8 +1791,8 @@
                                                     @if (finding.Nodes.Count > 0)
                                                     {
                                                         <details class="border-top
-                                                                        mt-3
-                                                                        pt-3">
+                                                            mt-3
+                                                            pt-3">
 
                                                             <summary class="fw-semibold">
                                                                 Technical Affected Elements
@@ -1791,9 +1812,9 @@
 
 
                                                                     <div class="border
-                                                                                rounded
-                                                                                p-3
-                                                                                mb-3">
+                                                                        rounded
+                                                                        p-3
+                                                                        mb-3">
 
                                                                         <h6 class="mb-3">
                                                                             Affected Element
@@ -1804,17 +1825,17 @@
                                                                         <div class="mb-3">
 
                                                                             <div class="small
-                                                                                        fw-semibold
-                                                                                        mb-1">
+                                                                                fw-semibold
+                                                                                mb-1">
                                                                                 CSS Selector / Target
                                                                             </div>
 
                                                                             <code class="d-block
-                                                                                         border
-                                                                                         rounded
-                                                                                         bg-light
-                                                                                         p-2
-                                                                                         text-break">
+                                                                                border
+                                                                                rounded
+                                                                                bg-light
+                                                                                p-2
+                                                                                text-break">
 
                                                                                 @(string.IsNullOrWhiteSpace(
                                                                                     node.Target)
@@ -1832,14 +1853,14 @@
                                                                             <div class="mb-3">
 
                                                                                 <div class="small
-                                                                                            fw-semibold
-                                                                                            mb-1">
+                                                                                    fw-semibold
+                                                                                    mb-1">
                                                                                     Why This Element Failed
                                                                                 </div>
 
                                                                                 <div class="border
-                                                                                            rounded
-                                                                                            p-2"
+                                                                                    rounded
+                                                                                    p-2"
                                                                                      style="white-space: pre-line;">
                                                                                     @node.FailureSummary
                                                                                 </div>
@@ -1852,11 +1873,11 @@
                                                                             node.ElementFixGuidance))
                                                                         {
                                                                             <div class="alert
-                                                                                        alert-success
-                                                                                        mb-3">
+                                                                                alert-success
+                                                                                mb-3">
 
                                                                                 <div class="fw-semibold
-                                                                                            mb-1">
+                                                                                    mb-1">
                                                                                     Element Fix Guidance
                                                                                 </div>
 
@@ -1874,17 +1895,17 @@
                                                                             <div>
 
                                                                                 <div class="small
-                                                                                            fw-semibold
-                                                                                            mb-1">
+                                                                                    fw-semibold
+                                                                                    mb-1">
                                                                                     HTML Snippet
                                                                                 </div>
 
                                                                                 <pre class="border
-                                                                                            rounded
-                                                                                            bg-light
-                                                                                            p-2
-                                                                                            mb-0
-                                                                                            text-wrap"><code>@node.Html</code></pre>
+                                                                                rounded
+                                                                                bg-light
+                                                                                p-2
+                                                                                mb-0
+                                                                                text-wrap"><code>@node.Html</code></pre>
 
                                                                             </div>
                                                                         }
@@ -1917,3 +1938,4 @@
     }
 
 </section>
+

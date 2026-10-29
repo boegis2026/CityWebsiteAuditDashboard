@@ -131,6 +131,8 @@ public sealed class ReportStore(IConfiguration configuration)
         const string one = "WITH Filtered AS (SELECT Id, ApplicationName, StartedAt, Status FROM dbo.AuthenticatedAuditRuns WHERE Id = @id) ";
         page.Audit = (await Read(one + AuditColumns, page.Filter, Audit, ct, id)).SingleOrDefault();
         if (page.Audit is null) return;
+        page.AuditNotes = (await Read("SELECT AuditNotes FROM dbo.AuthenticatedAuditRuns WHERE Id = @id;",
+            page.Filter, r => Optional(r, 0), ct, id)).SingleOrDefault();
         page.Steps = await Read("""
             SELECT StepNumber, StepName, ScannedAt, ScanSucceeded, ViolationRuleCount, NeedsReviewRuleCount, AffectedElementCount
             FROM dbo.AuthenticatedAuditSteps WHERE AuthenticatedAuditRunId = @id ORDER BY StepNumber;
@@ -151,7 +153,8 @@ public sealed class ReportStore(IConfiguration configuration)
                      CASE f.Impact WHEN N'critical' THEN 0 WHEN N'serious' THEN 1 WHEN N'moderate' THEN 2 WHEN N'minor' THEN 3 ELSE 4 END,
                      s.StepNumber, f.Id
             """ + (all ? ";" : " OFFSET @offset ROWS FETCH NEXT 25 ROWS ONLY;"), page.Filter, r => new FindingRow(r.GetInt32(0), r.GetInt32(1), Text(r, 2), Text(r, 3), Text(r, 4),
-                Text(r, 5), Text(r, 6), Text(r, 7), Optional(r, 8), Optional(r, 9), r.GetInt32(10)) { Tags = Text(r, 11) }, ct, id);
+                Text(r, 5), Text(r, 6), Text(r, 7), Optional(r, 8), Optional(r, 9), r.GetInt32(10))
+        { Tags = Text(r, 11) }, ct, id);
         if (page.Findings.Count > 0)
         {
             // IDs originate from the preceding database query, never from request text.
@@ -188,3 +191,4 @@ public sealed class ReportStore(IConfiguration configuration)
                 r.IsDBNull(10) ? null : r.GetDateTime(10), Optional(r, 11), Optional(r, 12)), ct);
     }
 }
+

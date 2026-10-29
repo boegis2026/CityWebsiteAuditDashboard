@@ -14,5 +14,6 @@
 		<PackageReference Include="System.Drawing.Common" Version="10.0.10" />
 		<ProjectReference Include="..\CityWebsiteAuditDashboard.Contracts\CityWebsiteAuditDashboard.Contracts.csproj" />
 		<Compile Include="..\Services\AuthenticatedAuditing\IAuthenticatedAuditService.cs" Link="IAuthenticatedAuditService.cs" />
+		<PackageReference Include="System.Security.Cryptography.Pkcs" Version="8.0.2" />
 	</ItemGroup>
 </Project>

@@ -23,664 +23,669 @@ namespace CityWebsiteAuditDashboard.Migrations
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
             modelBuilder.Entity("CityWebsiteAuditDashboard.Models.AccessibilityRemediationFindingOccurrence", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("AccessibilityRemediationItemId")
-                        .HasColumnType("int");
+                b.Property<int>("AccessibilityRemediationItemId")
+                    .HasColumnType("int");
 
-                    b.Property<int>("AuthenticatedAuditFindingId")
-                        .HasColumnType("int");
+                b.Property<int>("AuthenticatedAuditFindingId")
+                    .HasColumnType("int");
 
-                    b.Property<DateTime>("LinkedAt")
-                        .HasColumnType("datetime2");
+                b.Property<DateTime>("LinkedAt")
+                    .HasColumnType("datetime2");
 
-                    b.Property<string>("LinkedBy")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                b.Property<string>("LinkedBy")
+                    .HasMaxLength(200)
+                    .HasColumnType("nvarchar(200)");
 
-                    b.Property<decimal?>("MatchConfidence")
-                        .HasPrecision(5, 4)
-                        .HasColumnType("decimal(5,4)");
+                b.Property<decimal?>("MatchConfidence")
+                    .HasPrecision(5, 4)
+                    .HasColumnType("decimal(5,4)");
 
-                    b.Property<string>("MatchMethod")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                b.Property<string>("MatchMethod")
+                    .HasMaxLength(100)
+                    .HasColumnType("nvarchar(100)");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("AccessibilityRemediationItemId");
+                b.HasIndex("AccessibilityRemediationItemId");
 
-                    b.HasIndex("AuthenticatedAuditFindingId")
-                        .IsUnique();
+                b.HasIndex("AuthenticatedAuditFindingId")
+                    .IsUnique();
 
-                    b.ToTable("AccessibilityRemediationFindingOccurrences");
-                });
+                b.ToTable("AccessibilityRemediationFindingOccurrences");
+            });
 
             modelBuilder.Entity("CityWebsiteAuditDashboard.Models.AccessibilityRemediationHistory", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("AccessibilityRemediationItemId")
-                        .HasColumnType("int");
+                b.Property<int>("AccessibilityRemediationItemId")
+                    .HasColumnType("int");
 
-                    b.Property<DateTime>("ChangedAt")
-                        .HasColumnType("datetime2");
+                b.Property<DateTime>("ChangedAt")
+                    .HasColumnType("datetime2");
 
-                    b.Property<string>("ChangedBy")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                b.Property<string>("ChangedBy")
+                    .HasMaxLength(200)
+                    .HasColumnType("nvarchar(200)");
 
-                    b.Property<string>("EventType")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                b.Property<string>("EventType")
+                    .IsRequired()
+                    .HasMaxLength(100)
+                    .HasColumnType("nvarchar(100)");
 
-                    b.Property<string>("NewAssignee")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                b.Property<string>("NewAssignee")
+                    .HasMaxLength(200)
+                    .HasColumnType("nvarchar(200)");
 
-                    b.Property<string>("NewStatus")
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
+                b.Property<string>("NewStatus")
+                    .HasMaxLength(30)
+                    .HasColumnType("nvarchar(30)");
 
-                    b.Property<string>("Notes")
-                        .HasMaxLength(4000)
-                        .HasColumnType("nvarchar(4000)");
+                b.Property<string>("Notes")
+                    .HasMaxLength(4000)
+                    .HasColumnType("nvarchar(4000)");
 
-                    b.Property<string>("PreviousAssignee")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                b.Property<string>("PreviousAssignee")
+                    .HasMaxLength(200)
+                    .HasColumnType("nvarchar(200)");
 
-                    b.Property<string>("PreviousStatus")
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
+                b.Property<string>("PreviousStatus")
+                    .HasMaxLength(30)
+                    .HasColumnType("nvarchar(30)");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("AccessibilityRemediationItemId");
+                b.HasIndex("AccessibilityRemediationItemId");
 
-                    b.HasIndex("ChangedAt");
+                b.HasIndex("ChangedAt");
 
-                    b.ToTable("AccessibilityRemediationHistories");
-                });
+                b.ToTable("AccessibilityRemediationHistories");
+            });
 
             modelBuilder.Entity("CityWebsiteAuditDashboard.Models.AccessibilityRemediationItem", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("AssignedTo")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                b.Property<string>("AssignedTo")
+                    .HasMaxLength(200)
+                    .HasColumnType("nvarchar(200)");
 
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
+                b.Property<DateTime>("CreatedAt")
+                    .HasColumnType("datetime2");
 
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
+                b.Property<byte[]>("RowVersion")
+                    .IsConcurrencyToken()
+                    .ValueGeneratedOnAddOrUpdate()
+                    .HasColumnType("rowversion");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
+                b.Property<string>("Status")
+                    .IsRequired()
+                    .HasMaxLength(30)
+                    .HasColumnType("nvarchar(30)");
 
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime2");
+                b.Property<DateTime>("UpdatedAt")
+                    .HasColumnType("datetime2");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("AssignedTo");
+                b.HasIndex("AssignedTo");
 
-                    b.HasIndex("Status");
+                b.HasIndex("Status");
 
-                    b.ToTable("AccessibilityRemediationItems");
-                });
+                b.ToTable("AccessibilityRemediationItems");
+            });
 
             modelBuilder.Entity("CityWebsiteAuditDashboard.Models.AccessibilityRemediationRetest", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("AccessibilityRemediationItemId")
-                        .HasColumnType("int");
+                b.Property<int>("AccessibilityRemediationItemId")
+                    .HasColumnType("int");
 
-                    b.Property<int?>("AuthenticatedAuditRunId")
-                        .HasColumnType("int");
+                b.Property<int?>("AuthenticatedAuditRunId")
+                    .HasColumnType("int");
 
-                    b.Property<int?>("AuthenticatedAuditStepId")
-                        .HasColumnType("int");
+                b.Property<int?>("AuthenticatedAuditStepId")
+                    .HasColumnType("int");
 
-                    b.Property<decimal?>("MatchConfidence")
-                        .HasPrecision(5, 4)
-                        .HasColumnType("decimal(5,4)");
+                b.Property<decimal?>("MatchConfidence")
+                    .HasPrecision(5, 4)
+                    .HasColumnType("decimal(5,4)");
 
-                    b.Property<string>("MatchMethod")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                b.Property<string>("MatchMethod")
+                    .HasMaxLength(100)
+                    .HasColumnType("nvarchar(100)");
 
-                    b.Property<int?>("MatchedAuthenticatedAuditFindingId")
-                        .HasColumnType("int");
+                b.Property<int?>("MatchedAuthenticatedAuditFindingId")
+                    .HasColumnType("int");
 
-                    b.Property<string>("Notes")
-                        .HasMaxLength(4000)
-                        .HasColumnType("nvarchar(4000)");
+                b.Property<string>("Notes")
+                    .HasMaxLength(4000)
+                    .HasColumnType("nvarchar(4000)");
 
-                    b.Property<int?>("OriginalAuthenticatedAuditFindingId")
-                        .HasColumnType("int");
+                b.Property<int?>("OriginalAuthenticatedAuditFindingId")
+                    .HasColumnType("int");
 
-                    b.Property<string>("Result")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
+                b.Property<string>("Result")
+                    .IsRequired()
+                    .HasMaxLength(30)
+                    .HasColumnType("nvarchar(30)");
 
-                    b.Property<string>("RetestType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                b.Property<string>("RetestType")
+                    .IsRequired()
+                    .HasMaxLength(50)
+                    .HasColumnType("nvarchar(50)");
 
-                    b.Property<DateTime>("RetestedAt")
-                        .HasColumnType("datetime2");
+                b.Property<DateTime>("RetestedAt")
+                    .HasColumnType("datetime2");
 
-                    b.Property<string>("RetestedBy")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                b.Property<string>("RetestedBy")
+                    .HasMaxLength(200)
+                    .HasColumnType("nvarchar(200)");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("AccessibilityRemediationItemId");
+                b.HasIndex("AccessibilityRemediationItemId");
 
-                    b.HasIndex("AuthenticatedAuditRunId");
+                b.HasIndex("AuthenticatedAuditRunId");
 
-                    b.HasIndex("AuthenticatedAuditStepId");
+                b.HasIndex("AuthenticatedAuditStepId");
 
-                    b.HasIndex("MatchedAuthenticatedAuditFindingId");
+                b.HasIndex("MatchedAuthenticatedAuditFindingId");
 
-                    b.HasIndex("OriginalAuthenticatedAuditFindingId");
+                b.HasIndex("OriginalAuthenticatedAuditFindingId");
 
-                    b.HasIndex("Result");
+                b.HasIndex("Result");
 
-                    b.HasIndex("RetestedAt");
+                b.HasIndex("RetestedAt");
 
-                    b.ToTable("AccessibilityRemediationRetests");
-                });
+                b.ToTable("AccessibilityRemediationRetests");
+            });
 
             modelBuilder.Entity("CityWebsiteAuditDashboard.Models.AuthenticatedAuditFinding", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("AffectedElementCount")
-                        .HasColumnType("int");
+                b.Property<int>("AffectedElementCount")
+                    .HasColumnType("int");
 
-                    b.Property<int>("AuthenticatedAuditStepId")
-                        .HasColumnType("int");
+                b.Property<int>("AuthenticatedAuditStepId")
+                    .HasColumnType("int");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(2000)
-                        .HasColumnType("nvarchar(2000)");
+                b.Property<string>("Description")
+                    .HasMaxLength(2000)
+                    .HasColumnType("nvarchar(2000)");
 
-                    b.Property<string>("FindingType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                b.Property<string>("FindingType")
+                    .IsRequired()
+                    .HasMaxLength(50)
+                    .HasColumnType("nvarchar(50)");
 
-                    b.Property<string>("Help")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
+                b.Property<string>("Help")
+                    .HasMaxLength(500)
+                    .HasColumnType("nvarchar(500)");
 
-                    b.Property<string>("HelpUrl")
-                        .HasMaxLength(2048)
-                        .HasColumnType("nvarchar(2048)");
+                b.Property<string>("HelpUrl")
+                    .HasMaxLength(2048)
+                    .HasColumnType("nvarchar(2048)");
 
-                    b.Property<string>("Impact")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                b.Property<string>("Impact")
+                    .HasMaxLength(50)
+                    .HasColumnType("nvarchar(50)");
 
-                    b.Property<string>("RuleId")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                b.Property<string>("RuleId")
+                    .IsRequired()
+                    .HasMaxLength(200)
+                    .HasColumnType("nvarchar(200)");
 
-                    b.Property<string>("WcagLevel")
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("WcagLevel")
+                    .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("WcagTags")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("WcagTags")
+                    .IsRequired()
+                    .HasColumnType("nvarchar(max)");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("AuthenticatedAuditStepId", "FindingType", "RuleId")
-                        .IsUnique();
+                b.HasIndex("AuthenticatedAuditStepId", "FindingType", "RuleId")
+                    .IsUnique();
 
-                    b.ToTable("AuthenticatedAuditFindings");
-                });
+                b.ToTable("AuthenticatedAuditFindings");
+            });
 
             modelBuilder.Entity("CityWebsiteAuditDashboard.Models.AuthenticatedAuditFindingNode", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("AuthenticatedAuditFindingId")
-                        .HasColumnType("int");
+                b.Property<int>("AuthenticatedAuditFindingId")
+                    .HasColumnType("int");
 
-                    b.Property<string>("ElementFixGuidance")
-                        .HasMaxLength(4000)
-                        .HasColumnType("nvarchar(4000)");
+                b.Property<string>("ElementFixGuidance")
+                    .HasMaxLength(4000)
+                    .HasColumnType("nvarchar(4000)");
 
-                    b.Property<string>("FailureSummary")
-                        .HasMaxLength(4000)
-                        .HasColumnType("nvarchar(4000)");
+                b.Property<string>("FailureSummary")
+                    .HasMaxLength(4000)
+                    .HasColumnType("nvarchar(4000)");
 
-                    b.Property<string>("Html")
-                        .HasMaxLength(10000)
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("Html")
+                    .HasMaxLength(10000)
+                    .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("Target")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("nvarchar(2000)");
+                b.Property<string>("Target")
+                    .IsRequired()
+                    .HasMaxLength(2000)
+                    .HasColumnType("nvarchar(2000)");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("AuthenticatedAuditFindingId");
+                b.HasIndex("AuthenticatedAuditFindingId");
 
-                    b.ToTable("AuthenticatedAuditFindingNodes");
-                });
+                b.ToTable("AuthenticatedAuditFindingNodes");
+            });
 
             modelBuilder.Entity("CityWebsiteAuditDashboard.Models.AuthenticatedAuditRun", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("AccessibilityEngine")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                b.Property<string>("AccessibilityEngine")
+                    .IsRequired()
+                    .HasMaxLength(50)
+                    .HasColumnType("nvarchar(50)");
 
-                    b.Property<string>("ApplicationName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                b.Property<string>("AuditNotes")
+                    .HasMaxLength(4000)
+                    .HasColumnType("nvarchar(4000)");
 
-                    b.Property<DateTime?>("CompletedAt")
-                        .HasColumnType("datetime2");
+                b.Property<string>("ApplicationName")
+                    .IsRequired()
+                    .HasMaxLength(200)
+                    .HasColumnType("nvarchar(200)");
 
-                    b.Property<string>("ErrorMessage")
-                        .HasMaxLength(4000)
-                        .HasColumnType("nvarchar(4000)");
+                b.Property<DateTime?>("CompletedAt")
+                    .HasColumnType("datetime2");
 
-                    b.Property<DateTime>("StartedAt")
-                        .HasColumnType("datetime2");
+                b.Property<string>("ErrorMessage")
+                    .HasMaxLength(4000)
+                    .HasColumnType("nvarchar(4000)");
 
-                    b.Property<string>("StartingUrl")
-                        .IsRequired()
-                        .HasMaxLength(2048)
-                        .HasColumnType("nvarchar(2048)");
+                b.Property<DateTime>("StartedAt")
+                    .HasColumnType("datetime2");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                b.Property<string>("StartingUrl")
+                    .IsRequired()
+                    .HasMaxLength(2048)
+                    .HasColumnType("nvarchar(2048)");
 
-                    b.HasKey("Id");
+                b.Property<string>("Status")
+                    .IsRequired()
+                    .HasMaxLength(50)
+                    .HasColumnType("nvarchar(50)");
 
-                    b.HasIndex("StartedAt");
+                b.HasKey("Id");
 
-                    b.HasIndex("Status");
+                b.HasIndex("StartedAt");
 
-                    b.ToTable("AuthenticatedAuditRuns");
-                });
+                b.HasIndex("Status");
+
+                b.ToTable("AuthenticatedAuditRuns");
+            });
 
             modelBuilder.Entity("CityWebsiteAuditDashboard.Models.AuthenticatedAuditStep", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("AffectedElementCount")
-                        .HasColumnType("int");
+                b.Property<int>("AffectedElementCount")
+                    .HasColumnType("int");
 
-                    b.Property<int>("AuthenticatedAuditRunId")
-                        .HasColumnType("int");
+                b.Property<int>("AuthenticatedAuditRunId")
+                    .HasColumnType("int");
 
-                    b.Property<string>("DomFingerprint")
-                        .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)");
+                b.Property<string>("DomFingerprint")
+                    .HasMaxLength(128)
+                    .HasColumnType("nvarchar(128)");
 
-                    b.Property<string>("ErrorMessage")
-                        .HasMaxLength(4000)
-                        .HasColumnType("nvarchar(4000)");
+                b.Property<string>("ErrorMessage")
+                    .HasMaxLength(4000)
+                    .HasColumnType("nvarchar(4000)");
 
-                    b.Property<string>("Heading")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
+                b.Property<string>("Heading")
+                    .HasMaxLength(500)
+                    .HasColumnType("nvarchar(500)");
 
-                    b.Property<int>("NeedsReviewRuleCount")
-                        .HasColumnType("int");
+                b.Property<int>("NeedsReviewRuleCount")
+                    .HasColumnType("int");
 
-                    b.Property<string>("PageTitle")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
+                b.Property<string>("PageTitle")
+                    .HasMaxLength(500)
+                    .HasColumnType("nvarchar(500)");
 
-                    b.Property<int>("PassedRuleCount")
-                        .HasColumnType("int");
+                b.Property<int>("PassedRuleCount")
+                    .HasColumnType("int");
 
-                    b.Property<bool>("ScanSucceeded")
-                        .HasColumnType("bit");
+                b.Property<bool>("ScanSucceeded")
+                    .HasColumnType("bit");
 
-                    b.Property<DateTime>("ScannedAt")
-                        .HasColumnType("datetime2");
+                b.Property<DateTime>("ScannedAt")
+                    .HasColumnType("datetime2");
 
-                    b.Property<string>("StepName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                b.Property<string>("StepName")
+                    .IsRequired()
+                    .HasMaxLength(200)
+                    .HasColumnType("nvarchar(200)");
 
-                    b.Property<int>("StepNumber")
-                        .HasColumnType("int");
+                b.Property<int>("StepNumber")
+                    .HasColumnType("int");
 
-                    b.Property<string>("Url")
-                        .IsRequired()
-                        .HasMaxLength(2048)
-                        .HasColumnType("nvarchar(2048)");
+                b.Property<string>("Url")
+                    .IsRequired()
+                    .HasMaxLength(2048)
+                    .HasColumnType("nvarchar(2048)");
 
-                    b.Property<int>("ViolationRuleCount")
-                        .HasColumnType("int");
+                b.Property<int>("ViolationRuleCount")
+                    .HasColumnType("int");
 
-                    b.Property<int>("VisibleButtonCount")
-                        .HasColumnType("int");
+                b.Property<int>("VisibleButtonCount")
+                    .HasColumnType("int");
 
-                    b.Property<int>("VisibleFieldCount")
-                        .HasColumnType("int");
+                b.Property<int>("VisibleFieldCount")
+                    .HasColumnType("int");
 
-                    b.Property<int>("VisibleFormCount")
-                        .HasColumnType("int");
+                b.Property<int>("VisibleFormCount")
+                    .HasColumnType("int");
 
-                    b.Property<bool>("WasFinalStep")
-                        .HasColumnType("bit");
+                b.Property<bool>("WasFinalStep")
+                    .HasColumnType("bit");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("ScannedAt");
+                b.HasIndex("ScannedAt");
 
-                    b.HasIndex("AuthenticatedAuditRunId", "StepNumber")
-                        .IsUnique();
+                b.HasIndex("AuthenticatedAuditRunId", "StepNumber")
+                    .IsUnique();
 
-                    b.ToTable("AuthenticatedAuditSteps");
-                });
+                b.ToTable("AuthenticatedAuditSteps");
+            });
 
             modelBuilder.Entity("CityWebsiteAuditDashboard.Models.WaveAccessibilityIssue", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Category")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                b.Property<string>("Category")
+                    .IsRequired()
+                    .HasMaxLength(50)
+                    .HasColumnType("nvarchar(50)");
 
-                    b.Property<int>("Count")
-                        .HasColumnType("int");
+                b.Property<int>("Count")
+                    .HasColumnType("int");
 
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
+                b.Property<string>("Description")
+                    .IsRequired()
+                    .HasMaxLength(300)
+                    .HasColumnType("nvarchar(300)");
 
-                    b.Property<string>("IssueCode")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                b.Property<string>("IssueCode")
+                    .IsRequired()
+                    .HasMaxLength(100)
+                    .HasColumnType("nvarchar(100)");
 
-                    b.Property<int>("WebsiteScanId")
-                        .HasColumnType("int");
+                b.Property<int>("WebsiteScanId")
+                    .HasColumnType("int");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.HasIndex("WebsiteScanId");
+                b.HasIndex("WebsiteScanId");
 
-                    b.ToTable("WaveAccessibilityIssues");
-                });
+                b.ToTable("WaveAccessibilityIssues");
+            });
 
             modelBuilder.Entity("CityWebsiteAuditDashboard.Models.WebsiteScan", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<DateTime>("DateScanned")
-                        .HasColumnType("datetime2");
+                b.Property<DateTime>("DateScanned")
+                    .HasColumnType("datetime2");
 
-                    b.Property<int?>("HttpStatusCode")
-                        .HasColumnType("int");
+                b.Property<int?>("HttpStatusCode")
+                    .HasColumnType("int");
 
-                    b.Property<string>("IPv4Address")
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("IPv4Address")
+                    .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("Notes")
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("Notes")
+                    .HasColumnType("nvarchar(max)");
 
-                    b.Property<long?>("ResponseTimeMilliseconds")
-                        .HasColumnType("bigint");
+                b.Property<long?>("ResponseTimeMilliseconds")
+                    .HasColumnType("bigint");
 
-                    b.Property<string>("ScanError")
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("ScanError")
+                    .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("ServerHeader")
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("ServerHeader")
+                    .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("Url")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("Url")
+                    .IsRequired()
+                    .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("WaveAlerts")
-                        .HasColumnType("int");
+                b.Property<int?>("WaveAlerts")
+                    .HasColumnType("int");
 
-                    b.Property<int?>("WaveAria")
-                        .HasColumnType("int");
+                b.Property<int?>("WaveAria")
+                    .HasColumnType("int");
 
-                    b.Property<int?>("WaveContrastErrors")
-                        .HasColumnType("int");
+                b.Property<int?>("WaveContrastErrors")
+                    .HasColumnType("int");
 
-                    b.Property<string>("WaveErrorMessage")
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("WaveErrorMessage")
+                    .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("WaveErrors")
-                        .HasColumnType("int");
+                b.Property<int?>("WaveErrors")
+                    .HasColumnType("int");
 
-                    b.Property<int?>("WaveFeatures")
-                        .HasColumnType("int");
+                b.Property<int?>("WaveFeatures")
+                    .HasColumnType("int");
 
-                    b.Property<bool?>("WaveScanSucceeded")
-                        .HasColumnType("bit");
+                b.Property<bool?>("WaveScanSucceeded")
+                    .HasColumnType("bit");
 
-                    b.Property<DateTime?>("WaveScannedAt")
-                        .HasColumnType("datetime2");
+                b.Property<DateTime?>("WaveScannedAt")
+                    .HasColumnType("datetime2");
 
-                    b.Property<string>("XPoweredByHeader")
-                        .HasColumnType("nvarchar(max)");
+                b.Property<string>("XPoweredByHeader")
+                    .HasColumnType("nvarchar(max)");
 
-                    b.HasKey("Id");
+                b.HasKey("Id");
 
-                    b.ToTable("WebsiteScans");
-                });
+                b.ToTable("WebsiteScans");
+            });
 
             modelBuilder.Entity("CityWebsiteAuditDashboard.Models.AccessibilityRemediationFindingOccurrence", b =>
-                {
-                    b.HasOne("CityWebsiteAuditDashboard.Models.AccessibilityRemediationItem", "RemediationItem")
-                        .WithMany("FindingOccurrences")
-                        .HasForeignKey("AccessibilityRemediationItemId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+            {
+                b.HasOne("CityWebsiteAuditDashboard.Models.AccessibilityRemediationItem", "RemediationItem")
+                    .WithMany("FindingOccurrences")
+                    .HasForeignKey("AccessibilityRemediationItemId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
 
-                    b.HasOne("CityWebsiteAuditDashboard.Models.AuthenticatedAuditFinding", "AuthenticatedAuditFinding")
-                        .WithMany()
-                        .HasForeignKey("AuthenticatedAuditFindingId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                b.HasOne("CityWebsiteAuditDashboard.Models.AuthenticatedAuditFinding", "AuthenticatedAuditFinding")
+                    .WithMany()
+                    .HasForeignKey("AuthenticatedAuditFindingId")
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .IsRequired();
 
-                    b.Navigation("AuthenticatedAuditFinding");
+                b.Navigation("AuthenticatedAuditFinding");
 
-                    b.Navigation("RemediationItem");
-                });
+                b.Navigation("RemediationItem");
+            });
 
             modelBuilder.Entity("CityWebsiteAuditDashboard.Models.AccessibilityRemediationHistory", b =>
-                {
-                    b.HasOne("CityWebsiteAuditDashboard.Models.AccessibilityRemediationItem", "RemediationItem")
-                        .WithMany("History")
-                        .HasForeignKey("AccessibilityRemediationItemId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+            {
+                b.HasOne("CityWebsiteAuditDashboard.Models.AccessibilityRemediationItem", "RemediationItem")
+                    .WithMany("History")
+                    .HasForeignKey("AccessibilityRemediationItemId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
 
-                    b.Navigation("RemediationItem");
-                });
+                b.Navigation("RemediationItem");
+            });
 
             modelBuilder.Entity("CityWebsiteAuditDashboard.Models.AccessibilityRemediationRetest", b =>
-                {
-                    b.HasOne("CityWebsiteAuditDashboard.Models.AccessibilityRemediationItem", "RemediationItem")
-                        .WithMany("Retests")
-                        .HasForeignKey("AccessibilityRemediationItemId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+            {
+                b.HasOne("CityWebsiteAuditDashboard.Models.AccessibilityRemediationItem", "RemediationItem")
+                    .WithMany("Retests")
+                    .HasForeignKey("AccessibilityRemediationItemId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
 
-                    b.HasOne("CityWebsiteAuditDashboard.Models.AuthenticatedAuditRun", "AuthenticatedAuditRun")
-                        .WithMany()
-                        .HasForeignKey("AuthenticatedAuditRunId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                b.HasOne("CityWebsiteAuditDashboard.Models.AuthenticatedAuditRun", "AuthenticatedAuditRun")
+                    .WithMany()
+                    .HasForeignKey("AuthenticatedAuditRunId")
+                    .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("CityWebsiteAuditDashboard.Models.AuthenticatedAuditStep", "AuthenticatedAuditStep")
-                        .WithMany()
-                        .HasForeignKey("AuthenticatedAuditStepId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                b.HasOne("CityWebsiteAuditDashboard.Models.AuthenticatedAuditStep", "AuthenticatedAuditStep")
+                    .WithMany()
+                    .HasForeignKey("AuthenticatedAuditStepId")
+                    .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("CityWebsiteAuditDashboard.Models.AuthenticatedAuditFinding", "MatchedAuthenticatedAuditFinding")
-                        .WithMany()
-                        .HasForeignKey("MatchedAuthenticatedAuditFindingId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                b.HasOne("CityWebsiteAuditDashboard.Models.AuthenticatedAuditFinding", "MatchedAuthenticatedAuditFinding")
+                    .WithMany()
+                    .HasForeignKey("MatchedAuthenticatedAuditFindingId")
+                    .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("CityWebsiteAuditDashboard.Models.AuthenticatedAuditFinding", "OriginalAuthenticatedAuditFinding")
-                        .WithMany()
-                        .HasForeignKey("OriginalAuthenticatedAuditFindingId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                b.HasOne("CityWebsiteAuditDashboard.Models.AuthenticatedAuditFinding", "OriginalAuthenticatedAuditFinding")
+                    .WithMany()
+                    .HasForeignKey("OriginalAuthenticatedAuditFindingId")
+                    .OnDelete(DeleteBehavior.Restrict);
 
-                    b.Navigation("AuthenticatedAuditRun");
+                b.Navigation("AuthenticatedAuditRun");
 
-                    b.Navigation("AuthenticatedAuditStep");
+                b.Navigation("AuthenticatedAuditStep");
 
-                    b.Navigation("MatchedAuthenticatedAuditFinding");
+                b.Navigation("MatchedAuthenticatedAuditFinding");
 
-                    b.Navigation("OriginalAuthenticatedAuditFinding");
+                b.Navigation("OriginalAuthenticatedAuditFinding");
 
-                    b.Navigation("RemediationItem");
-                });
+                b.Navigation("RemediationItem");
+            });
 
             modelBuilder.Entity("CityWebsiteAuditDashboard.Models.AuthenticatedAuditFinding", b =>
-                {
-                    b.HasOne("CityWebsiteAuditDashboard.Models.AuthenticatedAuditStep", "AuthenticatedAuditStep")
-                        .WithMany("Findings")
-                        .HasForeignKey("AuthenticatedAuditStepId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+            {
+                b.HasOne("CityWebsiteAuditDashboard.Models.AuthenticatedAuditStep", "AuthenticatedAuditStep")
+                    .WithMany("Findings")
+                    .HasForeignKey("AuthenticatedAuditStepId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
 
-                    b.Navigation("AuthenticatedAuditStep");
-                });
+                b.Navigation("AuthenticatedAuditStep");
+            });
 
             modelBuilder.Entity("CityWebsiteAuditDashboard.Models.AuthenticatedAuditFindingNode", b =>
-                {
-                    b.HasOne("CityWebsiteAuditDashboard.Models.AuthenticatedAuditFinding", "AuthenticatedAuditFinding")
-                        .WithMany("Nodes")
-                        .HasForeignKey("AuthenticatedAuditFindingId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+            {
+                b.HasOne("CityWebsiteAuditDashboard.Models.AuthenticatedAuditFinding", "AuthenticatedAuditFinding")
+                    .WithMany("Nodes")
+                    .HasForeignKey("AuthenticatedAuditFindingId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
 
-                    b.Navigation("AuthenticatedAuditFinding");
-                });
+                b.Navigation("AuthenticatedAuditFinding");
+            });
 
             modelBuilder.Entity("CityWebsiteAuditDashboard.Models.AuthenticatedAuditStep", b =>
-                {
-                    b.HasOne("CityWebsiteAuditDashboard.Models.AuthenticatedAuditRun", "AuthenticatedAuditRun")
-                        .WithMany("Steps")
-                        .HasForeignKey("AuthenticatedAuditRunId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+            {
+                b.HasOne("CityWebsiteAuditDashboard.Models.AuthenticatedAuditRun", "AuthenticatedAuditRun")
+                    .WithMany("Steps")
+                    .HasForeignKey("AuthenticatedAuditRunId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
 
-                    b.Navigation("AuthenticatedAuditRun");
-                });
+                b.Navigation("AuthenticatedAuditRun");
+            });
 
             modelBuilder.Entity("CityWebsiteAuditDashboard.Models.WaveAccessibilityIssue", b =>
-                {
-                    b.HasOne("CityWebsiteAuditDashboard.Models.WebsiteScan", "WebsiteScan")
-                        .WithMany("WaveAccessibilityIssues")
-                        .HasForeignKey("WebsiteScanId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+            {
+                b.HasOne("CityWebsiteAuditDashboard.Models.WebsiteScan", "WebsiteScan")
+                    .WithMany("WaveAccessibilityIssues")
+                    .HasForeignKey("WebsiteScanId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
 
-                    b.Navigation("WebsiteScan");
-                });
+                b.Navigation("WebsiteScan");
+            });
 
             modelBuilder.Entity("CityWebsiteAuditDashboard.Models.AccessibilityRemediationItem", b =>
-                {
-                    b.Navigation("FindingOccurrences");
+            {
+                b.Navigation("FindingOccurrences");
 
-                    b.Navigation("History");
+                b.Navigation("History");
 
-                    b.Navigation("Retests");
-                });
+                b.Navigation("Retests");
+            });
 
             modelBuilder.Entity("CityWebsiteAuditDashboard.Models.AuthenticatedAuditFinding", b =>
-                {
-                    b.Navigation("Nodes");
-                });
+            {
+                b.Navigation("Nodes");
+            });
 
             modelBuilder.Entity("CityWebsiteAuditDashboard.Models.AuthenticatedAuditRun", b =>
-                {
-                    b.Navigation("Steps");
-                });
+            {
+                b.Navigation("Steps");
+            });
 
             modelBuilder.Entity("CityWebsiteAuditDashboard.Models.AuthenticatedAuditStep", b =>
-                {
-                    b.Navigation("Findings");
-                });
+            {
+                b.Navigation("Findings");
+            });
 
             modelBuilder.Entity("CityWebsiteAuditDashboard.Models.WebsiteScan", b =>
-                {
-                    b.Navigation("WaveAccessibilityIssues");
-                });
+            {
+                b.Navigation("WaveAccessibilityIssues");
+            });
 #pragma warning restore 612, 618
         }
     }
 }
+

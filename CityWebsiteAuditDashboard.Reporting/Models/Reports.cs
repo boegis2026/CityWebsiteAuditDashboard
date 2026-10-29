@@ -12,8 +12,10 @@ public static class ReportDisplay
     public static string Number(long value) => value.ToString("N0", CultureInfo.GetCultureInfo("en-US"));
     public static string Status(string value) => value switch
     {
-        "InProgress" => "In progress", "WontFix" => "Won’t fix",
-        "NeedsReview" => "Needs manual review", "NotDetected" => "Not detected",
+        "InProgress" => "In progress",
+        "WontFix" => "Won’t fix",
+        "NeedsReview" => "Needs manual review",
+        "NotDetected" => "Not detected",
         _ => value
     };
     public static string Tone(string value) => value.ToLowerInvariant() switch
@@ -56,7 +58,9 @@ public sealed class ReportFilter
     }
     public Dictionary<string, string> Routes(int? page = null) => new()
     {
-        ["Application"] = Application ?? "", ["From"] = From ?? "", ["To"] = To ?? "",
+        ["Application"] = Application ?? "",
+        ["From"] = From ?? "",
+        ["To"] = To ?? "",
         ["Page"] = (page ?? Page).ToString(CultureInfo.InvariantCulture)
     };
 }
@@ -90,6 +94,7 @@ public sealed class ReportPage
     public List<StepRow> Steps { get; set; } = [];
     public List<RemediationRow> Items { get; set; } = [];
     public AuditRow? Audit { get; set; }
+    public string? AuditNotes { get; set; }
     public long Total { get; set; }
     public long ApplicationsCount { get; set; }
     public long CompletedCount { get; set; }
@@ -99,3 +104,4 @@ public sealed class ReportPage
     public long PageCount => Math.Max(1, (Total + 24) / 25);
     public bool HasNext => (long)Filter.Page * 25 < Total;
 }
+

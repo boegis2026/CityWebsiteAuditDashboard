@@ -330,6 +330,12 @@ public static class ReportPdf
                 $"Status: {run.Status}" +
                 $" | Started: {ReportDisplay.Time(run.Started)}");
 
+            if (!string.IsNullOrWhiteSpace(model.AuditNotes))
+            {
+                Heading("Audit notes");
+                Text(model.AuditNotes);
+            }
+
             Metrics(
                 ("Scanned steps", run.SuccessfulSteps),
                 ("Violations", run.Violations),
@@ -500,3 +506,4 @@ public static class ReportPdf
         return output.ToString();
     }
 }
+

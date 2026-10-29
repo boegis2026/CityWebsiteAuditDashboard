@@ -214,6 +214,12 @@ public sealed class AuthenticatedAuditPdfReportService
             section,
             "Executive Summary");
 
+        if (!string.IsNullOrWhiteSpace(audit.AuditNotes))
+        {
+            section.AddParagraph("Audit notes", "Heading2");
+            section.AddParagraph(audit.AuditNotes);
+        }
+
         AddExecutiveSummary(
             section,
             audit,
@@ -2232,3 +2238,4 @@ public sealed class AuthenticatedAuditPdfReportService
                 : value;
     }
 }
+

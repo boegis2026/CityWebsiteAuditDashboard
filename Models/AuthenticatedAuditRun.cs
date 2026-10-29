@@ -6,6 +6,9 @@ public class AuthenticatedAuditRun
 {
     public int Id { get; set; }
 
+    [StringLength(4000)]
+    public string? AuditNotes { get; set; }
+
     [Required]
     [StringLength(200)]
     public string ApplicationName { get; set; } = string.Empty;
@@ -35,3 +38,4 @@ public class AuthenticatedAuditRun
     public ICollection<AuthenticatedAuditStep> Steps { get; set; }
         = new List<AuthenticatedAuditStep>();
 }
+
